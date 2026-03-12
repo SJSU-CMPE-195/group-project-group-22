@@ -6,15 +6,15 @@ import java.awt.event.ActionEvent;
 
 public class PoC_HitTheZone extends JFrame {
 
-    private static final int WIDTH = 640;
-    private static final int HEIGHT = 300;
-    private static final int BALL_DIAMETER = 20;
-    private static final int START_X = 40;
-    private static final int TRACK_Y = 120;
-    private static final int SPEED = 5;
+    static final int WIDTH = 640;
+    static final int HEIGHT = 300;
+    static final int BALL_DIAMETER = 20;
+    static final int START_X = 40;
+    static final int TRACK_Y = 120;
+    static final int SPEED = 5;
 
-    private static final int ZONE_WIDTH = 80;
-    private static final int ZONE_START = (WIDTH - ZONE_WIDTH) / 2;
+    static final int ZONE_WIDTH = 80;
+    static final int ZONE_START = (WIDTH - ZONE_WIDTH) / 2;
 
     protected int ballX = START_X;
     protected int direction = +SPEED;
