@@ -52,9 +52,21 @@ class PoCTest {
     @Test
     @DisplayName("Test 3: Reset should clear all counters")
     void testResetFunctionality() {
-        // 1. Arrange: Simulate some game play (hits = 5, attempts = 10)
-        // 2. Act: Call resetGame()
-        // 3. Assert: All counters should be 0
+
+        // Simulate some game play (hits = 5, attempts = 10) 
+        game.successfulHits = 5; 
+        game.totalAttempts = 10; 
+        game.totalPasses = 3; 
+
+        // Call resetGame()
+        game.resetGame();
+
+        // All counters should be 0 
+        assertEquals(0, game.successfulHits, "successfullHits should be 0 after reset");
+        assertEquals(0, game.totalAttempts, "totalAttempts should be 0 after reset");
+        assertEquals(0, game.totalPasses, "totalPasses should be 0 after reset");
+        assertEquals(PoC_HitTheZone.START_X, game.ballX, "ballX should return to START_X after resetting");
+
         fail("Implement reset verification");
     }
 
