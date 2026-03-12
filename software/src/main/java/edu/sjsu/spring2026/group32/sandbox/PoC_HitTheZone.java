@@ -158,8 +158,11 @@ public class PoC_HitTheZone extends JFrame {
         // Move
         ballX += direction;
 
+        // For testing: fallback to width constant if panel hasn't rendered (in headless env)
+        int panelWidth = gamePanel.getWidth() > 0 ? gamePanel.getWidth() : WIDTH;
+
         // Bounds (use panel width to be safe)
-        int rightBound = gamePanel.getWidth() - BALL_DIAMETER;
+        int rightBound = panelWidth - BALL_DIAMETER;
         if (ballX <= 0) {
             ballX = 0;
             direction = +SPEED;
