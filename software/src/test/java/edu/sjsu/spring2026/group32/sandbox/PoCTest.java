@@ -27,7 +27,7 @@ class PoCTest {
 
         // Assert Check if 'direction' is now negative
         assertTrue(game.direction < 0, "Direction should be negative after hitting the right wall");
-        fail("Implement bounce logic check");
+        
     }
 
     @Test
@@ -46,7 +46,6 @@ class PoCTest {
         assertEquals(1, game.successfulHits, "Should only score once per zone entry");
         assertEquals(2, game.totalAttempts, "Both attempts should be counted"); 
 
-        fail("Implement double-tap prevention check");
     }
 
     @Test
@@ -67,7 +66,6 @@ class PoCTest {
         assertEquals(0, game.totalPasses, "totalPasses should be 0 after reset");
         assertEquals(PoC_HitTheZone.START_X, game.ballX, "ballX should return to START_X after resetting");
 
-        fail("Implement reset verification");
     }
 
     @Test
@@ -85,6 +83,5 @@ class PoCTest {
         // Ball should not have moved
         assertEquals(originalX, game.ballX, "Ball should not move while paused");
 
-        fail("Implement pause state check");
     }
 }
