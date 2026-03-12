@@ -12,7 +12,7 @@ class PoCTest {
     @BeforeEach
     void setUp() {
         // We initialize the GUI, but we will test the underlying logic variables
-        game = new PoC_HitTheZone();
+        game = new PoC_HitTheZone(true);
     }
 
     @Test

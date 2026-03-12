@@ -38,6 +38,13 @@ public class PoC_HitTheZone extends JFrame {
 
     protected final Timer tick;
 
+    // ---- Headless constructor for testing ----
+    // In test env there isn't a screen to render so the GUI times out --> gives us a bare instance w/ game state + no bg timer
+    protected PoC_HitTheZone(boolean headless) {
+        super("Hit The Zone"); 
+        tick = null; // time isn't needed for the tests so far
+    } 
+
     public PoC_HitTheZone() {
         super("Hit The Zone");
 
