@@ -73,9 +73,18 @@ class PoCTest {
     @Test
     @DisplayName("Test 4: Pause should freeze movement")
     void testPauseLogic() {
-        // 1. Arrange: Set isPaused = true and record current ballX
-        // 2. Act: Call onTick() multiple times
-        // 3. Assert: ballX should not have changed
+        // Set isPaused to true + record current ballX position
+        game.isPaused = true; 
+        int originalX = game.ballX; 
+
+        // Call onTick() multiple times
+        game.onTick();
+        game.onTick();
+        game.onTick();
+
+        // Ball should not have moved
+        assertEquals(originalX, game.ballX, "Ball should not move while paused");
+
         fail("Implement pause state check");
     }
 }
