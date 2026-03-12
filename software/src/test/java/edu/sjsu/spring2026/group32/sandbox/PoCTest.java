@@ -25,7 +25,7 @@ class PoCTest {
         // Call the onTick() method
         game.onTick();
 
-        // Assert: Check if 'direction' is now negative
+        // Assert Check if 'direction' is now negative
         assertTrue(game.direction < 0, "Direction should be negative after hitting the right wall");
         fail("Implement bounce logic check");
     }
@@ -33,9 +33,19 @@ class PoCTest {
     @Test
     @DisplayName("Test 2: Scoring should only be possible once per zone entry")
     void testScoreLockout() {
-        // 1. Arrange: Move ball into the zone
-        // 2. Act: Call attemptScore() twice
-        // 3. Assert: successfulHits should be 1, not 2
+        // Move ball into the zone
+        game.ballX = PoC_HitTheZone.ZONE_START - (PoC_HitTheZone.BALL_DIAMETER / 2); // center lands on ZONE_START
+        game.canScore = true; 
+        game.inZone = true; 
+
+        // Call attemptScore() twice 
+        game.attemptScore(); 
+        game.attemptScore();
+
+        // Assert successfulHits should be 1, not 2
+        assertEquals(1, game.successfulHits, "Should only score once per zone entry");
+        assertEquals(2, game.totalAttempts, "Both attempts should be counted"); 
+
         fail("Implement double-tap prevention check");
     }
 
