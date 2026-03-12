@@ -19,7 +19,7 @@ class PoCTest {
     @DisplayName("Test 1: Ball should reverse direction when hitting right wall")
     void testRightWallBounce() {
         // Set ball to the far right (Width - Diameter)
-        game.ballX = game.gamePanel.getWidth() - PoC_HitTheZone.BALL_DIAMETER; 
+        game.ballX = PoC_HitTheZone.WIDTH - PoC_HitTheZone.BALL_DIAMETER; 
         game.direction = PoC_HitTheZone.SPEED; 
 
         // Call the onTick() method
