@@ -18,9 +18,15 @@ class PoCTest {
     @Test
     @DisplayName("Test 1: Ball should reverse direction when hitting right wall")
     void testRightWallBounce() {
-        // 1. Arrange: Set ball to the far right (Width - Diameter)
-        // 2. Act: Call the onTick() method
-        // 3. Assert: Check if 'direction' is now negative
+        // Set ball to the far right (Width - Diameter)
+        game.ballX = game.gamePanel.getWidth() - PoC_HitTheZone.BALL_DIAMETER; 
+        game.direction = PoC_HitTheZone.SPEED; 
+
+        // Call the onTick() method
+        game.onTick();
+
+        // Assert: Check if 'direction' is now negative
+        assertTrue(game.direction < 0, "Direction should be negative after hitting the right wall");
         fail("Implement bounce logic check");
     }
 
