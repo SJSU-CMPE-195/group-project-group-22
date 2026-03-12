@@ -1,4 +1,4 @@
-package sandbox;
+package edu.sjsu.spring2026.group32.sandbox;
 
 import javax.swing.*;
 import java.awt.*;
