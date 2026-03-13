@@ -6,37 +6,44 @@ import java.awt.event.ActionEvent;
 
 public class PoC_HitTheZone extends JFrame {
 
-    private static final int WIDTH = 640;
-    private static final int HEIGHT = 300;
-    private static final int BALL_DIAMETER = 20;
-    private static final int START_X = 40;
-    private static final int TRACK_Y = 120;
-    private static final int SPEED = 5;
+    static final int WIDTH = 640;
+    static final int HEIGHT = 300;
+    static final int BALL_DIAMETER = 20;
+    static final int START_X = 40;
+    static final int TRACK_Y = 120;
+    static final int SPEED = 5;
 
-    private static final int ZONE_WIDTH = 80;
-    private static final int ZONE_START = (WIDTH - ZONE_WIDTH) / 2;
+    static final int ZONE_WIDTH = 80;
+    static final int ZONE_START = (WIDTH - ZONE_WIDTH) / 2;
 
-    private int ballX = START_X;
-    private int direction = +SPEED;
+    protected int ballX = START_X;
+    protected int direction = +SPEED;
 
     // Scoring & Tracking
-    private int successfulHits = 0;
-    private int totalAttempts = 0;
-    private int totalPasses = 0;
+    protected int successfulHits = 0;
+    protected int totalAttempts = 0;
+    protected int totalPasses = 0;
 
-    private boolean inZone = false;
-    private boolean canScore = false;
-    private boolean isPaused = false;
+    protected boolean inZone = false;
+    protected boolean canScore = false;
+    protected boolean isPaused = false;
 
     // ---- Swing ----
-    private final JLabel topLabel = new JLabel("", SwingConstants.CENTER);
-    private final JLabel xyLabel = new JLabel("", SwingConstants.CENTER);
-    private final JButton scoreButton = new JButton("Score (Space)");
-    private final JButton pauseButton = new JButton("Pause (Esc)");
-    private final JButton resetButton = new JButton("Reset (R)");
-    private final GamePanel gamePanel = new GamePanel();
+    protected final JLabel topLabel = new JLabel("", SwingConstants.CENTER);
+    protected final JLabel xyLabel = new JLabel("", SwingConstants.CENTER);
+    protected final JButton scoreButton = new JButton("Score (Space)");
+    protected final JButton pauseButton = new JButton("Pause (Esc)");
+    protected final JButton resetButton = new JButton("Reset (R)");
+    protected final GamePanel gamePanel = new GamePanel();
 
-    private final Timer tick;
+    protected final Timer tick;
+
+    // ---- Headless constructor for testing ----
+    // In test env there isn't a screen to render so the GUI times out --> gives us a bare instance w/ game state + no bg timer
+    protected PoC_HitTheZone(boolean headless) {
+        super("Hit The Zone"); 
+        tick = null; // time isn't needed for the tests so far
+    } 
 
     public PoC_HitTheZone() {
         super("Hit The Zone");
@@ -81,7 +88,7 @@ public class PoC_HitTheZone extends JFrame {
         tick.start();
     }
 
-    private void setupKeyBindings() {
+    protected void setupKeyBindings() {
         InputMap im = gamePanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = gamePanel.getActionMap();
 
@@ -113,7 +120,7 @@ public class PoC_HitTheZone extends JFrame {
         });
     }
 
-    private void togglePause() {
+    protected void togglePause() {
         isPaused = !isPaused;
         if (isPaused) {
             pauseButton.setText("Resume (Esc)");
@@ -126,7 +133,7 @@ public class PoC_HitTheZone extends JFrame {
         }
     }
 
-    private void resetGame() {
+    protected void resetGame() {
         // Reset all game variables
         ballX = START_X;
         direction = +SPEED;
@@ -145,14 +152,17 @@ public class PoC_HitTheZone extends JFrame {
         gamePanel.repaint();
     }
 
-    private void onTick() {
+    protected void onTick() {
         if (isPaused) return;
 
         // Move
         ballX += direction;
 
+        // For testing: fallback to width constant if panel hasn't rendered (in headless env)
+        int panelWidth = gamePanel.getWidth() > 0 ? gamePanel.getWidth() : WIDTH;
+
         // Bounds (use panel width to be safe)
-        int rightBound = gamePanel.getWidth() - BALL_DIAMETER;
+        int rightBound = panelWidth - BALL_DIAMETER;
         if (ballX <= 0) {
             ballX = 0;
             direction = +SPEED;
@@ -176,7 +186,7 @@ public class PoC_HitTheZone extends JFrame {
         gamePanel.repaint();
     }
 
-    private void attemptScore() {
+    protected void attemptScore() {
         if (isPaused) return;
 
         totalAttempts++;
@@ -192,7 +202,7 @@ public class PoC_HitTheZone extends JFrame {
         updateHud();
     }
 
-    private void updateHud() {
+    protected void updateHud() {
         if (isPaused) return;
 
         String accuracy = totalAttempts == 0 ? "0%" : String.format("%d%%", (successfulHits * 100) / totalAttempts);
@@ -206,7 +216,7 @@ public class PoC_HitTheZone extends JFrame {
     }
 
     // Drawing
-    private class GamePanel extends JPanel {
+    protected class GamePanel extends JPanel {
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
