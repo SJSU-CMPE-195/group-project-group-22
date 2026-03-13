@@ -10,7 +10,7 @@
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath> </parent>
 
-    <artifactId>hardware-neural-network</artifactId>
+    <artifactId>hardware-neural-network-software</artifactId>
     <dependencies>
         <dependency>
             <groupId>com.fazecast</groupId>
@@ -19,13 +19,6 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.10.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>5.10.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
