@@ -1,0 +1,48 @@
+package edu.sjsu.spring2026.group32.hardware.serial;
+
+import com.fazecast.jSerialComm.SerialPort;
+import java.io.InputStream;
+
+public class RealSerialDevice implements SerialDevice {
+    private final SerialPort port;
+
+    public RealSerialDevice(SerialPort port) {
+        this.port = port;
+    }
+
+    @Override
+    public String getDescriptivePortName() { return port.getDescriptivePortName(); }
+
+    @Override
+    public String getSystemPortName() { return port.getSystemPortName(); }
+
+    @Override
+    public void setBaudRate(int baudRate) { port.setBaudRate(baudRate); }
+
+    @Override
+    public void setComPortTimeouts(int timeoutMode, int readTimeout, int writeTimeout) {
+        port.setComPortTimeouts(timeoutMode, readTimeout, writeTimeout);
+    }
+
+    @Override
+    public boolean openPort() { return port.openPort(); }
+
+    @Override
+    public boolean isOpen() { return port.isOpen(); }
+
+    @Override
+    public void closePort() { port.closePort(); }
+
+    @Override
+    public InputStream getInputStream() { return port.getInputStream(); }
+
+    // Helper to get all real ports wrapped in our interface
+    public static SerialDevice[] getRealPorts() {
+        SerialPort[] realPorts = SerialPort.getCommPorts();
+        SerialDevice[] wrappedPorts = new SerialDevice[realPorts.length];
+        for (int i = 0; i < realPorts.length; i++) {
+            wrappedPorts[i] = new RealSerialDevice(realPorts[i]);
+        }
+        return wrappedPorts;
+    }
+}
