@@ -22,8 +22,13 @@ class NeuralSignalParserTest {
     @Test
     @DisplayName("Should handle max and min ADC values bounds")
     void testAdcBounds() {
-        // TODO: Assert that an ADC value of 4095 results in exactly 3.3V.
-        // TODO: Assert that an ADC value of 0 results in exactly 0.0V.
+        // Asserts that an ADC value of 4095 results in exactly 3.3V (because (4095 / 4095) * 3.3 = 3.3 V) 
+        assertEquals(3.3, parser.parseVoltage("123456,1,0,4095"),0.0001);
+
+        // Asserts that an ADC value of 0 results in exactly 0.0V.
+        // Min bound: used to reset so the 0-ADC read is also a first reading so its unaffected by a prior state
+        parser.resetFilter();
+        assertEquals(0.0, parser.parseVoltage("123456,1,0,0"),0.001);
     }
 
     @Test
