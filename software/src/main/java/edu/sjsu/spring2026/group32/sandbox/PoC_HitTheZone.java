@@ -1,248 +1,448 @@
 package edu.sjsu.spring2026.group32.sandbox;
 
+import edu.sjsu.spring2026.group32.player.*;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.KeyboardFocusManager;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class PoC_HitTheZone extends JFrame {
 
-    static final int WIDTH = 640;
-    static final int HEIGHT = 300;
-    static final int BALL_DIAMETER = 20;
-    static final int START_X = 40;
-    static final int TRACK_Y = 120;
-    static final int SPEED = 5;
-
+    // ---- Layout constants ------------------------------------------------
+    static final int WIDTH      = 820;
+    static final int HEIGHT     = 300;
+    static final int BALL_DIAM  = 20;
+    static final int START_X    = 40;
+    static final int TRACK_Y    = 130;
+    static final int SPEED      = 5;
     static final int ZONE_WIDTH = 80;
     static final int ZONE_START = (WIDTH - ZONE_WIDTH) / 2;
 
-    protected int ballX = START_X;
-    protected int direction = +SPEED;
+    static final Color[] PLAYER_COLORS = {
+            new Color(30,  120, 220),
+            new Color(34,  160,  80),
+            new Color(200,  80,  80),
+            new Color(160,  80, 200),
+    };
 
-    // Scoring & Tracking
-    protected int successfulHits = 0;
-    protected int totalAttempts = 0;
-    protected int totalPasses = 0;
+    // ---- Players ---------------------------------------------------------
+    private final List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players;
 
-    protected boolean inZone = false;
-    protected boolean canScore = false;
-    protected boolean isPaused = false;
+    private final int[]              hits;
+    private final int[]              attempts;
+    private final boolean[]          canScore;
+    /**
+     * Edge-detection: an action is only processed on the tick it first appears.
+     * IMPORTANT: reset to null on every new zone entry so a press that fired
+     * outside the zone cannot block the player's first press inside it.
+     */
+    private final HitTheZoneAction[] lastActions;
 
-    // ---- Swing ----
-    protected final JLabel topLabel = new JLabel("", SwingConstants.CENTER);
-    protected final JLabel xyLabel = new JLabel("", SwingConstants.CENTER);
-    protected final JButton scoreButton = new JButton("Score (Space)");
-    protected final JButton pauseButton = new JButton("Pause (Esc)");
-    protected final JButton resetButton = new JButton("Reset (R)");
-    protected final GamePanel gamePanel = new GamePanel();
+    // ---- Shared game state -----------------------------------------------
+    protected int     ballX       = START_X;
+    protected int     direction   = +SPEED;
+    protected int     totalPasses = 0;
+    protected boolean inZone      = false;
+    protected boolean isPaused    = false;
+    /** Total game time in milliseconds — frozen while paused. */
+    protected long    elapsedMs   = 0;
 
-    protected final Timer tick;
+    // ---- Swing -----------------------------------------------------------
+    private  final JLabel[]        playerLabels;
+    private  final List<JButton>   humanScoreButtons = new ArrayList<>();
+    private  final JLabel          infoLabel   = new JLabel("", SwingConstants.CENTER);
+    private  final JButton    pauseButton = new JButton("Pause (Esc)");
+    private  final JButton    resetButton = new JButton("Reset (R)");
+    protected final GamePanel gamePanel   = new GamePanel();
+    protected final Timer     tick;
 
-    // ---- Headless constructor for testing ----
-    // In test env there isn't a screen to render so the GUI times out --> gives us a bare instance w/ game state + no bg timer
-    protected PoC_HitTheZone(boolean headless) {
-        super("Hit The Zone"); 
-        tick = null; // time isn't needed for the tests so far
-    } 
+    // ======================================================================
+    // Headless constructor (unit tests)
+    // ======================================================================
 
-    public PoC_HitTheZone() {
+    protected PoC_HitTheZone(boolean headless,
+                             List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
         super("Hit The Zone");
+        this.players      = players;
+        int n             = players.size();
+        this.hits         = new int[n];
+        this.attempts     = new int[n];
+        this.canScore     = new boolean[n];
+        this.lastActions  = new HitTheZoneAction[n];
+        this.playerLabels = new JLabel[n];
+        this.tick         = null;
+    }
+
+    // ======================================================================
+    // Full GUI constructor
+    // ======================================================================
+
+    public PoC_HitTheZone(List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
+        super("Hit The Zone");
+
+        this.players     = players;
+        int n            = players.size();
+        this.hits        = new int[n];
+        this.attempts    = new int[n];
+        this.canScore    = new boolean[n];
+        this.lastActions = new HitTheZoneAction[n];
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        JPanel top = new JPanel(new GridLayout(2, 1));
-        top.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
-        top.add(topLabel);
-        top.add(xyLabel);
-        add(top, BorderLayout.NORTH);
+        // ---- Top HUD -----------------------------------------------------
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setBorder(BorderFactory.createEmptyBorder(6, 8, 4, 8));
 
+        playerLabels = new JLabel[n];
+        JPanel playerRow = new JPanel(new GridLayout(n, 1, 0, 2));
+        for (int i = 0; i < n; i++) {
+            playerLabels[i] = new JLabel("", SwingConstants.CENTER);
+            playerLabels[i].setFont(playerLabels[i].getFont().deriveFont(Font.BOLD, 13f));
+            playerLabels[i].setForeground(playerColor(i));
+            playerRow.add(playerLabels[i]);
+        }
+        topPanel.add(playerRow, BorderLayout.CENTER);
+
+        infoLabel.setFont(infoLabel.getFont().deriveFont(12f));
+        topPanel.add(infoLabel, BorderLayout.SOUTH);
+        add(topPanel, BorderLayout.NORTH);
+
+        // ---- Game panel --------------------------------------------------
         gamePanel.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+        gamePanel.setFocusable(true);
         add(gamePanel, BorderLayout.CENTER);
 
-        // Buttons
-        scoreButton.setFocusable(false); // Prevents spacebar double-firing
-        scoreButton.addActionListener(e -> attemptScore());
+        // FIX: Register human players via KeyboardFocusManager instead of
+        // gamePanel.addKeyListener(). KeyboardFocusManager dispatches key
+        // events application-wide regardless of which component has focus,
+        // so the human's input is never silently dropped when a button or
+        // another component steals focus.
+        for (BasePlayer<?, ?> p : players) {
+            if (p instanceof KeyListener kl) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                        .addKeyEventDispatcher(e -> {
+                            if (e.getID() == KeyEvent.KEY_PRESSED)  kl.keyPressed(e);
+                            if (e.getID() == KeyEvent.KEY_RELEASED) kl.keyReleased(e);
+                            return false; // don't consume — let Esc/R bindings still fire
+                        });
+            }
+        }
 
+        // ---- Global key bindings (pause / reset) -------------------------
+        setupKeyBindings();
+
+        // ---- Bottom controls ---------------------------------------------
         pauseButton.setFocusable(false);
         pauseButton.addActionListener(e -> togglePause());
 
         resetButton.setFocusable(false);
         resetButton.addActionListener(e -> resetGame());
 
-        JPanel bottom = new JPanel();
-        bottom.add(scoreButton);
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 6));
         bottom.add(pauseButton);
         bottom.add(resetButton);
+        // Add a dedicated Score button for every human (KeyListener) player.
+        // Using instanceof KeyListener rather than getType() == HUMAN because
+        // HumanPlayer.getType() incorrectly returns SOFTWARE (upstream bug).
+        for (int i = 0; i < players.size(); i++) {
+            if (players.get(i) instanceof KeyListener) {
+                final int idx = i;
+                JButton scoreBtn = new JButton("Score — " + players.get(i).getName());
+                scoreBtn.setFocusable(false);  // prevents spacebar double-firing via focus
+                scoreBtn.setForeground(playerColor(i));
+                scoreBtn.setFont(scoreBtn.getFont().deriveFont(Font.BOLD));
+                scoreBtn.addActionListener(e -> processScore(idx));
+                humanScoreButtons.add(scoreBtn);
+                bottom.add(scoreBtn);
+            }
+        }
         add(bottom, BorderLayout.SOUTH);
 
-        setupKeyBindings();
-
+        // ---- Launch ------------------------------------------------------
         pack();
         setResizable(false);
         setLocationRelativeTo(null);
         setVisible(true);
+        gamePanel.requestFocusInWindow();
 
         updateHud();
-        tick = new Timer(16, e -> onTick()); // ~60fps
+        tick = new Timer(16, e -> onTick());
         tick.start();
     }
 
-    protected void setupKeyBindings() {
-        InputMap im = gamePanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+    // ======================================================================
+    // Key bindings
+    // ======================================================================
+
+    private void setupKeyBindings() {
+        InputMap  im = gamePanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = gamePanel.getActionMap();
 
-        // Spacebar for scoring
-        im.put(KeyStroke.getKeyStroke("SPACE"), "scoreAction");
-        am.put("scoreAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                attemptScore();
-            }
-        });
-
-        // Escape for pausing
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "pauseAction");
         am.put("pauseAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                togglePause();
-            }
+            @Override public void actionPerformed(ActionEvent e) { togglePause(); }
         });
 
-        // R for resetting
         im.put(KeyStroke.getKeyStroke("R"), "resetAction");
         am.put("resetAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                resetGame();
-            }
+            @Override public void actionPerformed(ActionEvent e) { resetGame(); }
         });
+    }
+
+    // ======================================================================
+    // Game loop
+    // ======================================================================
+
+    protected void onTick() {
+        if (isPaused) return;
+
+        elapsedMs += 16;
+        moveBall();
+
+        HitTheZoneState state = new HitTheZoneState(inZone);
+
+        for (int i = 0; i < players.size(); i++) {
+            HitTheZoneAction action = players.get(i).getNextMove(state);
+
+            if (action != null && action != lastActions[i]) {
+                switch (action) {
+                    case SCORE -> processScore(i);
+                    case PAUSE -> togglePause();
+                    case RESET -> resetGame();
+                }
+            }
+            lastActions[i] = action;
+        }
+
+        updateHud();
+        gamePanel.repaint();
+    }
+
+    // ---- Ball physics ----------------------------------------------------
+
+    private void moveBall() {
+        ballX += direction;
+
+        int panelWidth = gamePanel.getWidth() > 0 ? gamePanel.getWidth() : WIDTH;
+        int rightBound = panelWidth - BALL_DIAM;
+
+        if      (ballX <= 0)          { ballX = 0;          direction = +SPEED; }
+        else if (ballX >= rightBound) { ballX = rightBound; direction = -SPEED; }
+
+        int     centerX   = ballX + BALL_DIAM / 2;
+        boolean nowInZone = centerX >= ZONE_START && centerX <= (ZONE_START + ZONE_WIDTH);
+
+        if (!inZone && nowInZone) {
+            // Zone entry: arm scoring and clear edge-detection for all players.
+            totalPasses++;
+            for (int i = 0; i < canScore.length; i++) {
+                canScore[i]    = true;
+                lastActions[i] = null;
+            }
+        } else if (inZone && !nowInZone) {
+            // Zone exit: explicitly disarm canScore so the state machine is
+            // unambiguous. Without this, a player who never scored this pass
+            // retains canScore=true across the gap between passes, and a
+            // mis-timed edge-detection reset on re-entry could fire an
+            // out-of-zone press as a hit.
+            for (int i = 0; i < canScore.length; i++) {
+                canScore[i] = false;
+            }
+        }
+
+        inZone = nowInZone;
+    }
+
+    // ======================================================================
+    // Game actions
+    // ======================================================================
+
+    protected void processScore(int playerIndex) {
+        if (isPaused) return;
+
+        attempts[playerIndex]++;
+
+        int     centerX = ballX + BALL_DIAM / 2;
+        boolean inside  = centerX >= ZONE_START && centerX <= (ZONE_START + ZONE_WIDTH);
+
+        if (inside && canScore[playerIndex]) {
+            hits[playerIndex]++;
+        }
     }
 
     protected void togglePause() {
         isPaused = !isPaused;
+        pauseButton.setText(isPaused ? "Resume (Esc)" : "Pause (Esc)");
+        humanScoreButtons.forEach(b -> b.setEnabled(!isPaused));
         if (isPaused) {
-            pauseButton.setText("Resume (Esc)");
-            scoreButton.setEnabled(false);
-            topLabel.setText("--- PAUSED ---");
+            infoLabel.setText("--- PAUSED  (Esc to resume · R to reset) ---");
         } else {
-            pauseButton.setText("Pause (Esc)");
-            scoreButton.setEnabled(true);
             updateHud();
         }
     }
 
     protected void resetGame() {
-        // Reset all game variables
-        ballX = START_X;
-        direction = +SPEED;
-        successfulHits = 0;
-        totalAttempts = 0;
+        ballX       = START_X;
+        direction   = +SPEED;
         totalPasses = 0;
-        inZone = false;
-        canScore = false;
+        inZone      = false;
+        elapsedMs   = 0;
 
-        // Unpause if it was paused
-        if (isPaused) {
-            togglePause();
+        for (int i = 0; i < players.size(); i++) {
+            hits[i]        = 0;
+            attempts[i]    = 0;
+            canScore[i]    = false;
+            lastActions[i] = null;
         }
+
+        if (isPaused) togglePause();
 
         updateHud();
         gamePanel.repaint();
     }
 
-    protected void onTick() {
-        if (isPaused) return;
-
-        // Move
-        ballX += direction;
-
-        // For testing: fallback to width constant if panel hasn't rendered (in headless env)
-        int panelWidth = gamePanel.getWidth() > 0 ? gamePanel.getWidth() : WIDTH;
-
-        // Bounds (use panel width to be safe)
-        int rightBound = panelWidth - BALL_DIAMETER;
-        if (ballX <= 0) {
-            ballX = 0;
-            direction = +SPEED;
-        } else if (ballX >= rightBound) {
-            ballX = rightBound;
-            direction = -SPEED;
-        }
-
-        int centerX = ballX + BALL_DIAMETER / 2;
-        boolean nowInZone = centerX >= ZONE_START && centerX <= (ZONE_START + ZONE_WIDTH);
-
-        // Reset scoring ability and count a pass when re-entering the zone
-        if (!inZone && nowInZone) {
-            canScore = true;
-            totalPasses++;
-        }
-
-        inZone = nowInZone;
-
-        updateHud();
-        gamePanel.repaint();
-    }
-
-    protected void attemptScore() {
-        if (isPaused) return;
-
-        totalAttempts++;
-
-        int centerX = ballX + BALL_DIAMETER / 2;
-        boolean inside = centerX >= ZONE_START && centerX <= (ZONE_START + ZONE_WIDTH);
-
-        if (inside && canScore) {
-            successfulHits++;
-            canScore = false; // Prevents getting multiple hits on a single pass
-        }
-
-        updateHud();
-    }
+    // ======================================================================
+    // HUD
+    // ======================================================================
 
     protected void updateHud() {
         if (isPaused) return;
 
-        String accuracy = totalAttempts == 0 ? "0%" : String.format("%d%%", (successfulHits * 100) / totalAttempts);
+        // Per-player row — minified:
+        // Name [TYPE]  |  Hits: X / Y  |  Accuracy: X/Y (Z%)  |  Hits/Pass: X/P (Z%)
+        for (int i = 0; i < players.size(); i++) {
+            int    h   = hits[i];
+            int    a   = attempts[i];
+            String acc      = a == 0 ? "—" : String.format("%d/%d (%.0f%%)", h, a, (h * 100.0) / a);
+            String hitsPass = totalPasses == 0 ? "—" : String.format("%.2f", (double) h / totalPasses);
 
-        topLabel.setText(String.format(
-                "Successful Hits: %d / Total Attempts: %d    |    Passes: %d    |    Accuracy: %s    |    %s",
-                successfulHits, totalAttempts, totalPasses, accuracy,
-                inZone ? "In Zone" : "Out of Zone"
-        ));
-        xyLabel.setText(String.format("Ball position: (x=%d, y=%d)", ballX, TRACK_Y));
+            playerLabels[i].setText(String.format(
+                    "%-12s [%s]   Hits: %d / %d   Accuracy: %s   Hits/Pass: %s",
+                    players.get(i).getName(),
+                    players.get(i).getType(),
+                    h, a, acc, hitsPass));
+        }
+
+        // Global stats row — elapsed time frozen while paused
+        long   secs  = (elapsedMs / 1000) % 60;
+        long   mins  = (elapsedMs / 60_000);
+        String timer = String.format("%02d:%02d", mins, secs);
+
+        infoLabel.setText(String.format(
+                "Time: %s   |   Total Passes: %d   |   Ball X: %d   |   %s",
+                timer, totalPasses, ballX, inZone ? "★  IN ZONE  ★" : "Out of Zone"));
     }
 
-    // Drawing
+    // ======================================================================
+    // Rendering
+    // ======================================================================
+
     protected class GamePanel extends JPanel {
+
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
 
-            // Track
-            g.setColor(Color.LIGHT_GRAY);
-            int trackHeight = 40;
-            g.fillRect(0, TRACK_Y - trackHeight / 2, getWidth(), trackHeight);
+            final int trackH   = 44;
+            final int trackTop = TRACK_Y - trackH / 2;
 
-            // Zone
-            g.setColor(new Color(255, 230, 128)); // soft yellow
-            g.fillRect(ZONE_START, TRACK_Y - trackHeight / 2, ZONE_WIDTH, trackHeight);
+            g2.setColor(new Color(210, 210, 210));
+            g2.fillRect(0, trackTop, getWidth(), trackH);
 
-            // Zone border
-            g.setColor(Color.DARK_GRAY);
-            g.drawRect(ZONE_START, TRACK_Y - trackHeight / 2, ZONE_WIDTH, trackHeight);
+            g2.setColor(new Color(255, 228, 80));
+            g2.fillRect(ZONE_START, trackTop, ZONE_WIDTH, trackH);
+            g2.setColor(new Color(160, 120, 0));
+            g2.setStroke(new BasicStroke(2f));
+            g2.drawRect(ZONE_START, trackTop, ZONE_WIDTH, trackH);
+
+            // Per-player hit-rate bars.
+            // Scale is dynamic: the player with the highest hits/pass fills the
+            // bar completely; all others are drawn relative to that ceiling.
+            // This keeps every bar within its border regardless of how many
+            // hits per pass players accumulate.
+            final int barH    = 10;
+            final int barGap  = 4;
+            int       barTopY = trackTop + trackH + 10;
+
+            double maxRate = 0.0;
+            if (totalPasses > 0) {
+                for (int i = 0; i < players.size(); i++)
+                    maxRate = Math.max(maxRate, hits[i] / (double) totalPasses);
+            }
+
+            for (int i = 0; i < players.size(); i++) {
+                double rate   = (totalPasses == 0 || maxRate == 0) ? 0.0
+                        : (hits[i] / (double) totalPasses) / maxRate;
+                int    filled = (int) (rate * ZONE_WIDTH);
+                Color  c      = playerColor(i);
+
+                g2.setColor(c.darker());
+                g2.fillRect(ZONE_START, barTopY, ZONE_WIDTH, barH);
+                g2.setColor(c);
+                g2.fillRect(ZONE_START, barTopY, filled, barH);
+                g2.setColor(Color.DARK_GRAY);
+                g2.setStroke(new BasicStroke(1f));
+                g2.drawRect(ZONE_START, barTopY, ZONE_WIDTH, barH);
+                g2.setColor(c);
+                g2.setFont(g2.getFont().deriveFont(Font.BOLD, 10f));
+                String barLabel = totalPasses == 0
+                        ? players.get(i).getName()
+                        : String.format("%s (%.2f hits/pass)", players.get(i).getName(),
+                        hits[i] / (double) totalPasses);
+                g2.drawString(barLabel, ZONE_START + ZONE_WIDTH + 6, barTopY + barH - 1);
+
+                barTopY += barH + barGap;
+            }
 
             // Ball
-            g.setColor(Color.RED);
-            g.fillOval(ballX, TRACK_Y - BALL_DIAMETER / 2, BALL_DIAMETER, BALL_DIAMETER);
-            g.setColor(Color.BLACK);
-            g.drawOval(ballX, TRACK_Y - BALL_DIAMETER / 2, BALL_DIAMETER, BALL_DIAMETER);
+            g2.setColor(Color.RED);
+            g2.fillOval(ballX, TRACK_Y - BALL_DIAM / 2, BALL_DIAM, BALL_DIAM);
+            g2.setColor(new Color(120, 0, 0));
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.drawOval(ballX, TRACK_Y - BALL_DIAM / 2, BALL_DIAM, BALL_DIAM);
+
+            // Zone label
+            g2.setColor(new Color(100, 80, 0));
+            g2.setFont(g2.getFont().deriveFont(Font.BOLD, 10f));
+            FontMetrics fm  = g2.getFontMetrics();
+            String      lbl = "ZONE";
+            g2.drawString(lbl,
+                    ZONE_START + (ZONE_WIDTH - fm.stringWidth(lbl)) / 2,
+                    trackTop - 4);
         }
     }
 
+    // ======================================================================
+    // Helpers
+    // ======================================================================
+
+    private static Color playerColor(int index) {
+        return index < PLAYER_COLORS.length ? PLAYER_COLORS[index] : Color.DARK_GRAY;
+    }
+
+    // ======================================================================
+    // Entry point
+    // ======================================================================
+
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(PoC_HitTheZone::new);
+        Map<Integer, HitTheZoneAction> bindings =
+                Map.of(KeyEvent.VK_SPACE, HitTheZoneAction.SCORE);
+
+        List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players = List.of(
+                new HitTheZoneSoftwareAI("Bot Alpha", 3),
+                new HitTheZoneSoftwareAI("Bot Beta",  9),
+                new HumanPlayer<>("Human", bindings, null)
+        );
+
+        SwingUtilities.invokeLater(() -> new PoC_HitTheZone(players));
     }
 }
