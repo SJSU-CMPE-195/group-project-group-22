@@ -6,7 +6,15 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Neural Signal Parser Suite")
 class NeuralSignalParserTest {
 
-    private final NeuralSignalParser parser = new NeuralSignalParser();
+    private NeuralSignalParser parser = new NeuralSignalParser();
+
+    @BeforeEach
+    void setUp() {
+        // This needs to be re-instantiated before each test because NeuralSignalParser is stateful
+        // A shared instance would cause the voltage history to leak between test cases
+        parser = new NeuralSignalParser();
+    }
+
 
     @Test
     @DisplayName("Should correctly parse a standard valid line")
