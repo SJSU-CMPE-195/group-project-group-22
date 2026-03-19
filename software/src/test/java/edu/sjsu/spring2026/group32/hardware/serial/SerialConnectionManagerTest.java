@@ -61,12 +61,21 @@ class SerialConnectionManagerTest {
     @Test
     @DisplayName("Should return false when no compatible hardware is found")
     void testNoCompatibleHardware() {
-        // TODO (Arrange): Create a Supplier that returns an empty array (simulating no hardware plugged in).
-        // Instantiate the connection manager.
+        // Simulates serial device having no USB devices plugged in (based on empty array)
+        // connect() loops over nothing and falls through to return false
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{};
+        connectionManager = new SerialConnectionManager(supplier);
 
-        // TODO (Act): Call connect() and then call getNextLine().
+        // Attempts to connect and read with no hardware available
+        boolean result = connectionManager.connect();
+        String line = connectionManager.getNextLine();
 
-        // TODO (Assert): Assert that connect() returned false, and that getNextLine() returned null.
+        // Connect() found no compatible ports so it returns false
+        assertFalse(result);
+
+        // Scanner was never initialized since connect() failed, getNextLine() should return null immediately
+        assertNull(line);
+
     }
 
     @Test
