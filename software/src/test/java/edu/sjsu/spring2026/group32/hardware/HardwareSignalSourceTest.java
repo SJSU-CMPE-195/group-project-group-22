@@ -30,20 +30,20 @@ class HardwareSignalSourceTest {
     @DisplayName("Should handle missing hardware gracefully without crashing")
     void testMissingHardwareHandling() {
 
-        // When connect() is called, pretend it fails and return false (used for simulating hardware not found)
+        // Simulates connect() being called and failing to return false (used for simulating hardware not found)
         when(mockConnectionManager.connect()).thenReturn(false);
 
-        // When isConnected() is called, return false (controls gate for getNextVoltage())
+        // Simulates isConnected() being called (controls gate for getNextVoltage())
         when(mockConnectionManager.isConnected()).thenReturn(false);
 
-        // Simulating no data coming from the hardware 
+        // Simulates no data coming from the hardware 
         when(mockConnectionManager.getNextLine()).thenReturn(null);
 
-        // Instantiating triggers connect() internally 
+        // Instantiating triggers connect() 
         signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
         double voltage = signalSource.getNextVoltage();
 
-        // Assert, using Mockito's verify() to ensure connect() was called exactly 1 time
+        // Uses verify() to ensure connect() was called exactly once
         assertEquals(0.0, voltage, 0.0001);
         verify(mockConnectionManager, times(1)).connect();
 
@@ -52,12 +52,25 @@ class HardwareSignalSourceTest {
     @Test
     @DisplayName("Should successfully connect, configure port, and read voltage")
     void testConnectionSuccessAndVoltageRead() {
-        // TODO (Arrange): Simulate a successful connection (connect() returns true) 
-        // and return a valid fake string of data for getNextLine() (e.g., "123456,1,0,2047").
+        
+        // Simulates successful connection (connect() returns true) 
+        when(mockConnectionManager.connect()).thenReturn(true);
+        when(mockConnectionManager.isConnected()).thenReturn(true);
 
-        // TODO (Act): Instantiate the 'signalSource' and call getNextVoltage().
+        // Returns a valid fake string of data for getNextLine() (e.g., "123456,1,0,2047").
+        when(mockConnectionManager.getNextLine()).thenReturn("123456,1,0,2047");
 
-        // TODO (Assert): Assert that the voltage correctly parses to ~1.649.
-        // Verify that BOTH connect() and getNextLine() were called exactly 1 time on the mock.
+        // Instantiates the signalSource and calls getNextVoltage().
+        signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
+        double voltage = signalSource.getNextVoltage();
+
+        // Asserts the voltage correctly parses to ~1.649.
+        assertEquals(1.649, voltage, 0.01);
+        
+        // Verifies that BOTH connect() and getNextLine() were called exactly 1 time on the mock.
+        verify(mockConnectionManager, times(1)).connect();
+        verify(mockConnectionManager, times(1)).getNextLine();
+
+
     }
 }
