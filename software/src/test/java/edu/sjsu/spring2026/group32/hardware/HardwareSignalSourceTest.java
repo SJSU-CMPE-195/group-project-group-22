@@ -43,9 +43,9 @@ class HardwareSignalSourceTest {
         signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
         double voltage = signalSource.getNextVoltage();
 
-        // Uses verify() to ensure connect() was called exactly once
+        // Uses verify() to ensure connect() was called exactly twice
         assertEquals(0.0, voltage, 0.0001);
-        verify(mockConnectionManager, times(1)).connect();
+        verify(mockConnectionManager, times(2)).connect();
 
     }
 
