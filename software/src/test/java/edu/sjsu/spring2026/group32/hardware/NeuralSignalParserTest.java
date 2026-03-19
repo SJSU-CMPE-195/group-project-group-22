@@ -34,9 +34,16 @@ class NeuralSignalParserTest {
     @Test
     @DisplayName("Should gracefully handle malformed or partial lines")
     void testMalformedData() {
-        // TODO: Assert that passing an incomplete line (e.g., "123456,1,0") returns 0.0.
-        // TODO: Assert that passing a non-numeric ADC (e.g., "123456,1,0,CORRUPTED") returns 0.0.
-        // TODO: Assert that passing an empty string ("   ") returns 0.0.
-        // TODO: Assert that passing 'null' returns 0.0.
+        // Asserts that passing an incomplete line (e.g., "123456,1,0") returns 0.0.
+        assertEquals(0.0, parser.parseVoltage("123456,1,0"),0.0001);
+    
+        // Asserts that passing a non-numeric ADC (e.g., "123456,1,0,CORRUPTED") returns 0.0.
+        assertEquals(0.0, parser.parseVoltage("123456,1,0,CORRUPTED"),0.0001);
+
+        // Asserts that passing an empty string ("   ") returns 0.0.
+        assertEquals(0.0, parser.parseVoltage("   "),0.0001);
+
+        // Asserts that passing 'null' returns 0.0.
+        assertEquals(0.0, parser.parseVoltage(null),0.0001);
     }
 }
