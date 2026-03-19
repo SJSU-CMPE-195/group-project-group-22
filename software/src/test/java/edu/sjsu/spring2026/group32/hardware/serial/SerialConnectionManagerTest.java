@@ -81,10 +81,16 @@ class SerialConnectionManagerTest {
     @Test
     @DisplayName("Should properly close open ports on disconnect")
     void testDisconnect() {
-        // TODO (Arrange): Instantiate the manager with a supplier containing 'mockDevice', and call connect() so it is open.
+        // Injects mock device and calls connect() so comPort is assigned
+        // disconnect() is a no-op if connect() was never called first
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+        connectionManager.connect();
 
-        // TODO (Act): Call disconnect() on the manager.
+        // Simulates disconnecting from hardware
+        connectionManager.disconnect();
 
-        // TODO (Assert): Use Mockito.verify() to ensure that closePort() was called on 'mockDevice' exactly 1 time.
+        // Verifies closePort() was called once on the mock device
+        verify(mockDevice, times(1)).closePort();
     }
 }
