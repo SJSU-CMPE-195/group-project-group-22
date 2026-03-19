@@ -44,5 +44,5 @@ public class HumanPlayer<S extends GameState, A extends Action> implements BaseP
     public String getName() { return this.name; }
 
     @Override
-    public PlayerType getType() { return PlayerType.SOFTWARE; }
+    public PlayerType getType() { return PlayerType.HUMAN; }
 }
