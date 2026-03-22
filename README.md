@@ -67,24 +67,26 @@ Navigate to the software directory from the root of the cloned repository:
 build the project in maven
     ```
     mvn install 
-    ``
+    ```
 
 run the PoC
     ```
-    mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone"
+    mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox PoC_HitTheZone"
     ```
 
 
 ## Usage
 Basic instructions on how to use the application
-    The PoC demo showcases the hardware neural network against software bots and a human player. 
-    Players: 
-    - Bot Alpha/Beta: software AI players
-    - Human (user): presses Space when the ball is inside the yellow zone to score
-    - Hardware: ESP32 neural network player (neuron)
 
-![proofofconcept](poc-screenshot.png)
-*PoC UI*
+
+The PoC demo showcases the hardware neural network against software bots and a human player. 
+
+Players: 
+- Bot Alpha/Beta: software AI players
+- Human (user): presses Space when the ball is inside the yellow zone to score
+- Hardware: ESP32 neural network player (neuron)
+
+![proofofconcept](poc-screenshot.png)*Proof of Concept Screen*
 
 Controls: 
 - Space: Hits the ball when inside zone
