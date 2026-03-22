@@ -12,14 +12,14 @@ We are developing a custom, transistor-level spiking neural network (SNN) that w
 Software, tools, accounts, etc. needed before setup
 
 Software: 
-    - IDE of choice
-    - [Git](https://git-scm.com/install/)
-    - [Java JDK 17](https://docs.oracle.com/en/java/javase/21/install/overview-jdk-installation.html)
-    - [Apache Maven 3.X](https://maven.apache.org/install.html)
+- IDE of choice
+- [Git](https://git-scm.com/install/)
+- [Java JDK 17](https://docs.oracle.com/en/java/javase/21/install/overview-jdk-installation.html)
+- [Apache Maven 3.X](https://maven.apache.org/install.html)
 
 Hardware:
-    - ESP 32 microcontroller connected via USB/Serial
-    - Neural network circuit assembled on breadboard 
+- ESP 32 microcontroller connected via USB/Serial
+ - Neural network circuit assembled on breadboard 
 
 ## Installation Steps
 How to set up this project
@@ -27,7 +27,7 @@ How to set up this project
 1. Install Java JDK 16+
 2. Install Apache Maven 3.6+ 
 3. Clone the repository
-    1. On this page: go to code > HTTPS > copy the repo link > clone using the URL https://github.com/SJSU-CMPE-195/group-project-group-22.git*
+    1. On this page: go to code > HTTPS > copy the repo link > clone using the URL https://github.com/SJSU-CMPE-195/group-project-group-22.git
         In your IDE terminal type: 
         ```
         git clone https://github.com/SJSU-CMPE-195/group-project-group-22.git
@@ -39,20 +39,23 @@ How to set up this project
     ```
 
 4. Connect ESP32 via USB 
+
 5. Build the project
     ```
     mvn install
     ```
+
 6. Run the game
     ```
     mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone"
     ```
 
 
+
 ## Configuration
 How to configure environment variables, API keys, etc.
 
-No API keys or environment variables are required. 
+**No API keys or environment variables are required.**
 
 
 ## Running the Application
