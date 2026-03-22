@@ -11,13 +11,13 @@ We are developing a custom, transistor-level spiking neural network (SNN) that w
 ## Prerequisites
 Software, tools, accounts, etc. needed before setup
 
-### Software: 
+Software: 
     - IDE of choice
     - [Git](https://git-scm.com/install/)
     - [Java JDK 17](https://docs.oracle.com/en/java/javase/21/install/overview-jdk-installation.html)
     - [Apache Maven 3.X](https://maven.apache.org/install.html)
 
-### Hardware:
+Hardware:
     - ESP 32 microcontroller connected via USB/Serial
     - Neural network circuit assembled on breadboard 
 
@@ -36,7 +36,7 @@ How to set up this project
 
     2. cd into the project folder 
     ```
-        cd group-project-group-22/software
+    cd group-project-group-22/software
     ```
 
 4. Connect ESP32 via USB 
@@ -63,10 +63,12 @@ Navigate to the software directory from the root of the cloned repository:
     ```
     cd group-project-group-22/software
     ```
+
 build the project in maven
     ```
     mvn install 
     ``
+
 run the PoC
     ```
     mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone"
@@ -81,18 +83,33 @@ Basic instructions on how to use the application
     - Human (user): presses Space when the ball is inside the yellow zone to score
     - Hardware: ESP32 neural network player (neuron)
 
-The screen will look like this: 
-![installation-tutorial](poc-screenshot.png)
+![proofofconcept](poc-screenshot.png)
+*PoC UI*
 
 Controls: 
-Space: Hits the ball when inside zone
-Esc: Pauses the game
-R: Resets the game
+- Space: Hits the ball when inside zone
+- Esc: Pauses the game
+- R: Resets the game
 
 Recorded Stats:
-Hits: successful hits out of total attempts
-Accuracy: hit percentage
-Hits/Pass: average hits per pass of the ball
+- Hits: successful hits out of total attempts
+- Accuracy: hit percentage
+- Hits/Pass: average hits per pass of the ball
 
 ## Project Structure
-[Brief overview of folder/file organization]
+Brief overview of folder/file organization
+
+### Hardware
+- Schematics: contains LTspice schematic files with version history of neuron circuit diagrams 
+
+### Software
+- src/
+    - main/ 
+        - hardware/ Java program for connecting to ESP32 
+        - player/ core player abstractions and implementations
+        - pong/ for fully developed game 
+        - sandbox/ *location of PoC under PoC_HitTheZone.java*
+    - test/ for implementing testing with JUnit and Mockito
+        - hardware/ hardware test cases
+        - sandbox/ PoC test cases
+- pom.xml for Maven dependencies 
