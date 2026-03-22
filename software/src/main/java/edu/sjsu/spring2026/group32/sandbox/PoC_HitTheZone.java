@@ -1,5 +1,9 @@
 package edu.sjsu.spring2026.group32.sandbox;
 
+import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
+import edu.sjsu.spring2026.group32.hardware.serial.RealSerialDevice;
+import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.player.*;
 import javax.swing.*;
 import java.awt.*;
@@ -33,9 +37,10 @@ public class PoC_HitTheZone extends JFrame {
     // ---- Players ---------------------------------------------------------
     private final List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players;
 
-    private final int[]              hits;
-    private final int[]              attempts;
-    private final boolean[]          canScore;
+    // Package-private so same-package tests (PoCTest) can inspect values directly.
+    final int[]              hits;
+    final int[]              attempts;
+    final boolean[]          canScore;
     /**
      * Edge-detection: an action is only processed on the tick it first appears.
      * IMPORTANT: reset to null on every new zone entry so a press that fired
@@ -437,9 +442,21 @@ public class PoC_HitTheZone extends JFrame {
         Map<Integer, HitTheZoneAction> bindings =
                 Map.of(KeyEvent.VK_SPACE, HitTheZoneAction.SCORE);
 
+        // Build the hardware stack: serial manager → signal parser → source → player.
+        // If no ESP32 is connected, HardwareSignalSource returns 0.0 V and the
+        // hardware player simply never scores — safe graceful degradation.
+        SerialConnectionManager scm    = new SerialConnectionManager(RealSerialDevice::getRealPorts);
+        NeuralSignalParser      parser = new NeuralSignalParser();
+        HardwareSignalSource    src    = new HardwareSignalSource(scm, parser);
+        HitTheZoneHardwareAI    hwPlayer = new HitTheZoneHardwareAI("Neural", src);
+
+        // Release the serial port when the JVM exits (window close or Ctrl-C).
+        Runtime.getRuntime().addShutdownHook(new Thread(hwPlayer::close));
+
         List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players = List.of(
                 new HitTheZoneSoftwareAI("Bot Alpha", 3),
                 new HitTheZoneSoftwareAI("Bot Beta",  9),
+                hwPlayer,
                 new HumanPlayer<>("Human", bindings, null)
         );
 
