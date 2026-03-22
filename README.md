@@ -27,9 +27,8 @@ How to set up this project
 1. Install Java JDK 16+
 2. Install Apache Maven 3.6+ 
 3. Clone the repository
-    1. From here 
-        ![installation-tutorial](installation-tut.png)
-        *From the github page go to code > HTTPS > copy the repo link > clone using the URL https://github.com/SJSU-CMPE-195/group-project-group-22.git*
+    1. On this page: go to code > HTTPS > copy the repo link > clone using the URL https://github.com/SJSU-CMPE-195/group-project-group-22.git*
+        In your IDE terminal type: 
         ```
         git clone https://github.com/SJSU-CMPE-195/group-project-group-22.git
         ```
