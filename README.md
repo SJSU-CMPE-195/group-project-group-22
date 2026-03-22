@@ -15,7 +15,7 @@ Software:
 - IDE of choice
 - [Git](https://git-scm.com/install/)
 - [Java JDK 17](https://docs.oracle.com/en/java/javase/21/install/overview-jdk-installation.html)
-- [Apache Maven 3.X](https://maven.apache.org/install.html)
+- [Apache Maven 3.6](https://maven.apache.org/install.html)
 
 Hardware:
 - ESP 32 microcontroller connected via USB/Serial
