@@ -28,10 +28,10 @@ How to set up this project
 2. Install Apache Maven 3.6+ 
 3. Clone the repository
     1. From here 
-        ![alt text](installation-tut.png)
+        ![installation-tutorial](installation-tut.png)
         *From the github page go to code > HTTPS > copy the repo link > clone using the URL https://github.com/SJSU-CMPE-195/group-project-group-22.git*
         ```
-            git clone https://github.com/SJSU-CMPE-195/group-project-group-22.git
+        git clone https://github.com/SJSU-CMPE-195/group-project-group-22.git
         ```
 
     2. cd into the project folder 
@@ -42,22 +42,57 @@ How to set up this project
 4. Connect ESP32 via USB 
 5. Build the project
     ```
-        mvn install
+    mvn install
     ```
 6. Run the game
     ```
-        mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.pong.PongGame"
+    mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone"
     ```
 
 
 ## Configuration
-[How to configure environment variables, API keys, etc.]
+How to configure environment variables, API keys, etc.
+
+No API keys or environment variables are required. 
+
 
 ## Running the Application
-[Commands to start the application]
+Commands to start the application
+
+Navigate to the software directory from the root of the cloned repository:
+    ```
+    cd group-project-group-22/software
+    ```
+build the project in maven
+    ```
+    mvn install 
+    ``
+run the PoC
+    ```
+    mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone"
+    ```
+
 
 ## Usage
-[Basic instructions on how to use the application]
+Basic instructions on how to use the application
+    The PoC demo showcases the hardware neural network against software bots and a human player. 
+    Players: 
+    - Bot Alpha/Beta: software AI players
+    - Human (user): presses Space when the ball is inside the yellow zone to score
+    - Hardware: ESP32 neural network player (neuron)
+
+The screen will look like this: 
+![installation-tutorial](poc-screenshot.png)
+
+Controls: 
+Space: Hits the ball when inside zone
+Esc: Pauses the game
+R: Resets the game
+
+Recorded Stats:
+Hits: successful hits out of total attempts
+Accuracy: hit percentage
+Hits/Pass: average hits per pass of the ball
 
 ## Project Structure
 [Brief overview of folder/file organization]
