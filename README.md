@@ -1,6 +1,6 @@
 # Hardware Spiking Neural Network (SNN)
 
-We are developing a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the game Pong. This project is comprised of software game and a hardware neural network. 
+This project is a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the game Pong. It is comprised of software game made in Java and a hardware neural network. 
 
 ## Team - (Group 32)
 - Jonathon Fleming | [@JellyF02](https://github.com/JellyF02) | jonathon.fleming@sjsu.edu |
@@ -19,7 +19,7 @@ Software:
 
 Hardware:
 - ESP 32 microcontroller connected via USB/Serial
- - Neural network circuit assembled on breadboard 
+- Neural network circuit assembled on breadboard 
 
 ## Installation Steps
 How to set up this project
