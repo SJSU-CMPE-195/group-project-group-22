@@ -26,13 +26,12 @@ void loop()
  // Serial.printf("calculated voltage value: %f\n", voltage);
  // delay(1000);
 
-  Serial.print("Voltage:");
-  Serial.println(voltage);
-  
+  // Send 4-field CSV over USB Serial so Java NeuralSignalParser can read it.
+  // Format: millis,1,0,rawADC  (parser reads parts[3] as the raw ADC integer)
+  Serial.println(String(millis()) + ",1,0," + String(rawValue));
+
+  // Still send the human-readable payload over Serial2 for the Nano receiver.
   String payload = "<" + String(rawValue) + "," + String(voltage, 2) + ">";
   Serial2.println(payload);   //payload goes out over tx2 gpio17
-  
-  //Print to the USB Serial Monitor for verification of payload
-  Serial.println("Transmitting: " + payload);
   delay(10);
 }
