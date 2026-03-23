@@ -15,7 +15,15 @@ public class SerialConnectionManager {
     }
 
     public boolean connect() {
-        SerialDevice[] ports = portProvider.get();
+        SerialDevice[] ports;
+        try {
+            ports = portProvider.get();
+        } catch (Exception | Error e) {
+            System.err.println(">>> Failed to enumerate serial ports: " + e.getMessage());
+            System.err.println(">>> Hardware player will not score (no serial ports available).");
+            return false;
+        }
+
         for (SerialDevice port : ports) {
             String name = port.getDescriptivePortName();
             if (name.contains("CP210") || name.contains("CH340") || name.contains("USB-to-Serial")) {

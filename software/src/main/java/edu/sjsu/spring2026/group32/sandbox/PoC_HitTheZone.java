@@ -1,5 +1,9 @@
 package edu.sjsu.spring2026.group32.sandbox;
 
+import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
+import edu.sjsu.spring2026.group32.hardware.serial.RealSerialDevice;
+import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.player.*;
 import javax.swing.*;
 import java.awt.*;
@@ -8,6 +12,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.KeyboardFocusManager;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -15,7 +20,7 @@ public class PoC_HitTheZone extends JFrame {
 
     // ---- Layout constants ------------------------------------------------
     static final int WIDTH      = 820;
-    static final int HEIGHT     = 300;
+    static final int HEIGHT     = 400;
     static final int BALL_DIAM  = 20;
     static final int START_X    = 40;
     static final int TRACK_Y    = 130;
@@ -33,9 +38,10 @@ public class PoC_HitTheZone extends JFrame {
     // ---- Players ---------------------------------------------------------
     private final List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players;
 
-    private final int[]              hits;
-    private final int[]              attempts;
-    private final boolean[]          canScore;
+    // Package-private so same-package tests (PoCTest) can inspect values directly.
+    final int[]              hits;
+    final int[]              attempts;
+    final boolean[]          canScore;
     /**
      * Edge-detection: an action is only processed on the tick it first appears.
      * IMPORTANT: reset to null on every new zone entry so a press that fired
@@ -45,7 +51,7 @@ public class PoC_HitTheZone extends JFrame {
 
     // ---- Shared game state -----------------------------------------------
     protected int     ballX       = START_X;
-    protected int     direction   = +SPEED;
+    protected int     direction   = SPEED;
     protected int     totalPasses = 0;
     protected boolean inZone      = false;
     protected boolean isPaused    = false;
@@ -57,7 +63,6 @@ public class PoC_HitTheZone extends JFrame {
     private  final List<JButton>   humanScoreButtons = new ArrayList<>();
     private  final JLabel          infoLabel   = new JLabel("", SwingConstants.CENTER);
     private  final JButton    pauseButton = new JButton("Pause (Esc)");
-    private  final JButton    resetButton = new JButton("Reset (R)");
     protected final GamePanel gamePanel   = new GamePanel();
     protected final Timer     tick;
 
@@ -141,6 +146,7 @@ public class PoC_HitTheZone extends JFrame {
         pauseButton.setFocusable(false);
         pauseButton.addActionListener(e -> togglePause());
 
+        JButton resetButton = new JButton("Reset (R)");
         resetButton.setFocusable(false);
         resetButton.addActionListener(e -> resetGame());
 
@@ -153,7 +159,7 @@ public class PoC_HitTheZone extends JFrame {
         for (int i = 0; i < players.size(); i++) {
             if (players.get(i) instanceof KeyListener) {
                 final int idx = i;
-                JButton scoreBtn = new JButton("Score — " + players.get(i).getName());
+                JButton scoreBtn = new JButton("Score (Space) — " + players.get(i).getName());
                 scoreBtn.setFocusable(false);  // prevents spacebar double-firing via focus
                 scoreBtn.setForeground(playerColor(i));
                 scoreBtn.setFont(scoreBtn.getFont().deriveFont(Font.BOLD));
@@ -174,6 +180,7 @@ public class PoC_HitTheZone extends JFrame {
         updateHud();
         tick = new Timer(16, e -> onTick());
         tick.start();
+        togglePause();
     }
 
     // ======================================================================
@@ -232,7 +239,7 @@ public class PoC_HitTheZone extends JFrame {
         int panelWidth = gamePanel.getWidth() > 0 ? gamePanel.getWidth() : WIDTH;
         int rightBound = panelWidth - BALL_DIAM;
 
-        if      (ballX <= 0)          { ballX = 0;          direction = +SPEED; }
+        if      (ballX <= 0)          { ballX = 0;          direction = SPEED; }
         else if (ballX >= rightBound) { ballX = rightBound; direction = -SPEED; }
 
         int     centerX   = ballX + BALL_DIAM / 2;
@@ -251,9 +258,7 @@ public class PoC_HitTheZone extends JFrame {
             // retains canScore=true across the gap between passes, and a
             // mis-timed edge-detection reset on re-entry could fire an
             // out-of-zone press as a hit.
-            for (int i = 0; i < canScore.length; i++) {
-                canScore[i] = false;
-            }
+            Arrays.fill(canScore, false);
         }
 
         inZone = nowInZone;
@@ -289,7 +294,7 @@ public class PoC_HitTheZone extends JFrame {
 
     protected void resetGame() {
         ballX       = START_X;
-        direction   = +SPEED;
+        direction   = SPEED;
         totalPasses = 0;
         inZone      = false;
         elapsedMs   = 0;
@@ -437,9 +442,21 @@ public class PoC_HitTheZone extends JFrame {
         Map<Integer, HitTheZoneAction> bindings =
                 Map.of(KeyEvent.VK_SPACE, HitTheZoneAction.SCORE);
 
+        // Build the hardware stack: serial manager → signal parser → source → player.
+        // If no ESP32 is connected, HardwareSignalSource returns 0.0 V and the
+        // hardware player simply never scores — safe graceful degradation.
+        SerialConnectionManager scm    = new SerialConnectionManager(RealSerialDevice::getRealPorts);
+        NeuralSignalParser      parser = new NeuralSignalParser();
+        HardwareSignalSource    src    = new HardwareSignalSource(scm, parser);
+        HitTheZoneHardwareAI    hwPlayer = new HitTheZoneHardwareAI("Neural", src);
+
+        // Release the serial port when the JVM exits (window close or Ctrl-C).
+        Runtime.getRuntime().addShutdownHook(new Thread(hwPlayer::close));
+
         List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players = List.of(
                 new HitTheZoneSoftwareAI("Bot Alpha", 3),
                 new HitTheZoneSoftwareAI("Bot Beta",  9),
+                hwPlayer,
                 new HumanPlayer<>("Human", bindings, null)
         );
 

@@ -37,12 +37,21 @@ public class RealSerialDevice implements SerialDevice {
     public InputStream getInputStream() { return port.getInputStream(); }
 
     // Helper to get all real ports wrapped in our interface
+    // Returns an empty array if the jSerialComm native library fails to load
+    // (e.g. jSerialComm.dll access denied on Windows), allowing the rest of
+    // the application to start and run without serial hardware.
     public static SerialDevice[] getRealPorts() {
-        SerialPort[] realPorts = SerialPort.getCommPorts();
-        SerialDevice[] wrappedPorts = new SerialDevice[realPorts.length];
-        for (int i = 0; i < realPorts.length; i++) {
-            wrappedPorts[i] = new RealSerialDevice(realPorts[i]);
+        try {
+            SerialPort[] realPorts = SerialPort.getCommPorts();
+            SerialDevice[] wrappedPorts = new SerialDevice[realPorts.length];
+            for (int i = 0; i < realPorts.length; i++) {
+                wrappedPorts[i] = new RealSerialDevice(realPorts[i]);
+            }
+            return wrappedPorts;
+        } catch (Exception | Error e) {
+            System.err.println(">>> Failed to enumerate serial ports (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            System.err.println(">>> Hardware player will not score (no serial ports available).");
+            return new SerialDevice[0];
         }
-        return wrappedPorts;
     }
 }

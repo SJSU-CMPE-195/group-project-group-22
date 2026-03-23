@@ -11,9 +11,9 @@ void loop()
   for(int i = 0; i <= 168; i++) {
     analogWrite(pwmPin, i);
     
-    // Convert the PWM value back to a voltage just so we can print/plot it nicely
-    float voltage = (i / 255.0) * 5.0; 
-    Serial.println(voltage);
+    // 4-field CSV matching NeuralSignalParser format: millis,1,0,rawPWM
+    // NeuralSignalParser reads parts[3] as raw ADC; using PWM value i here.
+    Serial.println(String(millis()) + ",1,0," + String(i));
     
     delay(10); // Slows down the wave so you can see it
   }
@@ -22,8 +22,8 @@ void loop()
   for(int i = 168; i >= 0; i--) {
     analogWrite(pwmPin, i);
     
-    float voltage = (i / 255.0) * 5.0;
-    Serial.println(voltage);
+    // 4-field CSV matching NeuralSignalParser format: millis,1,0,rawPWM
+    Serial.println(String(millis()) + ",1,0," + String(i));
     
     delay(10);
   }
