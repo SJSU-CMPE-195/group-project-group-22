@@ -1,6 +1,6 @@
 # Hardware Spiking Neural Network (SNN)
 
-This project is a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the game Pong. It is comprised of software game made in Java and a hardware neural network. 
+This project is a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the game Pong. It is comprised of software game and AI model made in Java and a hardware neural network. 
 
 ## Team - (Group 32)
 - Jonathon Fleming | [@JellyF02](https://github.com/JellyF02) | jonathon.fleming@sjsu.edu |
@@ -24,7 +24,7 @@ Hardware:
 ## Installation Steps
 How to set up this project
 
-1. Install Java JDK 16+
+1. Install Java JDK 17+
 2. Install Apache Maven 3.6+ 
 3. Clone the repository
     1. On this page: go to code > HTTPS > copy the repo link > clone using the URL https://github.com/SJSU-CMPE-195/group-project-group-22.git
@@ -73,7 +73,7 @@ build the project in maven
 
 run the PoC
     ```
-    mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox PoC_HitTheZone"
+    mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone"
     ```
 
 
@@ -81,7 +81,7 @@ run the PoC
 Basic instructions on how to use the application
 
 
-The PoC demo showcases the hardware neural network against software bots and a human player. 
+The PoC demo showcases the hardware neural network against software bots, hardware AI, and a human player. 
 
 Players: 
 - Bot Alpha/Beta: software AI players
