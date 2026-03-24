@@ -11,6 +11,12 @@ class PoCTest {
 
     @BeforeEach
     void setUp() {
+        // TODO: Create a player list with a single zero-jitter software bot.
+        // Zero jitter means the bot reacts instantly but never interferes
+        // with the manual game state set in each test.
+        // Use the headless constructor (true) to skip Swing GUI initialisation.
+
+
         // We initialize the GUI, but we will test the underlying logic variables
         game = new PoC_HitTheZone(true);
     }
@@ -33,6 +39,9 @@ class PoCTest {
     @Test
     @DisplayName("Test 2: Scoring should only be possible once per zone entry")
     void testScoreLockout() {
+        // TODO: Refactor game.canScore, change attemptScore to processScore(),
+        //  refactor successfullHits + totalAttempts, assert  hits[0] == 1 and attempts[0] == 2 
+
         // Move ball into the zone
         game.ballX = PoC_HitTheZone.ZONE_START - (PoC_HitTheZone.BALL_DIAMETER / 2); // center lands on ZONE_START
         game.canScore = true; 
@@ -51,6 +60,8 @@ class PoCTest {
     @Test
     @DisplayName("Test 3: Reset should clear all counters")
     void testResetFunctionality() {
+        // TODO: Set hits[0], attempts[0], and totalPasses to non-zero values.
+        // Assert hits[0], attempts[0], and totalPasses are all 0.
 
         // Simulate some game play (hits = 5, attempts = 10) 
         game.successfulHits = 5; 
