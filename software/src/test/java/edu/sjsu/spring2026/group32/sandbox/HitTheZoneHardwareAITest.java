@@ -100,13 +100,15 @@ class HitTheZoneHardwareAITest {
     @Test
     @DisplayName("getName() returns the name passed to the constructor")
     void getNameReturnsConstructorValue() {
-        // Create a player with name "Neural".
-        // Assert getName() returns "Neural".
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Neural", fixed(2.0), 1.0);
+        assertEquals("Neural", p.getName());
+
     }
 
     @Test
     @DisplayName("getType() returns HARDWARE")
     void getTypeReturnsHardware() {
-        // Assert player.getType() equals PlayerType.HARDWARE.
+        assertEquals(PlayerType.HARDWARE, player.getType());
+
     }
 }
