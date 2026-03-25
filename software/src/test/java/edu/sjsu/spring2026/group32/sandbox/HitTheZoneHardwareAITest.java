@@ -43,6 +43,7 @@ class HitTheZoneHardwareAITest {
     @Test
     @DisplayName("Returns null when in zone but voltage is below threshold")
     void noScoreWhenVoltageLow() {
+        // Hardware with voltage fixed voltage 0.5 and threshold: 1.0 
         HitTheZoneHardwareAI lowPlayer = new HitTheZoneHardwareAI("Bot", fixed(0.5), 1.0);
         assertNull(lowPlayer.getNextMove(new HitTheZoneState(true)));
     }
@@ -51,6 +52,7 @@ class HitTheZoneHardwareAITest {
     @DisplayName("Returns null when outside zone regardless of voltage")
     void noScoreWhenOutsideZone() {
     
+        // Hardware with voltage fixed voltage 3.3 and threshold: 1.0 
         HitTheZoneHardwareAI hotPlayer = new HitTheZoneHardwareAI("Bot", fixed(3.3), 1.0);
         
         // Zone check must gate the voltage check, even max voltage should not score outside zone
@@ -65,25 +67,30 @@ class HitTheZoneHardwareAITest {
     @Test
     @DisplayName("Returns SCORE at exactly the threshold voltage (inclusive)")
     void scoreAtExactThreshold() {
-        // Create a player with voltageThreshold = 1.0 and fixed voltage = 1.0.
-        // Call getNextMove with inZone = true.
-        // Assert the result is HitTheZoneAction.SCORE (boundary is inclusive).
+
+        // Hardware with fixed voltage 1.0 and voltage threshold 1.0 
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(1.0), 1.0);
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(true)));
+
     }
 
     @Test
     @DisplayName("Returns null just below the threshold voltage")
     void noScoreJustBelowThreshold() {
-        // Create a player with voltageThreshold = 1.0 and fixed voltage = 0.99.
-        // Call getNextMove with inZone = true.
-        // Assert the result is null.
+
+        // Simulates hardware with fixed voltage 0.99 and voltage threshold 1.0 
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(0.99), 1.0);
+        assertNull(p.getNextMove(new HitTheZoneState(true)));
     }
 
     @Test
     @DisplayName("Custom threshold is respected")
     void customThresholdRespected() {
-        // Create a player with voltageThreshold = 2.5 and fixed voltage = 2.0.
-        // Call getNextMove with inZone = true.
-        // Assert the result is null — 2.0 V does not meet the 2.5 V threshold.
+
+        // Simulates hardware with fixed voltage = 2.0 and voltageThreshold = 2.5 
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 2.5);
+        assertNull(p.getNextMove(new HitTheZoneState(true)));
+
     }
 
     // ------------------------------------------------------------------
