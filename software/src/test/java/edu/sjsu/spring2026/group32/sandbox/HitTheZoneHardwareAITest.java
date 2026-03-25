@@ -37,25 +37,25 @@ class HitTheZoneHardwareAITest {
     @Test
     @DisplayName("Returns SCORE when in zone and voltage meets threshold")
     void scoreWhenInZoneAndVoltageHigh() {
-        // Create a player with a voltage above the threshold.
-        // Call getNextMove with inZone = true.
-        // Assert the result is HitTheZoneAction.SCORE.
+        assertEquals(HitTheZoneAction.SCORE, player.getNextMove(new HitTheZoneState(true)));
     }
 
     @Test
     @DisplayName("Returns null when in zone but voltage is below threshold")
     void noScoreWhenVoltageLow() {
-        // Create a player with a voltage below the threshold (e.g. 0.5 V).
-        // Call getNextMove with inZone = true.
-        // Assert the result is null.
+        HitTheZoneHardwareAI lowPlayer = new HitTheZoneHardwareAI("Bot", fixed(0.5), 1.0);
+        assertNull(lowPlayer.getNextMove(new HitTheZoneState(true)));
     }
 
     @Test
     @DisplayName("Returns null when outside zone regardless of voltage")
     void noScoreWhenOutsideZone() {
-        // Create a player with maximum voltage (3.3 V).
-        // Call getNextMove with inZone = false.
-        // Assert the result is null — zone check must gate the voltage check.
+    
+        HitTheZoneHardwareAI hotPlayer = new HitTheZoneHardwareAI("Bot", fixed(3.3), 1.0);
+        
+        // Zone check must gate the voltage check, even max voltage should not score outside zone
+        assertNull(hotPlayer.getNextMove(new HitTheZoneState(false)));
+
     }
 
     // ------------------------------------------------------------------
