@@ -26,8 +26,8 @@ class HitTheZoneHardwareAITest {
 
     @BeforeEach
     void setUp() {
-        // Instantiate a HitTheZoneHardwareAI with the default 1.0 V threshold.
-        // Use fixed(2.0) as the signal source so the default player is always "hot".
+        // Simulates a default player with the 1.0V voltage threshold and always-hot signal source 2.0 V
+        player = new HitTheZoneHardwareAI("bot", fixed(2.0),1.0);
     }
 
     // ------------------------------------------------------------------
