@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.hardware.serial;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 
 public interface SerialDevice {
     String getDescriptivePortName();
@@ -11,4 +12,5 @@ public interface SerialDevice {
     boolean isOpen();
     void closePort();
     InputStream getInputStream();
+    OutputStream getOutputStream();
 }

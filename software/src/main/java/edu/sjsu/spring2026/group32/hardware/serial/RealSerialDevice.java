@@ -2,6 +2,7 @@ package edu.sjsu.spring2026.group32.hardware.serial;
 
 import com.fazecast.jSerialComm.SerialPort;
 import java.io.InputStream;
+import java.io.OutputStream;
 
 public class RealSerialDevice implements SerialDevice {
     private final SerialPort port;
@@ -35,6 +36,9 @@ public class RealSerialDevice implements SerialDevice {
 
     @Override
     public InputStream getInputStream() { return port.getInputStream(); }
+
+    @Override
+    public OutputStream getOutputStream() { return port.getOutputStream(); }
 
     // Helper to get all real ports wrapped in our interface
     // Returns an empty array if the jSerialComm native library fails to load
