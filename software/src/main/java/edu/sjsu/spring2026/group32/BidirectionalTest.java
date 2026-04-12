@@ -48,6 +48,15 @@ public class BidirectionalTest extends JFrame {
     private static final double V_REF     = 3.3;
     private static final int    ADC_MAX   = 4095;
 
+    // ── Mode ──────────────────────────────────────────────────────────────────
+    /**
+     * {@code true}  → standalone: owns the connection UI and manages its own port.<br>
+     * {@code false} → launched: receives an already-open {@link SerialConnectionManager}
+     *                 from {@link edu.sjsu.spring2026.group32.launcher.Launcher};
+     *                 the connection panel is hidden and the port is not closed on exit.
+     */
+    private final boolean standaloneMode;
+
     // ── Serial state ──────────────────────────────────────────────────────────
     private SerialConnectionManager connectionManager;
     private ExecutorService         readerThread;
@@ -119,10 +128,18 @@ public class BidirectionalTest extends JFrame {
     }
 
     // =========================================================================
-    //  Constructor
+    //  Constructors
     // =========================================================================
+
+    /**
+     * Standalone constructor — shows the full Serial Connection panel so the
+     * user can pick a COM port directly from this window.
+     * Use this when running {@code BidirectionalTest} as its own entry point.
+     */
     public BidirectionalTest() {
         super("ESP32 ↔ Java Serial Test");
+        this.standaloneMode = true;
+
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
@@ -139,6 +156,47 @@ public class BidirectionalTest extends JFrame {
         setLocationRelativeTo(null);
     }
 
+    /**
+     * Launcher-injected constructor.  The COM port is already open; this window
+     * hides the connection panel and does <em>not</em> close the port when
+     * disposed — the {@link edu.sjsu.spring2026.group32.launcher.Launcher}
+     * retains ownership.
+     *
+     * @param connectionManager an already-connected serial manager provided
+     *                          by the Launcher
+     */
+    public BidirectionalTest(SerialConnectionManager connectionManager) {
+        super("ESP32 ↔ Java Serial Test  [via Launcher]");
+        this.standaloneMode    = false;
+        this.connectionManager = connectionManager;
+
+        // DISPOSE, not EXIT — the Launcher must keep running.
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) {
+                // Stop reading but do NOT close the port — the Launcher owns it.
+                stopReadLoop();
+                appendLog("── Closed (port stays open in Launcher) ──");
+            }
+        });
+
+        buildUI();
+
+        // Already connected: reset graph, silence injection, start reading.
+        voltageGraph.reset();
+        voltageGraph.setInjection(false, 0.0);
+        connectionManager.sendLine("STOP_INJECT");
+        startReadLoop();
+        injectBtn.setEnabled(true);
+        stopInjectBtn.setEnabled(true);
+        appendLog("── Connected (launched from Launcher) ──");
+        appendLog("Injection off by default.");
+
+        setMinimumSize(new Dimension(1000, 600));
+        pack();
+        setLocationRelativeTo(null);
+    }
+
     // =========================================================================
     //  UI construction
     // =========================================================================
@@ -147,7 +205,10 @@ public class BidirectionalTest extends JFrame {
         root.setBorder(new EmptyBorder(8, 8, 8, 8));
         setContentPane(root);
 
-        root.add(buildConnectionPanel(), BorderLayout.NORTH);
+        // The connection panel is only shown in standalone mode.
+        // When launched from Launcher, the port is already open and the
+        // Launcher's SerialConnectionPanel owns the connection UI.
+        if (standaloneMode) root.add(buildConnectionPanel(), BorderLayout.NORTH);
         root.add(buildCenterPanel(),     BorderLayout.CENTER);
         root.add(buildInjectionPanel(),  BorderLayout.SOUTH);
     }
@@ -466,15 +527,24 @@ public class BidirectionalTest extends JFrame {
         appendLog("Injection off by default.");
     }
 
-    private void disconnect() {
-        if (!running.getAndSet(false)) return;   // already disconnected
-
+    /**
+     * Stops the serial read thread without closing the underlying port.
+     * Used by the launched-mode window listener so the Launcher retains
+     * ownership of the connection.
+     */
+    private void stopReadLoop() {
+        if (!running.getAndSet(false)) return;
         cancelPendingTask();
-
         if (readerThread != null) {
             readerThread.shutdownNow();
             readerThread = null;
         }
+    }
+
+    /** Full disconnect — stops the read loop AND closes the port. Standalone only. */
+    private void disconnect() {
+        stopReadLoop();
+
         if (connectionManager != null) {
             connectionManager.disconnect();
             connectionManager = null;
@@ -486,22 +556,29 @@ public class BidirectionalTest extends JFrame {
 
     private void setConnectedState(boolean connected, String portLabel) {
         SwingUtilities.invokeLater(() -> {
-            connectBtn.setEnabled(!connected);
-            disconnectBtn.setEnabled(connected);
-            refreshBtn.setEnabled(!connected);
-            portSelector.setEnabled(!connected);
-            injectBtn.setEnabled(connected);
+            // These UI components only exist in standalone mode.
+            if (standaloneMode) {
+                connectBtn   .setEnabled(!connected);
+                disconnectBtn.setEnabled( connected);
+                refreshBtn   .setEnabled(!connected);
+                portSelector .setEnabled(!connected);
+
+                if (connected) {
+                    statusDot.setForeground(new Color(40, 190, 40));
+                    statusLabel.setText("Connected: " + portLabel);
+                } else {
+                    statusDot.setForeground(Color.RED);
+                    statusLabel.setText("Disconnected");
+                }
+            }
+
+            injectBtn    .setEnabled(connected);
             stopInjectBtn.setEnabled(connected);
 
-            if (connected) {
-                statusDot.setForeground(new Color(40, 190, 40));
-                statusLabel.setText("Connected: " + portLabel);
-            } else {
-                statusDot.setForeground(Color.RED);
-                statusLabel.setText("Disconnected");
-                rawLabel.setText("Raw ADC: —");
+            if (!connected) {
+                rawLabel    .setText("Raw ADC: —");
                 voltageLabel.setText("Voltage: —");
-                modeLabel.setText("Mode: —");
+                modeLabel   .setText("Mode: —");
             }
         });
     }
