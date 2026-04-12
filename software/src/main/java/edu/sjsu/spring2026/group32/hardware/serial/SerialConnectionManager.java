@@ -74,7 +74,10 @@ public class SerialConnectionManager {
 
         if (this.comPort.openPort()) {
             System.out.println(">>> Serial Connection Established: " + port.getSystemPortName());
-            // No Scanner here — caller owns the read strategy via getInputStream().
+            // Initialize Scanner so HardwareSignalSource.getNextLine() works when the
+            // Launcher passes this manager to a game's hardware stack.
+            // BidirectionalTest ignores the Scanner and reads via getInputStream() directly.
+            this.scanner = new Scanner(comPort.getInputStream());
             initWriter();
             return true;
         }

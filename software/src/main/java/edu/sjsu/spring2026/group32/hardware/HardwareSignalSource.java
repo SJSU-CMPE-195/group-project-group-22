@@ -13,7 +13,12 @@ public class HardwareSignalSource implements BaseSignalSource {
     public HardwareSignalSource(SerialConnectionManager connectionManager, NeuralSignalParser parser) {
         this.connectionManager = connectionManager;
         this.parser = parser;
-        this.connectionManager.connect();
+        // Only auto-connect if the port isn't already open.
+        // When the Launcher provides a pre-connected manager (via connectTo()),
+        // calling connect() again would attempt to reopen an already-open port.
+        if (!this.connectionManager.isConnected()) {
+            this.connectionManager.connect();
+        }
     }
 
     @Override

@@ -79,9 +79,15 @@ public class BidirectionalTest extends JFrame {
     };
 
     // ── Summary strip ─────────────────────────────────────────────────────────
-    private JLabel rawLabel;
-    private JLabel voltageLabel;
-    private JLabel modeLabel;
+    private JLabel    rawLabel;
+    private JLabel    voltageLabel;
+    private JLabel    ch2RawLabel;
+    private JLabel    ch2VoltageLabel;
+    private JLabel    modeLabel;
+
+    // ── Channel checkboxes (control which traces the graph shows) ─────────────
+    private JCheckBox ch1Check;
+    private JCheckBox ch2Check;
 
     // ── Terminal ──────────────────────────────────────────────────────────────
     private JTextArea        dataDisplay;
@@ -269,13 +275,40 @@ public class BidirectionalTest extends JFrame {
         JPanel strip = new JPanel(new BorderLayout());
         strip.setBorder(new TitledBorder("Live Readings"));
 
-        JPanel labelsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 2));
-        rawLabel     = makeSummaryLabel("Raw ADC: —");
-        voltageLabel = makeSummaryLabel("Voltage: —");
-        modeLabel    = makeSummaryLabel("Mode: —");
+        JPanel labelsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));
+        rawLabel        = makeSummaryLabel("Ch1 ADC: —");
+        voltageLabel    = makeSummaryLabel("Ch1: — V");
+        ch2RawLabel     = makeSummaryLabel("Ch2 ADC: —");
+        ch2VoltageLabel = makeSummaryLabel("Ch2: — V");
+        modeLabel       = makeSummaryLabel("Mode: —");
+
+        // Ch2 labels are hidden until dual-channel data arrives.
+        ch2RawLabel    .setVisible(false);
+        ch2VoltageLabel.setVisible(false);
+
+        // ── Channel checkboxes ────────────────────────────────────────────────
+        ch1Check = new JCheckBox("Ch 1", true);
+        ch2Check = new JCheckBox("Ch 2", false);
+        ch1Check.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        ch2Check.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        ch1Check.setForeground(new Color(50, 220, 80));   // green — matches graph trace
+        ch2Check.setForeground(new Color(80, 180, 255));  // blue  — matches graph trace
+        ch1Check.setToolTipText("Show / hide Channel 1 trace (GPIO34)");
+        ch2Check.setToolTipText("Show / hide Channel 2 trace (GPIO35, dual-channel firmware only)");
+        // Wire checkboxes to graph visibility — voltageGraph is assigned in buildCenterPanel
+        // so the listeners are attached after the graph exists (buildUI order is safe).
+        ch1Check.addItemListener(e -> voltageGraph.setChannelVisible(0, ch1Check.isSelected()));
+        ch2Check.addItemListener(e -> voltageGraph.setChannelVisible(1, ch2Check.isSelected()));
+
         labelsPanel.add(rawLabel);
         labelsPanel.add(voltageLabel);
+        labelsPanel.add(ch2RawLabel);
+        labelsPanel.add(ch2VoltageLabel);
         labelsPanel.add(modeLabel);
+        labelsPanel.add(Box.createHorizontalStrut(12));
+        labelsPanel.add(new JLabel("Graph:"));
+        labelsPanel.add(ch1Check);
+        labelsPanel.add(ch2Check);
 
         pauseBtn = new JButton("⏸ Pause");
         pauseBtn.setToolTipText("Pause terminal output (graph and labels keep updating)");
@@ -576,9 +609,11 @@ public class BidirectionalTest extends JFrame {
             stopInjectBtn.setEnabled(connected);
 
             if (!connected) {
-                rawLabel    .setText("Raw ADC: —");
-                voltageLabel.setText("Voltage: —");
-                modeLabel   .setText("Mode: —");
+                rawLabel        .setText("Ch1 ADC: —");
+                voltageLabel    .setText("Ch1: — V");
+                modeLabel       .setText("Mode: —");
+                ch2RawLabel    .setVisible(false);
+                ch2VoltageLabel.setVisible(false);
             }
         });
     }
@@ -650,25 +685,50 @@ public class BidirectionalTest extends JFrame {
             return;
         }
 
-        // Normal CSV: millis,1,0,rawADC
+        // Normal CSV: millis,1,0,rawADC[,rawADC2]
         String[] parts = line.split(",");
         if (parts.length >= 4) {
             try {
-                long   ms      = Long.parseLong(parts[0].trim());
-                int    raw     = Integer.parseInt(parts[3].trim());
-                double voltage = (raw / (double) ADC_MAX) * V_REF;
+                long   ms   = Long.parseLong(parts[0].trim());
+                int    raw0 = Integer.parseInt(parts[3].trim());
+                double v0   = (raw0 / (double) ADC_MAX) * V_REF;
 
-                final String timeStr  = LocalTime.now().format(TIME_FMT);
-                String formatted = String.format(
-                        "%s  %5.3f V  (raw %4d, t=%dms)",
-                        timeStr, voltage, raw, ms);
+                // Optional second ADC channel (dual-channel firmware only).
+                int    raw1 = -1;
+                double v1   = 0.0;
+                if (parts.length >= 5) {
+                    try {
+                        raw1 = Integer.parseInt(parts[4].trim());
+                        v1   = (raw1 / (double) ADC_MAX) * V_REF;
+                    } catch (NumberFormatException ignored2) {
+                        raw1 = -1;
+                    }
+                }
 
-                final double v = voltage;
+                final String timeStr = LocalTime.now().format(TIME_FMT);
+                final int    fr1     = raw1;
+                final double fv0     = v0;
+                final double fv1     = v1;
+                final long   fMs     = ms;
+                final String logLine = raw1 >= 0
+                        ? String.format("%s  Ch1: %5.3f V (raw %4d)  Ch2: %5.3f V (raw %4d)  t=%dms",
+                                timeStr, v0, raw0, v1, raw1, ms)
+                        : String.format("%s  %5.3f V  (raw %4d, t=%dms)",
+                                timeStr, v0, raw0, ms);
+
                 SwingUtilities.invokeLater(() -> {
-                    if (!displayPaused) appendLog(formatted);
-                    rawLabel.setText("Raw ADC: " + raw);
-                    voltageLabel.setText(String.format("Voltage: %.3f V", v));
-                    voltageGraph.addSample(v, raw, ms, timeStr);
+                    if (!displayPaused) appendLog(logLine);
+                    rawLabel    .setText("Ch1 ADC: " + raw0);
+                    voltageLabel.setText(String.format("Ch1: %.3f V", fv0));
+                    voltageGraph.addSample(0, fv0, raw0, fMs, timeStr);
+
+                    if (fr1 >= 0) {
+                        ch2RawLabel    .setText("Ch2 ADC: " + fr1);
+                        ch2VoltageLabel.setText(String.format("Ch2: %.3f V", fv1));
+                        ch2RawLabel    .setVisible(true);
+                        ch2VoltageLabel.setVisible(true);
+                        voltageGraph.addSample(1, fv1, fr1, fMs, timeStr);
+                    }
                 });
                 return;
             } catch (NumberFormatException ignored) {
@@ -847,29 +907,38 @@ public class BidirectionalTest extends JFrame {
     }
 
     // =========================================================================
-    //  VoltageGraph — custom scrolling chart panel
+    //  VoltageGraph — custom scrolling chart, supports up to 2 channels
     // =========================================================================
     private static class VoltageGraph extends JPanel {
 
-        private static final int   BUFFER   = 500;
-        private static final double V_REF   = 3.3;
-        private static final int   ML = 44, MR = 10, MT = 12, MB = 26;
+        private static final int    NUM_CHANNELS = 2;
+        private static final int    BUFFER       = 500;
+        private static final double V_REF        = 3.3;
+        private static final int    ML = 44, MR = 10, MT = 12, MB = 26;
 
-        private static final Color BG       = new Color(18,  18,  18);
-        private static final Color GRID_COL = new Color(45,  45,  45);
-        private static final Color TRACE    = new Color(50,  220, 80);
-        private static final Color INJECT_C = new Color(230, 140, 30);
-        private static final Color AXIS_TXT = new Color(150, 150, 150);
-        private static final Color HOVER_C  = new Color(255, 255, 255, 160);
-        private static final Color TIP_BG   = new Color(30,  30,  30,  220);
+        private static final Color   BG       = new Color(18,  18,  18);
+        private static final Color   GRID_COL = new Color(45,  45,  45);
+        private static final Color   INJECT_C = new Color(230, 140,  30);
+        private static final Color   AXIS_TXT = new Color(150, 150, 150);
+        private static final Color   HOVER_C  = new Color(255, 255, 255, 160);
+        private static final Color   TIP_BG   = new Color( 30,  30,  30, 220);
 
-        // ── Ring buffer (parallel arrays) ─────────────────────────────────────
-        private final double[] vBuf   = new double[BUFFER];
-        private final int[]    rawBuf = new int   [BUFFER];
-        private final long[]   msBuf  = new long  [BUFFER];
-        private final String[] tBuf   = new String[BUFFER];
-        private int head  = 0;
-        private int count = 0;
+        /** One colour per channel. Ch1 = green (legacy), Ch2 = blue. */
+        private static final Color[] TRACE_COLORS = {
+            new Color( 50, 220,  80),
+            new Color( 80, 180, 255),
+        };
+
+        // ── Per-channel ring buffers ──────────────────────────────────────────
+        private final double[][] vBufs   = new double[NUM_CHANNELS][BUFFER];
+        private final int[][]    rawBufs = new int   [NUM_CHANNELS][BUFFER];
+        private final long[][]   msBufs  = new long  [NUM_CHANNELS][BUFFER];
+        private final String[][] tBufs   = new String[NUM_CHANNELS][BUFFER];
+        private final int[]      heads   = new int[NUM_CHANNELS];
+        private final int[]      counts  = new int[NUM_CHANNELS];
+
+        // ── Visibility (toggled by the Ch1 / Ch2 checkboxes) ─────────────────
+        private final boolean[] visible = {true, false};
 
         // ── State ─────────────────────────────────────────────────────────────
         private boolean injecting  = false;
@@ -881,7 +950,7 @@ public class BidirectionalTest extends JFrame {
         private final JButton pauseBtn;
 
         VoltageGraph() {
-            setLayout(null);   // absolute positioning for the overlay button
+            setLayout(null);
 
             pauseBtn = new JButton("⏸");
             pauseBtn.setToolTipText("Pause graph updates");
@@ -898,26 +967,32 @@ public class BidirectionalTest extends JFrame {
 
             addMouseMotionListener(new MouseMotionAdapter() {
                 @Override public void mouseMoved(MouseEvent e) {
-                    hoverX = e.getX();
-                    repaint();
+                    hoverX = e.getX(); repaint();
                 }
             });
             addMouseListener(new MouseAdapter() {
                 @Override public void mouseExited(MouseEvent e) {
-                    hoverX = -1;
-                    repaint();
+                    hoverX = -1; repaint();
                 }
             });
         }
 
-        void addSample(double v, int raw, long ms, String time) {
-            if (paused) return;
-            vBuf  [head] = v;
-            rawBuf[head] = raw;
-            msBuf [head] = ms;
-            tBuf  [head] = time;
-            head = (head + 1) % BUFFER;
-            if (count < BUFFER) count++;
+        // ── Public API ────────────────────────────────────────────────────────
+
+        void addSample(int channel, double v, int raw, long ms, String time) {
+            if (paused || channel < 0 || channel >= NUM_CHANNELS) return;
+            int h = heads[channel];
+            vBufs  [channel][h] = v;
+            rawBufs[channel][h] = raw;
+            msBufs [channel][h] = ms;
+            tBufs  [channel][h] = time;
+            heads[channel] = (h + 1) % BUFFER;
+            if (counts[channel] < BUFFER) counts[channel]++;
+            repaint();
+        }
+
+        void setChannelVisible(int channel, boolean vis) {
+            if (channel >= 0 && channel < NUM_CHANNELS) visible[channel] = vis;
             repaint();
         }
 
@@ -928,16 +1003,20 @@ public class BidirectionalTest extends JFrame {
         }
 
         void reset() {
-            head  = 0;
-            count = 0;
+            for (int ch = 0; ch < NUM_CHANNELS; ch++) {
+                heads[ch]  = 0;
+                counts[ch] = 0;
+            }
             repaint();
         }
+
+        // ── Painting ──────────────────────────────────────────────────────────
 
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,  RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,      RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
             int w  = getWidth();
@@ -945,14 +1024,12 @@ public class BidirectionalTest extends JFrame {
             int pw = w - ML - MR;
             int ph = h - MT - MB;
 
-            // Position pause button top-right of the plot area
             Dimension btnSz = pauseBtn.getPreferredSize();
             pauseBtn.setBounds(w - btnSz.width - MR, MT, btnSz.width, btnSz.height);
 
             // ── Background ───────────────────────────────────────────────────
             g2.setColor(BG);
             g2.fillRect(0, 0, w, h);
-
             if (pw <= 0 || ph <= 0) { g2.dispose(); return; }
 
             // ── Grid + Y-axis labels ──────────────────────────────────────────
@@ -977,34 +1054,42 @@ public class BidirectionalTest extends JFrame {
                         BasicStroke.JOIN_MITER, 10f, dash, 0f));
                 g2.drawLine(ML, iy, ML + pw, iy);
                 g2.setStroke(new BasicStroke(1f));
+                g2.setColor(INJECT_C);
                 g2.drawString(String.format("inject %.2fV", injectionV), ML + 4, iy - 3);
             }
 
-            // ── Voltage trace ─────────────────────────────────────────────────
-            int hoverIdx = -1;
-            double hoverV = 0.0;
-            int hoverPxSnapped = hoverX;
+            // ── Voltage traces (one per visible channel) ──────────────────────
+            // We also record hover info for the tooltip.
+            // Primary reference for hover position = first visible channel with data.
+            int    hoverRefIdx = -1;
+            int    hoverRefCh  = -1;
+            int    hoverPxSnap = hoverX;
+            boolean anyData    = false;
 
-            if (count >= 2) {
-                int pts    = Math.min(count, pw);
-                int oldest = (head - pts + BUFFER) % BUFFER;
+            for (int ch = 0; ch < NUM_CHANNELS; ch++) {
+                if (!visible[ch] || counts[ch] < 2) continue;
+                anyData = true;
 
-                g2.setColor(TRACE);
+                int pts    = Math.min(counts[ch], pw);
+                int oldest = (heads[ch] - pts + BUFFER) % BUFFER;
+
+                g2.setColor(TRACE_COLORS[ch]);
                 g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 
                 int prevX = -1, prevY = -1;
                 for (int i = 0; i < pts; i++) {
                     int    idx = (oldest + i) % BUFFER;
-                    double v   = Math.max(0.0, Math.min(V_REF, vBuf[idx]));
+                    double v   = Math.max(0.0, Math.min(V_REF, vBufs[ch][idx]));
                     int    x   = ML + (int) Math.round((double) i / (pts - 1) * pw);
                     int    y   = MT + yPx(v, ph);
 
-                    // Find the sample closest to the cursor
-                    if (hoverX >= ML && hoverX <= ML + pw) {
-                        if (hoverIdx < 0 || Math.abs(x - hoverX) < Math.abs(hoverPxSnapped - hoverX)) {
-                            hoverIdx      = idx;
-                            hoverV        = v;
-                            hoverPxSnapped = x;
+                    // Capture hover reference from the first visible channel.
+                    if (hoverRefCh < 0 && hoverX >= ML && hoverX <= ML + pw) {
+                        if (hoverRefIdx < 0 ||
+                                Math.abs(x - hoverX) < Math.abs(hoverPxSnap - hoverX)) {
+                            hoverRefIdx = idx;
+                            hoverRefCh  = ch;
+                            hoverPxSnap = x;
                         }
                     }
 
@@ -1012,7 +1097,9 @@ public class BidirectionalTest extends JFrame {
                     prevX = x;
                     prevY = y;
                 }
-            } else {
+            }
+
+            if (!anyData) {
                 g2.setColor(AXIS_TXT);
                 g2.setFont(new Font("SansSerif", Font.ITALIC, 12));
                 String msg = "Waiting for data…";
@@ -1032,51 +1119,98 @@ public class BidirectionalTest extends JFrame {
             }
 
             // ── Hover crosshair + tooltip ─────────────────────────────────────
-            if (hoverIdx >= 0) {
-                int dotY = MT + yPx(hoverV, ph);
-
-                // Vertical line
+            if (hoverRefIdx >= 0) {
+                // Vertical crosshair
                 g2.setStroke(new BasicStroke(1f));
                 g2.setColor(HOVER_C);
-                g2.drawLine(hoverPxSnapped, MT, hoverPxSnapped, MT + ph);
+                g2.drawLine(hoverPxSnap, MT, hoverPxSnap, MT + ph);
 
-                // Dot at data point
-                g2.setColor(Color.WHITE);
-                g2.fillOval(hoverPxSnapped - 4, dotY - 4, 8, 8);
-                g2.setColor(TRACE);
-                g2.fillOval(hoverPxSnapped - 2, dotY - 2, 5, 5);
+                // Dots + channel label on each visible channel at hover position.
+                // Both channels are sampled at the same rate so we use the same
+                // relative offset within each channel's ring buffer.
+                int refPts    = Math.min(counts[hoverRefCh], pw);
+                int refOldest = (heads[hoverRefCh] - refPts + BUFFER) % BUFFER;
+                // Compute i (sample offset) that gave hoverRefIdx.
+                int hoverI = (hoverRefIdx - refOldest + BUFFER) % BUFFER;
 
-                // Tooltip box
-                String l1 = tBuf[hoverIdx] != null ? tBuf[hoverIdx] : "—";
-                String l2 = String.format("%.3f V", hoverV);
-                String l3 = String.format("raw  %d", rawBuf[hoverIdx]);
-                String l4 = String.format("t = %d ms", msBuf[hoverIdx]);
+                for (int ch = 0; ch < NUM_CHANNELS; ch++) {
+                    if (!visible[ch] || counts[ch] < 2) continue;
+                    int pts    = Math.min(counts[ch], pw);
+                    int oldest = (heads[ch] - pts + BUFFER) % BUFFER;
+                    int safeI  = Math.min(hoverI, pts - 1);
+                    int idx    = (oldest + safeI) % BUFFER;
+                    double v   = Math.max(0.0, Math.min(V_REF, vBufs[ch][idx]));
+                    int    dotY = MT + yPx(v, ph);
 
+                    g2.setColor(Color.WHITE);
+                    g2.fillOval(hoverPxSnap - 4, dotY - 4, 8, 8);
+                    g2.setColor(TRACE_COLORS[ch]);
+                    g2.fillOval(hoverPxSnap - 2, dotY - 2, 5, 5);
+                }
+
+                // Tooltip — timestamp + one row per visible channel
                 g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
                 FontMetrics tfm = g2.getFontMetrics();
-                int tw = Math.max(Math.max(tfm.stringWidth(l1), tfm.stringWidth(l2)),
-                                  Math.max(tfm.stringWidth(l3), tfm.stringWidth(l4))) + 14;
-                int lh = tfm.getHeight();
-                int th = lh * 4 + 10;
 
-                int tx = hoverPxSnapped + 10;
-                int ty = dotY - th / 2;
-                if (tx + tw > w - MR)         tx = hoverPxSnapped - tw - 10;
-                if (ty < MT + 2)              ty = MT + 2;
-                if (ty + th > MT + ph - 2)   ty = MT + ph - th - 2;
+                String tsLine = tBufs[hoverRefCh][hoverRefIdx] != null
+                        ? tBufs[hoverRefCh][hoverRefIdx] : "—";
+                String tLine  = String.format("t = %d ms", msBufs[hoverRefCh][hoverRefIdx]);
+
+                // Collect channel lines
+                java.util.List<String[]> chLines = new java.util.ArrayList<>();
+                for (int ch = 0; ch < NUM_CHANNELS; ch++) {
+                    if (!visible[ch] || counts[ch] < 2) continue;
+                    int pts    = Math.min(counts[ch], pw);
+                    int oldest = (heads[ch] - pts + BUFFER) % BUFFER;
+                    int safeI  = Math.min(hoverI, pts - 1);
+                    int idx    = (oldest + safeI) % BUFFER;
+                    double v   = Math.max(0.0, Math.min(V_REF, vBufs[ch][idx]));
+                    chLines.add(new String[]{
+                        String.format("Ch%d: %.3f V", ch + 1, v),
+                        String.format("raw  %d",      rawBufs[ch][idx]),
+                    });
+                }
+
+                int lh = tfm.getHeight();
+                int rows = 2 + chLines.size() * 2; // ts + t + 2 rows per channel
+                int th = lh * rows + 10;
+
+                // Measure tooltip width
+                int tw = tfm.stringWidth(tsLine);
+                tw = Math.max(tw, tfm.stringWidth(tLine));
+                for (String[] pair : chLines) {
+                    tw = Math.max(tw, Math.max(tfm.stringWidth(pair[0]), tfm.stringWidth(pair[1])));
+                }
+                tw += 14;
+
+                int anchorDotY = MT + yPx(
+                        Math.max(0.0, Math.min(V_REF, vBufs[hoverRefCh][hoverRefIdx])), ph);
+                int tx = hoverPxSnap + 10;
+                int ty = anchorDotY - th / 2;
+                if (tx + tw > w - MR)       tx = hoverPxSnap - tw - 10;
+                if (ty < MT + 2)            ty = MT + 2;
+                if (ty + th > MT + ph - 2)  ty = MT + ph - th - 2;
 
                 g2.setColor(TIP_BG);
                 g2.fillRoundRect(tx, ty, tw, th, 7, 7);
                 g2.setColor(HOVER_C);
                 g2.drawRoundRect(tx, ty, tw, th, 7, 7);
 
+                int row = 1;
                 g2.setColor(Color.WHITE);
-                g2.drawString(l1, tx + 7, ty + lh);
-                g2.setColor(new Color(80, 240, 110));
-                g2.drawString(l2, tx + 7, ty + lh * 2);
+                g2.drawString(tsLine, tx + 7, ty + lh * row++);
                 g2.setColor(AXIS_TXT);
-                g2.drawString(l3, tx + 7, ty + lh * 3);
-                g2.drawString(l4, tx + 7, ty + lh * 4);
+                g2.drawString(tLine, tx + 7, ty + lh * row++);
+                for (int ci = 0; ci < chLines.size(); ci++) {
+                    g2.setColor(TRACE_COLORS[
+                            // find which channel index this entry corresponds to
+                            chLines.size() == 1
+                                ? (visible[0] ? 0 : 1)
+                                : ci]);
+                    g2.drawString(chLines.get(ci)[0], tx + 7, ty + lh * row++);
+                    g2.setColor(AXIS_TXT);
+                    g2.drawString(chLines.get(ci)[1], tx + 7, ty + lh * row++);
+                }
             }
 
             // ── Plot border ───────────────────────────────────────────────────
