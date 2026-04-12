@@ -98,11 +98,12 @@ public class BidirectionalTest extends JFrame {
     private VoltageGraph voltageGraph;
 
     // ── Injection panel ───────────────────────────────────────────────────────
-    private JTextField   voltageField;
-    private JSlider      voltageSlider;
-    private JButton      injectBtn;
-    private JButton      stopInjectBtn;
-    private JLabel       sliderValueLabel;
+    private JTextField        voltageField;
+    private JSlider           voltageSlider;
+    private JButton           injectBtn;
+    private JButton           stopInjectBtn;
+    private JLabel            sliderValueLabel;
+    private JComboBox<String> injectChannelCombo;
     private JRadioButton continuousRadio;
     private JRadioButton intervalRadio;
     private JSpinner     onSpinner;          // pulse on-time  (ms)
@@ -119,8 +120,9 @@ public class BidirectionalTest extends JFrame {
                 return t;
             });
     private ScheduledFuture<?> pendingTask;
-    private int    remainingRepeats  = 0;
-    private double currentInjectionV = 0.0;
+    private int    remainingRepeats     = 0;
+    private double currentInjectionV   = 0.0;
+    private int    currentInjectionCh  = 0;   // 0 = Ch1, 1 = Ch2
 
     // ── Timestamp formatter ───────────────────────────────────────────────────
     private static final DateTimeFormatter TIME_FMT =
@@ -190,7 +192,8 @@ public class BidirectionalTest extends JFrame {
 
         // Already connected: reset graph, silence injection, start reading.
         voltageGraph.reset();
-        voltageGraph.setInjection(false, 0.0);
+        voltageGraph.setInjection(0, false, 0.0);
+        voltageGraph.setInjection(1, false, 0.0);
         connectionManager.sendLine("STOP_INJECT");
         startReadLoop();
         injectBtn.setEnabled(true);
@@ -396,6 +399,13 @@ public class BidirectionalTest extends JFrame {
         stopInjectBtn.setForeground(Color.WHITE);
         stopInjectBtn.setOpaque(true);
 
+        injectChannelCombo = new JComboBox<>(new String[]{"Ch 1  (GPIO34 / DAC1)", "Ch 2  (GPIO35 / DAC2)"});
+        injectChannelCombo.setToolTipText(
+                "Select which DAC channel to drive.\nCh 2 requires dual-channel firmware (CHANNEL_COUNT 2).");
+
+        controlRow.add(new JLabel("Channel:"));
+        controlRow.add(injectChannelCombo);
+        controlRow.add(Box.createHorizontalStrut(8));
         controlRow.add(new JLabel("Voltage (V):"));
         controlRow.add(voltageField);
         controlRow.add(sliderValueLabel);
@@ -552,7 +562,8 @@ public class BidirectionalTest extends JFrame {
         connectionManager.sendLine("STOP_INJECT");
 
         voltageGraph.reset();
-        voltageGraph.setInjection(false, 0.0);
+        voltageGraph.setInjection(0, false, 0.0);
+        voltageGraph.setInjection(1, false, 0.0);
 
         startReadLoop();
         setConnectedState(true, item.toString());
@@ -743,22 +754,50 @@ public class BidirectionalTest extends JFrame {
 
     private void updateModeAndGraph(String statusPayload) {
         if (statusPayload.contains("INJECT_START")) {
-            modeLabel.setText("Mode: INJECTING");
-            modeLabel.setForeground(new Color(220, 120, 0));
-            // Parse injected voltage from "INJECT_START,<raw>,<v>V"
+            // New firmware format: "INJECT_START,CH1,<raw>,<v>V"
+            //                   or "INJECT_START,CH2,<raw>,<v>V"
+            // Legacy format:       "INJECT_START,<raw>,<v>V"
             String[] parts = statusPayload.split(",");
-            if (parts.length >= 3) {
+            int ch   = 0;   // default Ch1
+            int vIdx = 2;   // index of the "<v>V" token in legacy format
+            if (parts.length >= 2 && parts[1].startsWith("CH")) {
+                ch   = "CH2".equals(parts[1]) ? 1 : 0;
+                vIdx = 3;   // new format shifts the voltage token one column right
+            }
+            modeLabel.setText("Mode: INJECTING (Ch" + (ch + 1) + ")");
+            modeLabel.setForeground(new Color(220, 120, 0));
+            if (parts.length > vIdx) {
                 try {
-                    String vStr = parts[2].replace("V", "").trim();
-                    voltageGraph.setInjection(true, Double.parseDouble(vStr));
+                    double v = Double.parseDouble(parts[vIdx].replace("V", "").trim());
+                    voltageGraph.setInjection(ch, true, v);
                 } catch (NumberFormatException ignored) {
-                    voltageGraph.setInjection(true, 0.0);
+                    voltageGraph.setInjection(ch, true, 0.0);
                 }
             }
-        } else if (statusPayload.contains("INJECT_STOPPED") || statusPayload.contains("NORMAL")) {
+        } else if (statusPayload.contains("INJECT_STOPPED")) {
+            // "INJECT_STOPPED,ALL" | "INJECT_STOPPED,CH1" | "INJECT_STOPPED,CH2"
+            String[] parts = statusPayload.split(",");
+            if (parts.length >= 2 && parts[1].startsWith("CH")) {
+                int ch = "CH2".equals(parts[1]) ? 1 : 0;
+                voltageGraph.setInjection(ch, false, 0.0);
+            } else {
+                // ALL or legacy — clear both channels
+                voltageGraph.setInjection(0, false, 0.0);
+                voltageGraph.setInjection(1, false, 0.0);
+            }
+            // Update mode label only if no channel is still injecting
+            boolean anyInjecting = false;
+            for (int i = 0; i < 2; i++) {
+                // Check graph state as the authoritative source
+                // (setInjection already updated internal state)
+            }
             modeLabel.setText("Mode: NORMAL");
             modeLabel.setForeground(new Color(40, 160, 40));
-            voltageGraph.setInjection(false, 0.0);
+        } else if (statusPayload.contains("NORMAL")) {
+            modeLabel.setText("Mode: NORMAL");
+            modeLabel.setForeground(new Color(40, 160, 40));
+            voltageGraph.setInjection(0, false, 0.0);
+            voltageGraph.setInjection(1, false, 0.0);
         }
     }
 
@@ -825,7 +864,8 @@ public class BidirectionalTest extends JFrame {
         }
 
         cancelPendingTask();
-        currentInjectionV = v;
+        currentInjectionV  = v;
+        currentInjectionCh = injectChannelCombo.getSelectedIndex();
 
         if (intervalRadio.isSelected()) {
             remainingRepeats = infiniteCheck.isSelected()
@@ -841,10 +881,13 @@ public class BidirectionalTest extends JFrame {
         startInjectionCycle();
     }
 
-    /** Sends INJECT_V and — in interval mode — schedules the pulse-end timer. */
+    /** Sends INJECT_V_CH1 / INJECT_V_CH2 and — in interval mode — schedules the pulse-end timer. */
     private void startInjectionCycle() {
-        sendCommand(String.format("INJECT_V:%.3f", currentInjectionV));
-        voltageGraph.setInjection(true, currentInjectionV);
+        String cmd = currentInjectionCh == 0
+                ? String.format("INJECT_V_CH1:%.3f", currentInjectionV)
+                : String.format("INJECT_V_CH2:%.3f", currentInjectionV);
+        sendCommand(cmd);
+        voltageGraph.setInjection(currentInjectionCh, true, currentInjectionV);
 
         if (continuousRadio.isSelected()) return; // hold until Stop is pressed
 
@@ -854,10 +897,10 @@ public class BidirectionalTest extends JFrame {
                 onMs, TimeUnit.MILLISECONDS);
     }
 
-    /** Called when the on-time expires; sends STOP and schedules the next pulse. */
+    /** Called when the on-time expires; sends a channel-specific STOP and schedules the next pulse. */
     private void onPulseEnd() {
-        sendCommand("STOP_INJECT");
-        voltageGraph.setInjection(false, 0.0);
+        sendCommand(currentInjectionCh == 0 ? "STOP_INJECT_CH1" : "STOP_INJECT_CH2");
+        voltageGraph.setInjection(currentInjectionCh, false, 0.0);
 
         if (remainingRepeats <= 1) {
             remainingRepeats = 0;
@@ -874,8 +917,8 @@ public class BidirectionalTest extends JFrame {
     private void stopInjection() {
         cancelPendingTask();
         remainingRepeats = 0;
-        sendCommand("STOP_INJECT");
-        voltageGraph.setInjection(false, 0.0);
+        sendCommand(currentInjectionCh == 0 ? "STOP_INJECT_CH1" : "STOP_INJECT_CH2");
+        voltageGraph.setInjection(currentInjectionCh, false, 0.0);
     }
 
     private void cancelPendingTask() {
@@ -941,10 +984,10 @@ public class BidirectionalTest extends JFrame {
         private final boolean[] visible = {true, false};
 
         // ── State ─────────────────────────────────────────────────────────────
-        private boolean injecting  = false;
-        private double  injectionV = 0.0;
-        private boolean paused     = false;
-        private int     hoverX     = -1;
+        private final boolean[] injecting  = {false, false};
+        private final double[]  injectionV = {0.0,   0.0};
+        private boolean paused = false;
+        private int     hoverX = -1;
 
         // ── Pause button (overlay) ────────────────────────────────────────────
         private final JButton pauseBtn;
@@ -996,16 +1039,20 @@ public class BidirectionalTest extends JFrame {
             repaint();
         }
 
-        void setInjection(boolean active, double v) {
-            injecting  = active;
-            injectionV = v;
+        void setInjection(int channel, boolean active, double v) {
+            if (channel >= 0 && channel < NUM_CHANNELS) {
+                injecting [channel] = active;
+                injectionV[channel] = v;
+            }
             repaint();
         }
 
         void reset() {
             for (int ch = 0; ch < NUM_CHANNELS; ch++) {
-                heads[ch]  = 0;
-                counts[ch] = 0;
+                heads[ch]     = 0;
+                counts[ch]    = 0;
+                injecting[ch] = false;
+                injectionV[ch]= 0.0;
             }
             repaint();
         }
@@ -1045,17 +1092,19 @@ public class BidirectionalTest extends JFrame {
                 g2.drawString(lbl, ML - fm.stringWidth(lbl) - 3, MT + y + 4);
             }
 
-            // ── Injection target line (dashed orange) ─────────────────────────
-            if (injecting) {
-                int iy = MT + yPx(injectionV, ph);
-                g2.setColor(INJECT_C);
-                float[] dash = {7f, 4f};
+            // ── Injection target lines — one dashed line per active channel ────
+            float[] dash = {7f, 4f};
+            for (int ch = 0; ch < NUM_CHANNELS; ch++) {
+                if (!injecting[ch]) continue;
+                int    iy    = MT + yPx(injectionV[ch], ph);
+                Color  col   = TRACE_COLORS[ch];  // green for ch1, blue for ch2
+                String label = String.format("inject Ch%d %.2fV", ch + 1, injectionV[ch]);
+                g2.setColor(col);
                 g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT,
                         BasicStroke.JOIN_MITER, 10f, dash, 0f));
                 g2.drawLine(ML, iy, ML + pw, iy);
                 g2.setStroke(new BasicStroke(1f));
-                g2.setColor(INJECT_C);
-                g2.drawString(String.format("inject %.2fV", injectionV), ML + 4, iy - 3);
+                g2.drawString(label, ML + 4, iy - 3);
             }
 
             // ── Voltage traces (one per visible channel) ──────────────────────
