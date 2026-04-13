@@ -2,4 +2,15 @@ package edu.sjsu.spring2026.group32.pong;
 
 import edu.sjsu.spring2026.group32.player.GameState;
 
-public record PongState(int paddleY, int ballX, int ballY) implements GameState {}
+/**
+ * Snapshot of Pong state as seen by a single player.
+ *
+ * <p>Vertical layout: paddles sit at the top and bottom of the field and
+ * slide horizontally.  The ball travels up/down.
+ *
+ * @param paddleX    left edge of this player's paddle (pixels)
+ * @param ballX      ball centre X (pixels)
+ * @param ballY      ball centre Y (pixels)
+ * @param fieldWidth total field width in pixels, useful for AI boundary clamping
+ */
+public record PongState(int paddleX, int ballX, int ballY, int fieldWidth) implements GameState {}

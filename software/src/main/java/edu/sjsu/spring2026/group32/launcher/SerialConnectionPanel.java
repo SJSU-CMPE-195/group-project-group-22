@@ -218,7 +218,17 @@ public class SerialConnectionPanel extends JPanel {
         }
 
         connectionManager = mgr;
+
+        // Send INFO? and parse the #INFO: capability response from the firmware.
+        boolean gotInfo = mgr.readInfoHandshake(20);
         String label = item.toString();
+        if (gotInfo) {
+            label += "  [" + mgr.getDeviceName() + ", CH=" + mgr.getDeviceChannelCount() + "]";
+            log("Device: " + mgr.getDeviceName() + ", channels: " + mgr.getDeviceChannelCount());
+        } else {
+            log("Warning: no #INFO response from device — channel count unknown");
+        }
+
         setConnectedState(true, label);
         log("── Connected: " + label + " ──");
 
@@ -258,8 +268,10 @@ public class SerialConnectionPanel extends JPanel {
 
         @Override
         public String toString() {
-            if (device == null) return "---";
-            return device.getSystemPortName() + "  —  " + device.getDescriptivePortName();
+            if (device == null) return "-- Select a port --";
+            String sys  = device.getSystemPortName();
+            String desc = device.getDescriptivePortName();
+            return desc.isBlank() ? sys : sys + "  " + desc;
         }
     }
 }

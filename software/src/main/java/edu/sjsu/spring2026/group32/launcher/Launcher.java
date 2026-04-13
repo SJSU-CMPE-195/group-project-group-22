@@ -6,11 +6,8 @@ import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.player.BasePlayer;
 import edu.sjsu.spring2026.group32.player.HumanPlayer;
-import edu.sjsu.spring2026.group32.pong.PongAction;
 import edu.sjsu.spring2026.group32.pong.PongGame;
 import edu.sjsu.spring2026.group32.pong.PongHardwareAI;
-import edu.sjsu.spring2026.group32.pong.PongSoftwareAI;
-import edu.sjsu.spring2026.group32.pong.PongState;
 import edu.sjsu.spring2026.group32.sandbox.HitTheZoneAction;
 import edu.sjsu.spring2026.group32.sandbox.HitTheZoneHardwareAI;
 import edu.sjsu.spring2026.group32.sandbox.HitTheZoneSoftwareAI;
@@ -32,18 +29,16 @@ import java.util.Map;
 
 /**
  * Central launch hub for all ESP32-backed programs.
- *
- * <p>Each game has its own dedicated ESP32 device and its own
- * {@link SerialConnectionPanel}.  Programs can always be launched; hardware
- * players are included only when the corresponding port is connected.
- *
- * <ul>
- *   <li><b>Hit The Zone</b> — 3-neuron config, single ADC channel (GPIO34).</li>
- *   <li><b>Pong</b> — 6-neuron config, dual ADC channels (GPIO34 = LEFT,
- *       GPIO35 = RIGHT).</li>
- *   <li><b>Bidirectional Test</b> — generic; launches with its own standalone
- *       connection panel and works with either firmware.</li>
- * </ul>
+ * Each game has its own dedicated ESP32 device and SerialConnectionPanel.
+ * Programs can always be launched; hardware players are included only when
+ * the corresponding port is connected.
+ *   Hit The Zone -- 3-neuron config, single ADC channel (GPIO34).
+ *   Pong         -- 6-neuron config, dual ADC channels:
+ *                   GPIO34 = LEFT, GPIO35 = RIGHT.
+ *                   Both channels combine into a single PongHardwareAI
+ *                   for bidirectional horizontal control.
+ *   Bidirectional Test -- generic; opens with its own standalone
+ *                         connection panel and works with either firmware.
  */
 public class Launcher extends JFrame {
 
@@ -129,7 +124,7 @@ public class Launcher extends JFrame {
                 new Color(34, 160, 80));
 
         launchPong          = makeLaunchButton("Pong",
-                "6-neuron dual-channel hardware AI (or software AI if not connected)",
+                "Hardware AI enabled when Pong device is connected",
                 new Color(160, 80, 200));
 
         launchBidirectional.addActionListener(e -> openBidirectionalTest());
@@ -186,7 +181,7 @@ public class Launcher extends JFrame {
         p.add(wrapLaunchButton(launchHitTheZone,
                 "Hardware AI added when\nHTZ device is connected"));
         p.add(wrapLaunchButton(launchPong,
-                "Dual hardware AI added when\nPong device is connected"));
+                "Hardware AI enabled when\nPong device is connected"));
         return p;
     }
 
@@ -229,9 +224,9 @@ public class Launcher extends JFrame {
     }
 
     /**
-     * Hit The Zone: if the HTZ device is connected, builds a
-     * single-channel hardware player (GPIO34, channel 0).
-     * Otherwise launches with software AIs + human only.
+     * Hit The Zone: if the HTZ device is connected, builds a single-channel
+     * hardware player (GPIO34, channel 0). Otherwise, launches with software
+     * AIs and human player only.
      */
     private void openHitTheZone() {
         log("Launching Hit The Zone…");
@@ -262,16 +257,19 @@ public class Launcher extends JFrame {
     }
 
     /**
-     * Pong: if the Pong device is connected, builds two hardware players —
-     * LEFT (GPIO34, channel 0) and RIGHT (GPIO35, channel 1) — using the
-     * dual-channel 6-neuron firmware.
-     * Otherwise falls back to two software AIs.
+     * Pong: if the Pong device is connected, builds a single PongHardwareAI
+     * from the two ADC channels of the 6-neuron dual-channel firmware.
+     *   ch 0 (GPIO34) = LEFT movement
+     *   ch 1 (GPIO35) = RIGHT movement
+     * Passes it to PongGame; if not connected, passes null so the HARDWARE
+     * option in the toolbar is automatically grayed out.
+     * Player selection (Human / Hardware / AI Easy / AI Hard) is handled
+     * entirely by PongGame and its toolbar UI.
      */
     private void openPong() {
         log("Launching Pong…");
 
-        BasePlayer<PongState, PongAction> player1;
-        BasePlayer<PongState, PongAction> player2;
+        PongHardwareAI hwPlayer = null;
 
         if (pongManager != null && pongManager.isConnected()) {
             // 6-neuron config: two ADC channels share the same serial connection.
@@ -279,18 +277,20 @@ public class Launcher extends JFrame {
             NeuralSignalParser   parserR  = new NeuralSignalParser(1); // GPIO35 = RIGHT
             HardwareSignalSource srcLeft  = new HardwareSignalSource(pongManager, parserL);
             HardwareSignalSource srcRight = new HardwareSignalSource(pongManager, parserR);
-            player1 = new PongHardwareAI("Neural-L", srcLeft);
-            player2 = new PongHardwareAI("Neural-R", srcRight);
-            log("  → Dual hardware AI added (Pong device, ch0=LEFT / ch1=RIGHT).");
+            hwPlayer = new PongHardwareAI("Hardware", srcLeft, srcRight);
+            final PongHardwareAI finalHw = hwPlayer;
+            Runtime.getRuntime().addShutdownHook(new Thread(finalHw::close, "pong-hw-close"));
+            log("  --> Hardware AI added (ch0=LEFT/GPIO34, ch1=RIGHT/GPIO35).");
+        } else if (pongManager != null && pongManager.isConnected()) {
+            int ch = pongManager.getDeviceChannelCount();
+            log("  --> Pong device has " + ch + " ch (need 2). Launching without neural player.");
         } else {
-            player1 = new PongSoftwareAI("SoftwareAI 1");
-            player2 = new PongSoftwareAI("SoftwareAI 2");
-            log("  → Pong device not connected. Launching with software AIs.");
+            log("  --> Pong device not connected. Launching without neural player.");
         }
 
-        PongGame gamePanel = new PongGame(player1, player2);
-        JFrame   frame     = new JFrame(String.format(
-                "Pong — %s vs %s", player1.getName(), player2.getName()));
+        PongGame gamePanel = new PongGame(hwPlayer);
+
+        JFrame frame = new JFrame("Pong");
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setResizable(false);
         frame.add(gamePanel);
@@ -306,10 +306,14 @@ public class Launcher extends JFrame {
     //  Helpers
     // =========================================================================
 
-    private void trackLaunchedWindow(Window window, String name) {
-        window.addWindowListener(new WindowAdapter() {
+    /**
+     * Registers a window-closed listener that logs when the window is disposed.
+     * The window's dispose-on-close is left to the caller.
+     */
+    private void trackLaunchedWindow(JFrame frame, String name) {
+        frame.addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent e) {
-                log(name + " closed. Connections remain open.");
+                log(name + " closed.");
             }
         });
     }

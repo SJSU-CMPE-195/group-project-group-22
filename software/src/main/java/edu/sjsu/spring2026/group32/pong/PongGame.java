@@ -1,138 +1,659 @@
 package edu.sjsu.spring2026.group32.pong;
 
 import edu.sjsu.spring2026.group32.player.BasePlayer;
+import edu.sjsu.spring2026.group32.player.HumanPlayer;
+import edu.sjsu.spring2026.group32.pong.ui.PongToolbar;
+import edu.sjsu.spring2026.group32.pong.ui.Scoreboard;
 
-import javax.swing.JFrame;
-import javax.swing.JPanel;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
+import java.util.Map;
 
-public class PongGame extends JPanel implements Runnable {
+/**
+ * Vertical Pong game panel.
+ *
+ * <p>Paddles sit at the top and bottom of the field and slide horizontally.
+ * The ball travels up and down, bouncing off left/right walls and the paddles.
+ *
+ * <h3>State machine</h3>
+ * <pre>
+ *   PAUSED -ESC-> COUNTDOWN -(2 s)-> PLAYING
+ *     ^                                  |
+ *     +------------------ESC-------------+
+ *   PLAYING -(ball out)-> COUNTDOWN -> PLAYING
+ *   R (any state) -> PAUSED (scores reset)
+ *   PAUSED + variant change -> stays PAUSED (players rebuilt, ball reset)
+ * </pre>
+ *
+ * <h3>Key bindings (WHEN_IN_FOCUSED_WINDOW)</h3>
+ * <ul>
+ *   <li>ESC   - toggle pause / resume</li>
+ *   <li>R     - reset scores, return to PAUSED</li>
+ *   <li>LEFT / RIGHT arrow - human player paddle</li>
+ * </ul>
+ */
+public class PongGame extends JPanel {
 
-    private final BasePlayer<PongState, PongAction> player1;
-    private final BasePlayer<PongState, PongAction> player2;
+    // -------------------------------------------------------------------------
+    // Field / paddle / ball constants
+    // -------------------------------------------------------------------------
 
-    // Window dimensions
-    private final int WIDTH = 800;
-    private final int HEIGHT = 600;
+    public static final int FIELD_WIDTH   = 600;
+    public static final int FIELD_HEIGHT  = 460;
+    public static final int PADDLE_WIDTH  = 80;
+    public static final int PADDLE_HEIGHT = 12;
+    public static final int BALL_SIZE     = 12;
 
-    // Game state variables mapped to pixel coordinates
-    private int p1Y = 250;
-    private int p2Y = 250;
-    private int ballX = 400;
-    private int ballY = 300;
+    private static final int  PADDLE_MARGIN  = 28;
+    static  final int  TOP_PADDLE_Y    = PADDLE_MARGIN;
+    static  final int  BOTTOM_PADDLE_Y = FIELD_HEIGHT - PADDLE_MARGIN - PADDLE_HEIGHT;
 
-    private int ballVelocityX = -6; // Speed of the ball
-    private int ballVelocityY = 4;
-    private final int PADDLE_SPEED = 8;
+    private static final int  PADDLE_SPEED   = 7;
+    private static final long COUNTDOWN_MS   = 2_000;
 
-    private boolean isRunning = true;
+    /** Ball X/Y velocities for speed levels 1-5 (index 0-4). Default level: 2 (index 1). */
+    private static final int[] SPEED_VEL_X = { 3, 4, 5, 6, 7 };
+    private static final int[] SPEED_VEL_Y = { 3, 5, 7, 9, 11 };
 
-    public PongGame(BasePlayer<PongState, PongAction> player1, BasePlayer<PongState, PongAction> player2) {
-        this.player1 = player1;
-        this.player2 = player2;
+    // -------------------------------------------------------------------------
+    // State machine
+    // -------------------------------------------------------------------------
 
-        // Set up the UI Panel
-        setPreferredSize(new Dimension(WIDTH, HEIGHT));
+    private enum GameState { PAUSED, COUNTDOWN, PLAYING }
+    private volatile GameState gameState = GameState.PAUSED;
+    private long countdownStartMs;
+
+    // -------------------------------------------------------------------------
+    // Game variables
+    // -------------------------------------------------------------------------
+
+    private int topPaddleX, bottomPaddleX;
+    private int ballX, ballY, ballVelX, ballVelY;
+    private int topScore = 0, bottomScore = 0;
+
+    /** 0-based index into SPEED_VEL_X / SPEED_VEL_Y; shown in pause overlay as levels 1-5. */
+    private int ballSpeedLevel = 1; // default = level 2
+
+    /**
+     * When true (default), each paddle hit normalizes the ball velocity back to
+     * the magnitude set by {@code ballSpeedLevel}, preventing accumulated drift.
+     * Toggled with the C key; displayed as a checkbox in the pause overlay.
+     */
+    private boolean constantSpeed = true;
+
+    // -------------------------------------------------------------------------
+    // Players
+    // -------------------------------------------------------------------------
+
+    private PlayerVariant topVariant    = PlayerVariant.AI_HARD;
+    private PlayerVariant bottomVariant = PlayerVariant.HUMAN;
+
+    private BasePlayer<PongState, PongAction> topPlayer;
+    private BasePlayer<PongState, PongAction> bottomPlayer;
+    private HumanPlayer<PongState, PongAction> activeHumanPlayer;
+
+    /** Provided by Launcher; null = no hardware connected. */
+    private final PongHardwareAI hardwarePlayer;
+
+    // -------------------------------------------------------------------------
+    // UIq
+    // -------------------------------------------------------------------------
+
+    private final Scoreboard  scoreboard;
+    private final PongToolbar topToolbar;
+    private final PongToolbar bottomToolbar;
+    private final GameCanvas  canvas;
+
+    // -------------------------------------------------------------------------
+    // Game loop
+    // -------------------------------------------------------------------------
+
+    private volatile boolean running = false;
+    private Thread gameThread;
+
+    // =========================================================================
+    // Constructor
+    // =========================================================================
+
+    /**
+     * @param hardwarePlayer pre-wired hardware AI from the Launcher, or
+     *                       {@code null} if no device is connected (grays out
+     *                       the HARDWARE option in both toolbars).
+     */
+    public PongGame(PongHardwareAI hardwarePlayer) {
+        this.hardwarePlayer = hardwarePlayer;
+        boolean hwAvail = (hardwarePlayer != null);
+
+        scoreboard = new Scoreboard();
+
+        setLayout(new BorderLayout());
         setBackground(Color.BLACK);
+
+        // Toolbars
+        topToolbar    = new PongToolbar(PongToolbar.Side.TOP,    topVariant,    hwAvail, scoreboard);
+        bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, bottomVariant, hwAvail, scoreboard);
+
+        topToolbar.setLockedOutVariant(bottomVariant);
+        bottomToolbar.setLockedOutVariant(topVariant);
+
+        topToolbar.setOnVariantChanged(   v -> onVariantSelected(PongToolbar.Side.TOP,    v));
+        bottomToolbar.setOnVariantChanged(v -> onVariantSelected(PongToolbar.Side.BOTTOM, v));
+
+        // Canvas
+        canvas = new GameCanvas();
+        canvas.setPreferredSize(new Dimension(FIELD_WIDTH, FIELD_HEIGHT));
+        canvas.setBackground(Color.BLACK);
+        canvas.setFocusable(false);
+
+        add(topToolbar,    BorderLayout.NORTH);
+        add(canvas,        BorderLayout.CENTER);
+        add(bottomToolbar, BorderLayout.SOUTH);
+
+        // Key bindings (WHEN_IN_FOCUSED_WINDOW covers toolbar-focus edge case)
         setFocusable(true);
+        bindGameKeys();
+
+        // Initial players
+        topPlayer    = createPlayer(topVariant);
+        bottomPlayer = createPlayer(bottomVariant);
+        wireHumanPlayer();
+
+        resetBall();
+        lockToolbars(false); // start PAUSED, toolbars unlocked
     }
 
+    // =========================================================================
+    // Key bindings
+    // =========================================================================
+
+    private void bindGameKeys() {
+        InputMap  im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = getActionMap();
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0, false), "game-esc");
+        am.put("game-esc", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { togglePause(); }
+        });
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, 0, false), "game-reset");
+        am.put("game-reset", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { resetGame(); }
+        });
+
+        // C key: toggle constant-speed mode
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, 0, false), "game-const-speed");
+        am.put("game-const-speed", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                constantSpeed = !constantSpeed;
+                canvas.repaint();
+            }
+        });
+
+        // Speed keys 1-5: change ball speed level (takes effect on next ball reset)
+        int[] speedKeys = {
+            KeyEvent.VK_1, KeyEvent.VK_2, KeyEvent.VK_3, KeyEvent.VK_4, KeyEvent.VK_5
+        };
+        for (int i = 0; i < speedKeys.length; i++) {
+            final int level = i;
+            String id = "speed-" + (i + 1);
+            im.put(KeyStroke.getKeyStroke(speedKeys[i], 0, false), id);
+            am.put(id, new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent e) {
+                    ballSpeedLevel = level;
+                    canvas.repaint(); // refresh speed indicator immediately in pause overlay
+                }
+            });
+        }
+    }
+
+    /**
+     * Wires LEFT/RIGHT arrow keys to the currently active HumanPlayer using
+     * WHEN_IN_FOCUSED_WINDOW so toolbar focus does not break human control.
+     */
+    private void wireHumanPlayer() {
+        unbindHumanKeys();
+        activeHumanPlayer = null;
+
+        HumanPlayer<PongState, PongAction> hp = null;
+        if (topPlayer instanceof HumanPlayer<?, ?> h) {
+            @SuppressWarnings("unchecked")
+            HumanPlayer<PongState, PongAction> c = (HumanPlayer<PongState, PongAction>) h;
+            hp = c;
+        } else if (bottomPlayer instanceof HumanPlayer<?, ?> h) {
+            @SuppressWarnings("unchecked")
+            HumanPlayer<PongState, PongAction> c = (HumanPlayer<PongState, PongAction>) h;
+            hp = c;
+        }
+        if (hp == null) return;
+
+        activeHumanPlayer = hp;
+        InputMap  im  = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am  = getActionMap();
+        final HumanPlayer<PongState, PongAction> finalHp = hp;
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, false), "hp-L-dn");
+        am.put("hp-L-dn",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
+            finalHp.keyPressed(fakeKey(KeyEvent.VK_LEFT)); }});
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, true),  "hp-L-up");
+        am.put("hp-L-up",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
+            finalHp.keyReleased(fakeKey(KeyEvent.VK_LEFT)); }});
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, false), "hp-R-dn");
+        am.put("hp-R-dn",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
+            finalHp.keyPressed(fakeKey(KeyEvent.VK_RIGHT)); }});
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, true),  "hp-R-up");
+        am.put("hp-R-up",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
+            finalHp.keyReleased(fakeKey(KeyEvent.VK_RIGHT)); }});
+    }
+
+    private void unbindHumanKeys() {
+        InputMap  im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = getActionMap();
+        for (String k : new String[]{"hp-L-dn","hp-L-up","hp-R-dn","hp-R-up"}) am.remove(k);
+        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, false));
+        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, true));
+        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, false));
+        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, true));
+    }
+
+    private KeyEvent fakeKey(int code) {
+        return new KeyEvent(this, KeyEvent.KEY_PRESSED,
+                System.currentTimeMillis(), 0, code, KeyEvent.CHAR_UNDEFINED);
+    }
+
+    // =========================================================================
+    // Player factory
+    // =========================================================================
+
+    /**
+     * Instantiates the correct player for the given variant.
+     *
+     * <p>AI presets (parameters here for easy tuning):
+     * <ul>
+     *   <li>AI Easy - deadZone=22 px, reactionProb=0.72 (~28% tick skip)</li>
+     *   <li>AI Hard - deadZone=8 px,  reactionProb=1.00 (perfect reaction)</li>
+     * </ul>
+     */
+    private BasePlayer<PongState, PongAction> createPlayer(PlayerVariant variant) {
+        return switch (variant) {
+            case HUMAN    -> buildHumanPlayer();
+            case HARDWARE -> hardwarePlayer;
+            case AI_HARD  -> new PongSoftwareAI("AI Hard",  8, 1.00);
+            case AI_EASY  -> new PongSoftwareAI("AI Easy", 22, 0.72);
+        };
+    }
+
+    private HumanPlayer<PongState, PongAction> buildHumanPlayer() {
+        return new HumanPlayer<>("Human",
+                Map.of(KeyEvent.VK_LEFT, PongAction.LEFT,
+                       KeyEvent.VK_RIGHT, PongAction.RIGHT),
+                PongAction.IDLE);
+    }
+
+    // =========================================================================
+    // Toolbar callbacks
+    // =========================================================================
+
+    private void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
+        PlayerVariant other = (side == PongToolbar.Side.TOP) ? bottomVariant : topVariant;
+        if (chosen == other) return;
+
+        if (side == PongToolbar.Side.TOP) {
+            topVariant = chosen;
+            bottomToolbar.setLockedOutVariant(topVariant);
+        } else {
+            bottomVariant = chosen;
+            topToolbar.setLockedOutVariant(bottomVariant);
+        }
+
+        topPlayer    = createPlayer(topVariant);
+        bottomPlayer = createPlayer(bottomVariant);
+        wireHumanPlayer();
+        resetBall();
+        // Stay in PAUSED so the user can review before pressing ESC
+    }
+
+    // =========================================================================
+    // Game loop
+    // =========================================================================
+
+    /** Starts the daemon game-loop thread and requests keyboard focus. */
     public void start() {
-        // Run the game loop in a new thread so it doesn't block the UI thread
-        new Thread(this).start();
+        running    = true;
+        gameThread = new Thread(this::gameLoop, "pong-loop");
+        gameThread.setDaemon(true);
+        gameThread.start();
+        requestFocusInWindow();
     }
 
-    @Override
-    public void run() {
-        while (isRunning) {
-            updateLogic();
-            repaint(); // Triggers paintComponent()
+    public void stop() { running = false; }
 
-            try {
-                Thread.sleep(16); // ~60 FPS
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+    private void gameLoop() {
+        while (running) {
+            long now = System.currentTimeMillis();
+            switch (gameState) {
+                case COUNTDOWN -> tickCountdown(now);
+                case PLAYING   -> tickPlaying();
+                case PAUSED    -> { /* idle */ }
+            }
+            canvas.repaint();
+            try { Thread.sleep(16); } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
             }
         }
     }
 
-    private void updateLogic() {
-        // 1. Generate state
-        PongState stateP1 = new PongState(p1Y, ballX, ballY);
-        PongState stateP2 = new PongState(p2Y, ballX, ballY);
+    private void tickCountdown(long now) {
+        if (now - countdownStartMs >= COUNTDOWN_MS) gameState = GameState.PLAYING;
+    }
 
-        // 2. Poll actions
-        PongAction p1Action = player1.getNextMove(stateP1);
-        PongAction p2Action = player2.getNextMove(stateP2);
+    private void tickPlaying() {
+        // State snapshots
+        PongState topState    = new PongState(topPaddleX,    ballX, ballY, FIELD_WIDTH);
+        PongState bottomState = new PongState(bottomPaddleX, ballX, ballY, FIELD_WIDTH);
 
-        // 3. Apply paddle movement with boundary checks
-        if (p1Action == PongAction.UP) p1Y = Math.max(0, p1Y - PADDLE_SPEED);
-        if (p1Action == PongAction.DOWN) p1Y = Math.min(HEIGHT - 100, p1Y + PADDLE_SPEED);
+        // Actions
+        PongAction topAct    = topPlayer.getNextMove(topState);
+        PongAction bottomAct = bottomPlayer.getNextMove(bottomState);
 
-        if (p2Action == PongAction.UP) p2Y = Math.max(0, p2Y - PADDLE_SPEED);
-        if (p2Action == PongAction.DOWN) p2Y = Math.min(HEIGHT - 100, p2Y + PADDLE_SPEED);
+        // Move paddles
+        topPaddleX    = clampPaddle(topPaddleX    + dx(topAct));
+        bottomPaddleX = clampPaddle(bottomPaddleX + dx(bottomAct));
 
-        // 4. Ball Movement
-        ballX += ballVelocityX;
-        ballY += ballVelocityY;
+        // Move ball
+        ballX += ballVelX;
+        ballY += ballVelY;
 
-        // Top and bottom wall collisions
-        if (ballY <= 0 || ballY >= HEIGHT - 15) {
-            ballVelocityY *= -1;
+        // Left / right wall bounce
+        if (ballX <= 0) {
+            ballX = 0; ballVelX = Math.abs(ballVelX);
+        } else if (ballX + BALL_SIZE >= FIELD_WIDTH) {
+            ballX = FIELD_WIDTH - BALL_SIZE; ballVelX = -Math.abs(ballVelX);
         }
 
-        // Paddle collisions
-        // Player 1 (Left Paddle at X=30, Width=20, Height=100)
-        if (ballX <= 50 && ballY + 15 >= p1Y && ballY <= p1Y + 100) {
-            ballVelocityX = Math.abs(ballVelocityX); // Force right
+        // Top paddle collision (ball moving up: VelY < 0)
+        if (ballVelY < 0
+                && ballY <= TOP_PADDLE_Y + PADDLE_HEIGHT
+                && ballY + BALL_SIZE >= TOP_PADDLE_Y
+                && ballX + BALL_SIZE >= topPaddleX
+                && ballX <= topPaddleX + PADDLE_WIDTH) {
+            ballVelY = Math.abs(ballVelY);
+            ballVelX += deflect(ballX, topPaddleX);
+            maybeNormalizeSpeed();
+            ballY = TOP_PADDLE_Y + PADDLE_HEIGHT + 1;
         }
-        // Player 2 (Right Paddle at X=750, Width=20, Height=100)
-        if (ballX >= 735 && ballY + 15 >= p2Y && ballY <= p2Y + 100) {
-            ballVelocityX = -Math.abs(ballVelocityX); // Force left
+
+        // Bottom paddle collision (ball moving down: VelY > 0)
+        if (ballVelY > 0
+                && ballY + BALL_SIZE >= BOTTOM_PADDLE_Y
+                && ballY <= BOTTOM_PADDLE_Y + PADDLE_HEIGHT
+                && ballX + BALL_SIZE >= bottomPaddleX
+                && ballX <= bottomPaddleX + PADDLE_WIDTH) {
+            ballVelY = -Math.abs(ballVelY);
+            ballVelX += deflect(ballX, bottomPaddleX);
+            maybeNormalizeSpeed();
+            ballY = BOTTOM_PADDLE_Y - BALL_SIZE - 1;
+        }
+
+        // Ball exits top -> bottom scores
+        if (ballY + BALL_SIZE < 0) {
+            bottomScore++;
+            scoreboard.recordPoint(bottomVariant, topVariant);
+            startCountdown(); return;
+        }
+
+        // Ball exits bottom -> top scores
+        if (ballY > FIELD_HEIGHT) {
+            topScore++;
+            scoreboard.recordPoint(topVariant, bottomVariant);
+            startCountdown();
         }
     }
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g); // Clears the screen with the background color
-        g.setColor(Color.WHITE);
+    // =========================================================================
+    // State transitions
+    // =========================================================================
 
-        // Draw Player 1
-        g.fillRect(30, p1Y, 20, 100);
-
-        // Draw Player 2
-        g.fillRect(750, p2Y, 20, 100);
-
-        // Draw Center Dashed Line
-        for (int i = 0; i < HEIGHT; i += 30) {
-            g.fillRect(WIDTH / 2 - 2, i, 4, 15);
+    private void togglePause() {
+        switch (gameState) {
+            case PAUSED    -> startCountdown();
+            case PLAYING,
+                 COUNTDOWN -> { gameState = GameState.PAUSED; lockToolbars(false); }
         }
-
-        // Draw Ball
-        g.fillRect(ballX, ballY, 15, 15);
     }
 
-    // --- Main Method ---
+    private void resetGame() {
+        topScore = 0; bottomScore = 0;
+        gameState = GameState.PAUSED;
+        lockToolbars(false);
+        resetBall();
+    }
+
+    private void startCountdown() {
+        gameState        = GameState.COUNTDOWN;
+        countdownStartMs = System.currentTimeMillis();
+        lockToolbars(true);
+        resetBall();
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private static int dx(PongAction a) {
+        return switch (a) { case LEFT -> -PADDLE_SPEED; case RIGHT -> PADDLE_SPEED; case IDLE -> 0; };
+    }
+
+    private static int clampPaddle(int x) {
+        return Math.max(0, Math.min(FIELD_WIDTH - PADDLE_WIDTH, x));
+    }
+
+    /**
+     * Small X deflection based on where the ball hits the paddle center.
+     * Hitting the edge imparts spin; dead center has no effect.
+     */
+    private static int deflect(int bx, int px) {
+        int off = (bx + BALL_SIZE / 2) - (px + PADDLE_WIDTH / 2);
+        return Math.max(-3, Math.min(3, off / 10));
+    }
+
+    /**
+     * If constant-speed mode is on, scales the ball velocity back to exactly the
+     * magnitude corresponding to the current {@code ballSpeedLevel}.  This is
+     * called after every paddle hit so deflect-induced drift cannot accumulate.
+     */
+    private void maybeNormalizeSpeed() {
+        if (!constantSpeed) return;
+        double target  = Math.sqrt(
+                (double) SPEED_VEL_X[ballSpeedLevel] * SPEED_VEL_X[ballSpeedLevel]
+              + (double) SPEED_VEL_Y[ballSpeedLevel] * SPEED_VEL_Y[ballSpeedLevel]);
+        double current = Math.sqrt((double) ballVelX * ballVelX + (double) ballVelY * ballVelY);
+        if (current == 0) return;
+        double scale = target / current;
+        ballVelX = (int) Math.round(ballVelX * scale);
+        ballVelY = (int) Math.round(ballVelY * scale);
+        // Ensure Y always keeps non-zero direction so the ball never gets stuck
+        if (ballVelY == 0) ballVelY = (ballVelY >= 0 ? 1 : -1);
+    }
+
+    private void resetBall() {
+        ballX    = FIELD_WIDTH  / 2 - BALL_SIZE / 2;
+        ballY    = FIELD_HEIGHT / 2 - BALL_SIZE / 2;
+        ballVelX = (Math.random() > 0.5 ? 1 : -1) * SPEED_VEL_X[ballSpeedLevel];
+        ballVelY = (Math.random() > 0.5 ? 1 : -1) * SPEED_VEL_Y[ballSpeedLevel];
+        topPaddleX    = FIELD_WIDTH / 2 - PADDLE_WIDTH / 2;
+        bottomPaddleX = FIELD_WIDTH / 2 - PADDLE_WIDTH / 2;
+    }
+
+    private void lockToolbars(boolean lock) {
+        SwingUtilities.invokeLater(() -> {
+            topToolbar.setSelectionLocked(lock);
+            bottomToolbar.setSelectionLocked(lock);
+        });
+    }
+
+    // =========================================================================
+    // Game canvas (inner class - all painting)
+    // =========================================================================
+
+    private class GameCanvas extends JPanel {
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                                RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // Horizontal centre-line dashes
+            g.setColor(new Color(55, 55, 55));
+            for (int x = 0; x < FIELD_WIDTH; x += 30) g.fillRect(x, FIELD_HEIGHT / 2 - 2, 18, 4);
+
+            // Paddles
+            g.setColor(Color.WHITE);
+            g2.fillRoundRect(topPaddleX,    TOP_PADDLE_Y,    PADDLE_WIDTH, PADDLE_HEIGHT, 8, 8);
+            g2.fillRoundRect(bottomPaddleX, BOTTOM_PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT, 8, 8);
+
+            // Ball
+            g2.fillOval(ballX, ballY, BALL_SIZE, BALL_SIZE);
+
+            // Scores
+            g.setFont(new Font("Monospaced", Font.BOLD, 28));
+            FontMetrics fm = g.getFontMetrics();
+            String ts = String.valueOf(topScore);
+            String bs = String.valueOf(bottomScore);
+            int cx = FIELD_WIDTH / 2;
+            g.setColor(new Color(200, 200, 200));
+            g.drawString(ts, cx - fm.stringWidth(ts) / 2, FIELD_HEIGHT / 2 - 20);
+            g.drawString(bs, cx - fm.stringWidth(bs) / 2, FIELD_HEIGHT / 2 + fm.getAscent() + 4);
+
+            // Player name labels
+            g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            g.setColor(new Color(120, 120, 120));
+            g.drawString(topPlayer.getName(),    8, TOP_PADDLE_Y    + PADDLE_HEIGHT + 14);
+            g.drawString(bottomPlayer.getName(), 8, BOTTOM_PADDLE_Y - 4);
+
+            // State overlay
+            switch (gameState) {
+                case COUNTDOWN -> paintCountdown(g);
+                case PAUSED    -> paintPaused(g);
+                case PLAYING   -> { /* no overlay */ }
+            }
+        }
+
+        private void paintCountdown(Graphics g) {
+            long rem  = COUNTDOWN_MS - (System.currentTimeMillis() - countdownStartMs);
+            int  dig  = (int) Math.ceil(rem / 1000.0);
+            String tx = dig >= 1 ? String.valueOf(dig) : "GO!";
+
+            g.setColor(new Color(0, 0, 0, 150));
+            g.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+            g.setFont(new Font("Monospaced", Font.BOLD, 80));
+            g.setColor(Color.WHITE);
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(tx,
+                    FIELD_WIDTH  / 2 - fm.stringWidth(tx) / 2,
+                    FIELD_HEIGHT / 2 + fm.getAscent() / 2 - 8);
+        }
+
+        private void paintPaused(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g;
+            g.setColor(new Color(0, 0, 0, 160));
+            g.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+            // Title
+            g.setFont(new Font("Monospaced", Font.BOLD, 52));
+            g.setColor(new Color(255, 220, 50));
+            FontMetrics fm = g.getFontMetrics();
+            String title = "PAUSED";
+            g.drawString(title,
+                    FIELD_WIDTH / 2 - fm.stringWidth(title) / 2,
+                    FIELD_HEIGHT / 2 - 46);
+
+            // Ball speed selector
+            g.setFont(new Font("SansSerif", Font.BOLD, 14));
+            fm = g.getFontMetrics();
+            String speedLabel = "BALL SPEED:";
+            int labelW = fm.stringWidth(speedLabel);
+            int cellW  = 30;
+            int gap    = 6;
+            int totalSpeedW = labelW + gap + 5 * cellW + 4 * gap;
+            int sx = FIELD_WIDTH / 2 - totalSpeedW / 2;
+            int sy = FIELD_HEIGHT / 2 - 4;
+
+            g.setColor(new Color(200, 200, 200));
+            g.drawString(speedLabel, sx, sy + fm.getAscent());
+            int bx = sx + labelW + gap;
+            for (int i = 0; i < 5; i++) {
+                boolean active = (i == ballSpeedLevel);
+                int rx = bx + i * (cellW + gap);
+                if (active) {
+                    g.setColor(new Color(255, 200, 0));
+                    g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
+                    g.setColor(Color.BLACK);
+                } else {
+                    g.setColor(new Color(80, 80, 80));
+                    g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
+                    g.setColor(new Color(180, 180, 180));
+                }
+                String num = String.valueOf(i + 1);
+                g.setFont(new Font("Monospaced", Font.BOLD, 14));
+                fm = g.getFontMetrics();
+                g.drawString(num,
+                        rx + cellW / 2 - fm.stringWidth(num) / 2,
+                        sy + cellW / 2 + fm.getAscent() / 2 - 2);
+            }
+
+            // Constant-speed checkbox
+            int cby   = FIELD_HEIGHT / 2 + 36;
+            int cbSz  = 16;
+            int cbX   = FIELD_WIDTH / 2 - 84;
+            g2.setStroke(new BasicStroke(2f));
+            g.setColor(constantSpeed ? new Color(255, 200, 0) : new Color(100, 100, 100));
+            g2.drawRoundRect(cbX, cby, cbSz, cbSz, 4, 4);
+            if (constantSpeed) {
+                g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.setColor(new Color(255, 200, 0));
+                g2.drawLine(cbX + 3, cby + 8,  cbX + 6,  cby + 12);
+                g2.drawLine(cbX + 6, cby + 12, cbX + 13, cby + 4);
+            }
+            g2.setStroke(new BasicStroke(1f));
+            g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            fm = g.getFontMetrics();
+            g.setColor(new Color(210, 210, 210));
+            g.drawString("Constant Speed  (C)", cbX + cbSz + 8, cby + fm.getAscent() - 1);
+
+            // Hint text
+            g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            g.setColor(new Color(130, 130, 130));
+            fm = g.getFontMetrics();
+            String hint = "ESC to resume  R to reset  1-5 for speed  C for constant speed";
+            g.drawString(hint,
+                    FIELD_WIDTH / 2 - fm.stringWidth(hint) / 2,
+                    FIELD_HEIGHT / 2 + 66);
+        }
+    }
+
+    // =========================================================================
+    // Standalone entry point (software-only, no hardware)
+    // =========================================================================
+
     public static void main(String[] args) {
-        // 1. Create the players
-        BasePlayer<PongState, PongAction> aiPlayer1 = new PongSoftwareAI("SoftwareAI1");
-        BasePlayer<PongState, PongAction> aiPlayer2 = new PongSoftwareAI("SoftwareAI2");
-
-        // 2. Create the game panel
-        PongGame gamePanel = new PongGame(aiPlayer1, aiPlayer2);
-
-        // 3. Set up the application window
-        JFrame frame = new JFrame(String.format("Pong - %s vs %s", aiPlayer1.getName(), aiPlayer2.getName()));
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setResizable(false);
-        frame.add(gamePanel);
-        frame.pack(); // Sizes the frame to fit the preferred size of the gamePanel
-        frame.setLocationRelativeTo(null); // Centers the window
-        frame.setVisible(true);
-
-        // 4. Start the game loop
-        gamePanel.start();
+        SwingUtilities.invokeLater(() -> {
+            PongGame game = new PongGame(null);
+            JFrame frame = new JFrame("Pong");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setResizable(false);
+            frame.add(game);
+            frame.pack();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+            game.start();
+        });
     }
 }
