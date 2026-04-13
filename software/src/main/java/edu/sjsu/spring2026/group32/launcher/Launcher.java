@@ -278,12 +278,14 @@ public class Launcher extends JFrame {
             HardwareSignalSource srcLeft  = new HardwareSignalSource(pongManager, parserL);
             HardwareSignalSource srcRight = new HardwareSignalSource(pongManager, parserR);
             hwPlayer = new PongHardwareAI("Hardware", srcLeft, srcRight);
-            log("  -> Hardware AI available (Pong device, ch0=LEFT / ch1=RIGHT).");
-
             final PongHardwareAI finalHw = hwPlayer;
             Runtime.getRuntime().addShutdownHook(new Thread(finalHw::close, "pong-hw-close"));
+            log("  --> Hardware AI added (ch0=LEFT/GPIO34, ch1=RIGHT/GPIO35).");
+        } else if (pongManager != null && pongManager.isConnected()) {
+            int ch = pongManager.getDeviceChannelCount();
+            log("  --> Pong device has " + ch + " ch (need 2). Launching without neural player.");
         } else {
-            log("  -> Pong device not connected. Hardware option will be disabled.");
+            log("  --> Pong device not connected. Launching without neural player.");
         }
 
         PongGame gamePanel = new PongGame(hwPlayer);
@@ -304,10 +306,14 @@ public class Launcher extends JFrame {
     //  Helpers
     // =========================================================================
 
-    private void trackLaunchedWindow(Window window, String name) {
-        window.addWindowListener(new WindowAdapter() {
+    /**
+     * Registers a window-closed listener that logs when the window is disposed.
+     * The window's dispose-on-close is left to the caller.
+     */
+    private void trackLaunchedWindow(JFrame frame, String name) {
+        frame.addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent e) {
-                log(name + " closed. Connections remain open.");
+                log(name + " closed.");
             }
         });
     }

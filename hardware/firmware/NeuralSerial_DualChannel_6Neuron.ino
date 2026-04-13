@@ -96,6 +96,7 @@ void setup() {
     // USB serial — communicates with Java
     Serial.begin(115200);
     Serial.println("STATUS,BOOT,NeuralSerial Ready,CH=" + String(CHANNEL_COUNT));
+    Serial.println("#INFO:NeuralSignal,CH=" + String(CHANNEL_COUNT));
 }
 
 // ============================================================
@@ -249,6 +250,10 @@ void processCommand(const String& cmd) {
                  "," + String(v1, 3) + "V";
 #endif
         Serial.println(reply);
+
+    // ── INFO? : respond with device capabilities ─────────────────
+    } else if (cmd == "INFO?") {
+        Serial.println("#INFO:NeuralSignal,CH=" + String(CHANNEL_COUNT));
 
     // ── Unknown command ──────────────────────────────────────
     } else {

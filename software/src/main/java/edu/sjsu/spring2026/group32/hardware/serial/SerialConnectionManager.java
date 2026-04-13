@@ -141,6 +141,65 @@ public class SerialConnectionManager {
     }
 
     // =========================================================================
+    //  Device capability info (populated by readInfoHandshake)
+    // =========================================================================
+
+    /** Human-readable device name from the #INFO: handshake, e.g. "NeuralSignal". */
+    private String deviceName         = "";
+
+    /** Number of ADC channels reported by the firmware (0 = not yet queried). */
+    private int    deviceChannelCount = 0;
+
+    /** @return the device name from the last successful handshake, or "" if unknown. */
+    public String getDeviceName()         { return deviceName; }
+
+    /** @return ADC channel count from the last successful handshake, or 0 if unknown. */
+    public int    getDeviceChannelCount() { return deviceChannelCount; }
+
+    /**
+     * Sends "INFO?" to the firmware and reads up to {@code maxAttempts} lines
+     * looking for the "#INFO:" capability response.
+     *
+     * <p>The firmware responds within one loop tick (~10 ms) with a line like:
+     * <pre>  #INFO:NeuralSignal,CH=2</pre>
+     * Called by SerialConnectionPanel right after connectTo() succeeds.
+     *
+     * @param maxAttempts maximum lines to read while waiting for the response
+     * @return true if a valid #INFO: line was received and parsed
+     */
+    public boolean readInfoHandshake(int maxAttempts) {
+        if (!isConnected()) return false;
+        sendLine("INFO?");
+        for (int i = 0; i < maxAttempts; i++) {
+            String line = getNextLine();
+            if (line != null && line.startsWith("#INFO:")) {
+                parseInfo(line);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Parses "#INFO:NeuralSignal,CH=2" into deviceName and deviceChannelCount.
+     */
+    private void parseInfo(String line) {
+        String body = line.substring(6); // strip "#INFO:"
+        for (String part : body.split(",")) {
+            part = part.trim();
+            if (part.contains("=")) {
+                String[] kv = part.split("=", 2);
+                if ("CH".equals(kv[0].trim())) {
+                    try { deviceChannelCount = Integer.parseInt(kv[1].trim()); }
+                    catch (NumberFormatException ignored) {}
+                }
+            } else if (!part.isEmpty()) {
+                deviceName = part;
+            }
+        }
+    }
+
+    // =========================================================================
     //  State / lifecycle
     // =========================================================================
 
@@ -151,10 +210,8 @@ public class SerialConnectionManager {
     public void disconnect() {
         if (lineWriter != null) { lineWriter.close(); lineWriter = null; }
         if (scanner   != null) { scanner.close();    scanner   = null; }
-        if (comPort != null && comPort.isOpen()) {
-            comPort.closePort();
-            System.out.println(">>> Serial Connection Closed.");
-        }
-        comPort = null;
+        if (comPort   != null) { comPort.closePort(); comPort  = null; }
+        deviceName         = "";
+        deviceChannelCount = 0;
     }
 }
