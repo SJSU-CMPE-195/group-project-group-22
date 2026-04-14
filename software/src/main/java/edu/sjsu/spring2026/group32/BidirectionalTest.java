@@ -21,6 +21,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -85,44 +87,53 @@ public class BidirectionalTest extends JFrame {
     private JLabel    ch2VoltageLabel;
     private JLabel    modeLabel;
 
-    // ── Channel checkboxes (control which traces the graph shows) ─────────────
+    // ── Channel checkboxes (filter the graph traces and the log together) ───────
     private JCheckBox ch1Check;
     private JCheckBox ch2Check;
+
+    // ── Log filtering ──────────────────────────────────────────────────────────
+    /** Channel tag for system/status messages — always shown regardless of filter. */
+    private static final int LOG_SYSTEM     = -1;
+    private static final int MAX_LOG_ENTRIES = 1000;
+    private record LogEntry(String text, int channel) {}
+    private final List<LogEntry> logEntries = new ArrayList<>(MAX_LOG_ENTRIES + 64);
+    /** Re-entry guard that prevents the "not-none" checkbox fix from re-triggering itself. */
+    private boolean updatingChannelFilter = false;
 
     // ── Terminal ──────────────────────────────────────────────────────────────
     private JTextArea        dataDisplay;
     private JButton          pauseBtn;
-    private volatile boolean displayPaused = false;
+    private final boolean displayPaused = false;
 
     // ── Graph ─────────────────────────────────────────────────────────────────
     private VoltageGraph voltageGraph;
 
-    // ── Injection panel ───────────────────────────────────────────────────────
-    private JTextField        voltageField;
-    private JSlider           voltageSlider;
-    private JButton           injectBtn;
-    private JButton           stopInjectBtn;
-    private JLabel            sliderValueLabel;
-    private JComboBox<String> injectChannelCombo;
-    private JRadioButton continuousRadio;
-    private JRadioButton intervalRadio;
-    private JSpinner     onSpinner;          // pulse on-time  (ms)
-    private JSpinner     offSpinner;         // gap between pulses (ms)
-    private JSpinner     repeatSpinner;      // repeat count
-    private JCheckBox    infiniteCheck;      // repeat indefinitely
-    private JPanel       intervalOptsPanel;  // shown only in interval mode
+    // ── Injection panels (index 0 = Ch1, index 1 = Ch2) ──────────────────────
+    // Ch2 panel is hidden until dual-channel firmware data arrives.
+    private final JTextField[]   voltageFields      = new JTextField[2];
+    private final JSlider[]      voltageSliders     = new JSlider[2];
+    private final JButton[]      injectBtns         = new JButton[2];
+    private final JButton[]      stopInjectBtns     = new JButton[2];
+    private final JLabel[]       sliderValueLabels  = new JLabel[2];
+    private final JRadioButton[] continuousRadios   = new JRadioButton[2];
+    private final JRadioButton[] intervalRadios     = new JRadioButton[2];
+    private final JSpinner[]     onSpinners         = new JSpinner[2];   // pulse on-time  (ms)
+    private final JSpinner[]     offSpinners        = new JSpinner[2];   // gap between pulses (ms)
+    private final JSpinner[]     repeatSpinners     = new JSpinner[2];   // repeat count
+    private final JCheckBox[]    infiniteChecks     = new JCheckBox[2];  // repeat indefinitely
+    private final JPanel[]       intervalOptsPanels = new JPanel[2];     // shown only in interval mode
+    private JPanel               ch2InjectionPanel; // hidden until dual-channel data arrives
 
     // ── Injection scheduler ───────────────────────────────────────────────────
     private final ScheduledExecutorService injScheduler =
-            Executors.newSingleThreadScheduledExecutor(r -> {
+            Executors.newScheduledThreadPool(2, r -> {
                 Thread t = new Thread(r, "InjScheduler");
                 t.setDaemon(true);
                 return t;
             });
-    private ScheduledFuture<?> pendingTask;
-    private int    remainingRepeats     = 0;
-    private double currentInjectionV   = 0.0;
-    private int    currentInjectionCh  = 0;   // 0 = Ch1, 1 = Ch2
+    private final ScheduledFuture<?>[] pendingTasks     = new ScheduledFuture[2];
+    private final int[]    remainingRepeats  = new int[2];
+    private final double[] currentInjectionV = new double[2];
 
     // ── Timestamp formatter ───────────────────────────────────────────────────
     private static final DateTimeFormatter TIME_FMT =
@@ -196,8 +207,8 @@ public class BidirectionalTest extends JFrame {
         voltageGraph.setInjection(1, false, 0.0);
         connectionManager.sendLine("STOP_INJECT");
         startReadLoop();
-        injectBtn.setEnabled(true);
-        stopInjectBtn.setEnabled(true);
+        injectBtns[0].setEnabled(true);
+        stopInjectBtns[0].setEnabled(true);
         appendLog("── Connected (launched from Launcher) ──");
         appendLog("Injection off by default.");
 
@@ -218,8 +229,16 @@ public class BidirectionalTest extends JFrame {
         // When launched from Launcher, the port is already open and the
         // Launcher's SerialConnectionPanel owns the connection UI.
         if (standaloneMode) root.add(buildConnectionPanel(), BorderLayout.NORTH);
-        root.add(buildCenterPanel(),     BorderLayout.CENTER);
-        root.add(buildInjectionPanel(),  BorderLayout.SOUTH);
+        root.add(buildCenterPanel(), BorderLayout.CENTER);
+
+        // Injection area: 1-column, 2-row stack.
+        // Ch2 panel is hidden until dual-channel firmware data arrives.
+        JPanel injWrapper = new JPanel(new GridLayout(0, 1, 0, 4));
+        injWrapper.add(buildChannelInjectionPanel(0));
+        ch2InjectionPanel = buildChannelInjectionPanel(1);
+        ch2InjectionPanel.setVisible(false);
+        injWrapper.add(ch2InjectionPanel);
+        root.add(injWrapper, BorderLayout.SOUTH);
     }
 
     // ── Connection panel ──────────────────────────────────────────────────────
@@ -296,12 +315,35 @@ public class BidirectionalTest extends JFrame {
         ch2Check.setFont(new Font("SansSerif", Font.PLAIN, 11));
         ch1Check.setForeground(new Color(50, 220, 80));   // green — matches graph trace
         ch2Check.setForeground(new Color(80, 180, 255));  // blue  — matches graph trace
-        ch1Check.setToolTipText("Show / hide Channel 1 trace (GPIO34)");
-        ch2Check.setToolTipText("Show / hide Channel 2 trace (GPIO35, dual-channel firmware only)");
-        // Wire checkboxes to graph visibility — voltageGraph is assigned in buildCenterPanel
-        // so the listeners are attached after the graph exists (buildUI order is safe).
-        ch1Check.addItemListener(e -> voltageGraph.setChannelVisible(0, ch1Check.isSelected()));
-        ch2Check.addItemListener(e -> voltageGraph.setChannelVisible(1, ch2Check.isSelected()));
+        ch1Check.setToolTipText("Show / hide Channel 1 in graph and log (GPIO34)");
+        ch2Check.setToolTipText("Show / hide Channel 2 in graph and log (GPIO35, dual-channel firmware only)");
+
+        // Each listener enforces "not-none": unchecking the last checked box is
+        // rejected so graph and log always show at least one channel.
+        // The updatingChannelFilter guard prevents the corrective setSelected()
+        // call from re-entering and looping.
+        ch1Check.addItemListener(e -> {
+            if (updatingChannelFilter) return;
+            if (!ch1Check.isSelected() && !ch2Check.isSelected()) {
+                updatingChannelFilter = true;
+                ch1Check.setSelected(true);   // veto — can't deselect both
+                updatingChannelFilter = false;
+                return;
+            }
+            voltageGraph.setChannelVisible(0, ch1Check.isSelected());
+            rebuildLogDisplay();
+        });
+        ch2Check.addItemListener(e -> {
+            if (updatingChannelFilter) return;
+            if (!ch1Check.isSelected() && !ch2Check.isSelected()) {
+                updatingChannelFilter = true;
+                ch2Check.setSelected(true);   // veto — can't deselect both
+                updatingChannelFilter = false;
+                return;
+            }
+            voltageGraph.setChannelVisible(1, ch2Check.isSelected());
+            rebuildLogDisplay();
+        });
 
         labelsPanel.add(rawLabel);
         labelsPanel.add(voltageLabel);
@@ -309,7 +351,7 @@ public class BidirectionalTest extends JFrame {
         labelsPanel.add(ch2VoltageLabel);
         labelsPanel.add(modeLabel);
         labelsPanel.add(Box.createHorizontalStrut(12));
-        labelsPanel.add(new JLabel("Graph:"));
+        labelsPanel.add(new JLabel("Show:"));
         labelsPanel.add(ch1Check);
         labelsPanel.add(ch2Check);
 
@@ -354,117 +396,112 @@ public class BidirectionalTest extends JFrame {
         return lbl;
     }
 
-    // ── Injection panel ───────────────────────────────────────────────────────
-    private JPanel buildInjectionPanel() {
+    // ── Injection panel for one channel (ch = 0 → Ch1, ch = 1 → Ch2) ─────────
+    private JPanel buildChannelInjectionPanel(int ch) {
+        String chLabel = "Channel " + (ch + 1);
         JPanel p = new JPanel(new BorderLayout(6, 4));
-        p.setBorder(new TitledBorder("Voltage Injection"));
+        p.setBorder(new TitledBorder("Voltage Injection – " + chLabel));
 
         // ── Slider row ───────────────────────────────────────────────────────
         JPanel sliderRow = new JPanel(new BorderLayout(6, 0));
         sliderRow.setBorder(new EmptyBorder(2, 4, 2, 4));
 
-        voltageSlider    = new JSlider(0, 330, 0);
-        sliderValueLabel = new JLabel("0.00 V");
-        sliderValueLabel.setFont(new Font("Monospaced", Font.BOLD, 13));
-        sliderValueLabel.setPreferredSize(new Dimension(56, 20));
+        voltageSliders[ch]    = new JSlider(0, 330, 0);
+        sliderValueLabels[ch] = new JLabel("0.00 V");
+        sliderValueLabels[ch].setFont(new Font("Monospaced", Font.BOLD, 13));
+        sliderValueLabels[ch].setPreferredSize(new Dimension(56, 20));
 
-        voltageSlider.addChangeListener(e -> {
-            double v = voltageSlider.getValue() / 100.0;
-            sliderValueLabel.setText(String.format("%.2f V", v));
-            voltageField.setText(String.format("%.2f", v));
+        voltageSliders[ch].addChangeListener(e -> {
+            double v = voltageSliders[ch].getValue() / 100.0;
+            sliderValueLabels[ch].setText(String.format("%.2f V", v));
+            voltageFields[ch].setText(String.format("%.2f", v));
         });
 
-        sliderRow.add(new JLabel("0.00 V"), BorderLayout.WEST);
-        sliderRow.add(voltageSlider,        BorderLayout.CENTER);
-        sliderRow.add(new JLabel("3.30 V"), BorderLayout.EAST);
+        sliderRow.add(new JLabel("0.00 V"),    BorderLayout.WEST);
+        sliderRow.add(voltageSliders[ch],       BorderLayout.CENTER);
+        sliderRow.add(new JLabel("3.30 V"),    BorderLayout.EAST);
 
-        // ── Controls row (voltage field + buttons) ───────────────────────────
+        // ── Controls row (channel label + voltage field + buttons) ───────────
         JPanel controlRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
 
-        voltageField = new JTextField("0.00", 7);
-        voltageField.setFont(new Font("Monospaced", Font.PLAIN, 13));
-        voltageField.addActionListener(e -> syncSliderFromField());
+        voltageFields[ch] = new JTextField("0.00", 7);
+        voltageFields[ch].setFont(new Font("Monospaced", Font.PLAIN, 13));
+        voltageFields[ch].addActionListener(e -> syncSliderFromField(ch));
 
-        injectBtn     = new JButton("▶  Inject");
-        stopInjectBtn = new JButton("■  Stop");
+        injectBtns[ch]     = new JButton("▶  Inject");
+        stopInjectBtns[ch] = new JButton("■  Stop");
 
-        injectBtn.setEnabled(false);
-        stopInjectBtn.setEnabled(false);
+        injectBtns[ch].setEnabled(false);
+        stopInjectBtns[ch].setEnabled(false);
 
-        injectBtn.setBackground(new Color(60, 120, 200));
-        injectBtn.setForeground(Color.WHITE);
-        injectBtn.setOpaque(true);
+        injectBtns[ch].setBackground(new Color(60, 120, 200));
+        injectBtns[ch].setForeground(Color.WHITE);
+        injectBtns[ch].setOpaque(true);
 
-        stopInjectBtn.setBackground(new Color(190, 100, 30));
-        stopInjectBtn.setForeground(Color.WHITE);
-        stopInjectBtn.setOpaque(true);
+        stopInjectBtns[ch].setBackground(new Color(190, 100, 30));
+        stopInjectBtns[ch].setForeground(Color.WHITE);
+        stopInjectBtns[ch].setOpaque(true);
 
-        injectChannelCombo = new JComboBox<>(new String[]{"Ch 1  (GPIO34 / DAC1)", "Ch 2  (GPIO35 / DAC2)"});
-        injectChannelCombo.setToolTipText(
-                "Select which DAC channel to drive.\nCh 2 requires dual-channel firmware (CHANNEL_COUNT 2).");
-
-        controlRow.add(new JLabel("Channel:"));
-        controlRow.add(injectChannelCombo);
-        controlRow.add(Box.createHorizontalStrut(8));
+        controlRow.add(new JLabel(chLabel + ":"));
         controlRow.add(new JLabel("Voltage (V):"));
-        controlRow.add(voltageField);
-        controlRow.add(sliderValueLabel);
+        controlRow.add(voltageFields[ch]);
+        controlRow.add(sliderValueLabels[ch]);
         controlRow.add(Box.createHorizontalStrut(8));
-        controlRow.add(injectBtn);
-        controlRow.add(stopInjectBtn);
+        controlRow.add(injectBtns[ch]);
+        controlRow.add(stopInjectBtns[ch]);
 
         // ── Mode row (Continuous / Interval) ─────────────────────────────────
         JPanel modeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
 
-        continuousRadio = new JRadioButton("Continuous");
-        continuousRadio.setToolTipText("Inject and hold until Stop is pressed");
-        continuousRadio.setSelected(true);
+        continuousRadios[ch] = new JRadioButton("Continuous");
+        continuousRadios[ch].setToolTipText("Inject and hold until Stop is pressed");
+        continuousRadios[ch].setSelected(true);
 
-        intervalRadio = new JRadioButton("Interval");
-        intervalRadio.setToolTipText("Pulse on/off repeatedly with configurable on-time and off-time");
+        intervalRadios[ch] = new JRadioButton("Interval");
+        intervalRadios[ch].setToolTipText("Pulse on/off repeatedly with configurable on-time and off-time");
 
         ButtonGroup modeGroup = new ButtonGroup();
-        modeGroup.add(continuousRadio);
-        modeGroup.add(intervalRadio);
+        modeGroup.add(continuousRadios[ch]);
+        modeGroup.add(intervalRadios[ch]);
 
         // Interval options — shown only when interval mode is active
-        onSpinner  = new JSpinner(new SpinnerNumberModel(200, 10, 60000, 50));
-        offSpinner = new JSpinner(new SpinnerNumberModel(300, 10, 60000, 50));
-        onSpinner .setPreferredSize(new Dimension(72, 26));
-        offSpinner.setPreferredSize(new Dimension(72, 26));
+        onSpinners[ch]  = new JSpinner(new SpinnerNumberModel(200, 10, 60000, 50));
+        offSpinners[ch] = new JSpinner(new SpinnerNumberModel(300, 10, 60000, 50));
+        onSpinners[ch] .setPreferredSize(new Dimension(72, 26));
+        offSpinners[ch].setPreferredSize(new Dimension(72, 26));
 
-        repeatSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 9999, 1));
-        repeatSpinner.setPreferredSize(new Dimension(60, 26));
+        repeatSpinners[ch] = new JSpinner(new SpinnerNumberModel(5, 1, 9999, 1));
+        repeatSpinners[ch].setPreferredSize(new Dimension(60, 26));
 
-        infiniteCheck = new JCheckBox("∞");
-        infiniteCheck.setToolTipText("Repeat indefinitely until Stop is pressed");
+        infiniteChecks[ch] = new JCheckBox("∞");
+        infiniteChecks[ch].setToolTipText("Repeat indefinitely until Stop is pressed");
 
         // ∞ disables the repeat count spinner
-        infiniteCheck.addItemListener(e ->
-                repeatSpinner.setEnabled(!infiniteCheck.isSelected()));
+        infiniteChecks[ch].addItemListener(e ->
+                repeatSpinners[ch].setEnabled(!infiniteChecks[ch].isSelected()));
 
-        intervalOptsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        intervalOptsPanel.add(new JLabel("On:"));
-        intervalOptsPanel.add(onSpinner);
-        intervalOptsPanel.add(new JLabel("ms   Off:"));
-        intervalOptsPanel.add(offSpinner);
-        intervalOptsPanel.add(new JLabel("ms   Repeat:"));
-        intervalOptsPanel.add(repeatSpinner);
-        intervalOptsPanel.add(new JLabel("×"));
-        intervalOptsPanel.add(infiniteCheck);
-        intervalOptsPanel.setVisible(false);
+        intervalOptsPanels[ch] = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        intervalOptsPanels[ch].add(new JLabel("On:"));
+        intervalOptsPanels[ch].add(onSpinners[ch]);
+        intervalOptsPanels[ch].add(new JLabel("ms   Off:"));
+        intervalOptsPanels[ch].add(offSpinners[ch]);
+        intervalOptsPanels[ch].add(new JLabel("ms   Repeat:"));
+        intervalOptsPanels[ch].add(repeatSpinners[ch]);
+        intervalOptsPanels[ch].add(new JLabel("×"));
+        intervalOptsPanels[ch].add(infiniteChecks[ch]);
+        intervalOptsPanels[ch].setVisible(false);
 
         // Toggle interval options visibility when mode changes
-        intervalRadio.addItemListener(e -> {
-            boolean iv = intervalRadio.isSelected();
-            intervalOptsPanel.setVisible(iv);
-            repeatSpinner.setEnabled(iv && !infiniteCheck.isSelected());
+        intervalRadios[ch].addItemListener(e -> {
+            boolean iv = intervalRadios[ch].isSelected();
+            intervalOptsPanels[ch].setVisible(iv);
+            repeatSpinners[ch].setEnabled(iv && !infiniteChecks[ch].isSelected());
         });
 
         modeRow.add(new JLabel("Mode:"));
-        modeRow.add(continuousRadio);
-        modeRow.add(intervalRadio);
-        modeRow.add(intervalOptsPanel);
+        modeRow.add(continuousRadios[ch]);
+        modeRow.add(intervalRadios[ch]);
+        modeRow.add(intervalOptsPanels[ch]);
 
         JPanel inner = new JPanel(new BorderLayout(0, 2));
         inner.add(sliderRow,  BorderLayout.NORTH);
@@ -472,8 +509,8 @@ public class BidirectionalTest extends JFrame {
         inner.add(modeRow,    BorderLayout.SOUTH);
         p.add(inner, BorderLayout.CENTER);
 
-        injectBtn.addActionListener(e -> injectVoltage());
-        stopInjectBtn.addActionListener(e -> stopInjection());
+        injectBtns[ch].addActionListener(e -> injectVoltage(ch));
+        stopInjectBtns[ch].addActionListener(e -> stopInjection(ch));
 
         return p;
     }
@@ -578,7 +615,8 @@ public class BidirectionalTest extends JFrame {
      */
     private void stopReadLoop() {
         if (!running.getAndSet(false)) return;
-        cancelPendingTask();
+        cancelPendingTask(0);
+        cancelPendingTask(1);
         if (readerThread != null) {
             readerThread.shutdownNow();
             readerThread = null;
@@ -616,8 +654,13 @@ public class BidirectionalTest extends JFrame {
                 }
             }
 
-            injectBtn    .setEnabled(connected);
-            stopInjectBtn.setEnabled(connected);
+            injectBtns[0]    .setEnabled(connected);
+            stopInjectBtns[0].setEnabled(connected);
+            // Ch2 buttons are only enabled when connected AND the panel is visible
+            if (ch2InjectionPanel != null && ch2InjectionPanel.isVisible()) {
+                injectBtns[1]    .setEnabled(connected);
+                stopInjectBtns[1].setEnabled(connected);
+            }
 
             if (!connected) {
                 rawLabel        .setText("Ch1 ADC: —");
@@ -625,6 +668,8 @@ public class BidirectionalTest extends JFrame {
                 modeLabel       .setText("Mode: —");
                 ch2RawLabel    .setVisible(false);
                 ch2VoltageLabel.setVisible(false);
+                // Hide the Ch2 injection panel until dual-channel data arrives again
+                if (ch2InjectionPanel != null) ch2InjectionPanel.setVisible(false);
             }
         });
     }
@@ -712,33 +757,43 @@ public class BidirectionalTest extends JFrame {
                         raw1 = Integer.parseInt(parts[4].trim());
                         v1   = (raw1 / (double) ADC_MAX) * V_REF;
                     } catch (NumberFormatException ignored2) {
-                        raw1 = -1;
                     }
                 }
 
-                final String timeStr = LocalTime.now().format(TIME_FMT);
-                final int    fr1     = raw1;
-                final double fv0     = v0;
-                final double fv1     = v1;
-                final long   fMs     = ms;
-                final String logLine = raw1 >= 0
-                        ? String.format("%s  Ch1: %5.3f V (raw %4d)  Ch2: %5.3f V (raw %4d)  t=%dms",
-                                timeStr, v0, raw0, v1, raw1, ms)
-                        : String.format("%s  %5.3f V  (raw %4d, t=%dms)",
-                                timeStr, v0, raw0, ms);
+                final String timeStr    = LocalTime.now().format(TIME_FMT);
+                final int    fr1        = raw1;
+                final double fv0        = v0;
+                final double fv1        = v1;
+                final long   fMs        = ms;
+                // Each channel gets its own tagged log entry so the filter can hide
+                // one without affecting the other.
+                final String ch1LogLine = String.format(
+                        "%s  Ch1: %5.3f V (raw %4d)  t=%dms", timeStr, v0, raw0, ms);
+                final String ch2LogLine = raw1 >= 0 ? String.format(
+                        "%s  Ch2: %5.3f V (raw %4d)  t=%dms", timeStr, v1, raw1, ms) : null;
 
                 SwingUtilities.invokeLater(() -> {
-                    if (!displayPaused) appendLog(logLine);
+                    appendLog(ch1LogLine, 0);
                     rawLabel    .setText("Ch1 ADC: " + raw0);
                     voltageLabel.setText(String.format("Ch1: %.3f V", fv0));
                     voltageGraph.addSample(0, fv0, raw0, fMs, timeStr);
 
                     if (fr1 >= 0) {
+                        appendLog(ch2LogLine, 1);
                         ch2RawLabel    .setText("Ch2 ADC: " + fr1);
                         ch2VoltageLabel.setText(String.format("Ch2: %.3f V", fv1));
                         ch2RawLabel    .setVisible(true);
                         ch2VoltageLabel.setVisible(true);
                         voltageGraph.addSample(1, fv1, fr1, fMs, timeStr);
+                        // Reveal the Ch2 injection panel the first time dual-channel data arrives
+                        if (ch2InjectionPanel != null && !ch2InjectionPanel.isVisible()) {
+                            ch2InjectionPanel.setVisible(true);
+                            injectBtns[1].setEnabled(true);
+                            stopInjectBtns[1].setEnabled(true);
+                            ch2Check.setSelected(true);  // auto-enable Ch2 graph trace
+                            revalidate();
+                            repaint();
+                        }
                     }
                 });
                 return;
@@ -805,7 +860,6 @@ public class BidirectionalTest extends JFrame {
     //  Log area helpers
     // =========================================================================
     private void togglePause() {
-        displayPaused = !displayPaused;
         if (displayPaused) {
             pauseBtn.setText("▶ Resume");
             pauseBtn.setToolTipText("Resume terminal output");
@@ -814,12 +868,55 @@ public class BidirectionalTest extends JFrame {
             pauseBtn.setText("⏸ Pause");
             pauseBtn.setToolTipText("Pause terminal output (graph and labels keep updating)");
             appendLog("── Output resumed ──");
+            // Flush everything that arrived while paused into the display.
+            rebuildLogDisplay();
         }
     }
 
+    /** Appends a system/status message that is always visible regardless of channel filter. */
     private void appendLog(String text) {
-        dataDisplay.append(text + "\n");
-        trimLog();
+        addLogEntry(text, LOG_SYSTEM);
+    }
+
+    /** Appends a channel-tagged data line; hidden when that channel's filter checkbox is off. */
+    private void appendLog(String text, int channel) {
+        addLogEntry(text, channel);
+    }
+
+    private void addLogEntry(String text, int channel) {
+        logEntries.add(new LogEntry(text, channel));
+        // Keep the stored list bounded — drop the oldest entry when over capacity.
+        if (logEntries.size() > MAX_LOG_ENTRIES) {
+            logEntries.remove(0);
+        }
+        // Write to the live display only when not paused and the channel passes the filter.
+        if (!displayPaused && isLogChannelVisible(channel)) {
+            dataDisplay.append(text + "\n");
+            trimLog();
+            dataDisplay.setCaretPosition(dataDisplay.getDocument().getLength());
+        }
+    }
+
+    /** Returns true if a log entry with this channel tag should appear in the display. */
+    private boolean isLogChannelVisible(int channel) {
+        if (channel == LOG_SYSTEM) return true;
+        if (channel == 0) return ch1Check.isSelected();
+        if (channel == 1) return ch2Check.isSelected();
+        return true;
+    }
+
+    /**
+     * Rebuilds the log display from the stored entry list using the current filter.
+     * No entries are deleted — only visibility changes.
+     */
+    private void rebuildLogDisplay() {
+        StringBuilder sb = new StringBuilder();
+        for (LogEntry entry : logEntries) {
+            if (isLogChannelVisible(entry.channel())) {
+                sb.append(entry.text()).append('\n');
+            }
+        }
+        dataDisplay.setText(sb.toString());
         dataDisplay.setCaretPosition(dataDisplay.getDocument().getLength());
     }
 
@@ -844,9 +941,9 @@ public class BidirectionalTest extends JFrame {
     // =========================================================================
     //  Injection commands
     // =========================================================================
-    private void injectVoltage() {
-        syncSliderFromField();
-        String raw = voltageField.getText().trim();
+    private void injectVoltage(int ch) {
+        syncSliderFromField(ch);
+        String raw = voltageFields[ch].getText().trim();
         double v;
         try {
             v = Double.parseDouble(raw);
@@ -863,69 +960,66 @@ public class BidirectionalTest extends JFrame {
             return;
         }
 
-        cancelPendingTask();
-        currentInjectionV  = v;
-        currentInjectionCh = injectChannelCombo.getSelectedIndex();
+        cancelPendingTask(ch);
+        currentInjectionV[ch] = v;
 
-        if (intervalRadio.isSelected()) {
-            remainingRepeats = infiniteCheck.isSelected()
+        if (intervalRadios[ch].isSelected()) {
+            remainingRepeats[ch] = infiniteChecks[ch].isSelected()
                     ? Integer.MAX_VALUE
-                    : (int) repeatSpinner.getValue();
-            int onMs  = (int) onSpinner.getValue();
-            int offMs = (int) offSpinner.getValue();
-            appendLog(String.format("Interval injection: %.3f V  on=%dms  off=%dms  ×%s",
-                    v, onMs, offMs,
-                    infiniteCheck.isSelected() ? "∞" : repeatSpinner.getValue()));
+                    : (int) repeatSpinners[ch].getValue();
+            int onMs  = (int) onSpinners[ch].getValue();
+            int offMs = (int) offSpinners[ch].getValue();
+            appendLog(String.format("Ch%d interval injection: %.3f V  on=%dms  off=%dms  ×%s",
+                    ch + 1, v, onMs, offMs,
+                    infiniteChecks[ch].isSelected() ? "∞" : repeatSpinners[ch].getValue()));
         }
 
-        startInjectionCycle();
+        startInjectionCycle(ch);
     }
 
     /** Sends INJECT_V_CH1 / INJECT_V_CH2 and — in interval mode — schedules the pulse-end timer. */
-    private void startInjectionCycle() {
-        String cmd = currentInjectionCh == 0
-                ? String.format("INJECT_V_CH1:%.3f", currentInjectionV)
-                : String.format("INJECT_V_CH2:%.3f", currentInjectionV);
+    private void startInjectionCycle(int ch) {
+        String cmd = String.format("INJECT_V_CH%d:%.3f", ch + 1, currentInjectionV[ch]);
         sendCommand(cmd);
-        voltageGraph.setInjection(currentInjectionCh, true, currentInjectionV);
+        voltageGraph.setInjection(ch, true, currentInjectionV[ch]);
 
-        if (continuousRadio.isSelected()) return; // hold until Stop is pressed
+        if (continuousRadios[ch].isSelected()) return; // hold until Stop is pressed
 
-        int onMs = (int) onSpinner.getValue();
-        pendingTask = injScheduler.schedule(
-                () -> SwingUtilities.invokeLater(this::onPulseEnd),
+        int onMs = (int) onSpinners[ch].getValue();
+        pendingTasks[ch] = injScheduler.schedule(
+                () -> SwingUtilities.invokeLater(() -> onPulseEnd(ch)),
                 onMs, TimeUnit.MILLISECONDS);
     }
 
     /** Called when the on-time expires; sends a channel-specific STOP and schedules the next pulse. */
-    private void onPulseEnd() {
-        sendCommand(currentInjectionCh == 0 ? "STOP_INJECT_CH1" : "STOP_INJECT_CH2");
-        voltageGraph.setInjection(currentInjectionCh, false, 0.0);
+    private void onPulseEnd(int ch) {
+        sendCommand("STOP_INJECT_CH" + (ch + 1));
+        voltageGraph.setInjection(ch, false, 0.0);
 
-        if (remainingRepeats <= 1) {
-            remainingRepeats = 0;
+        if (remainingRepeats[ch] <= 1) {
+            remainingRepeats[ch] = 0;
             return;
         }
-        if (remainingRepeats != Integer.MAX_VALUE) remainingRepeats--;
+        if (remainingRepeats[ch] != Integer.MAX_VALUE) remainingRepeats[ch]--;
 
-        int offMs = (int) offSpinner.getValue();
-        pendingTask = injScheduler.schedule(
-                () -> SwingUtilities.invokeLater(this::startInjectionCycle),
+        int offMs = (int) offSpinners[ch].getValue();
+        pendingTasks[ch] = injScheduler.schedule(
+                () -> SwingUtilities.invokeLater(() -> startInjectionCycle(ch)),
                 offMs, TimeUnit.MILLISECONDS);
     }
 
-    private void stopInjection() {
-        cancelPendingTask();
-        remainingRepeats = 0;
-        sendCommand(currentInjectionCh == 0 ? "STOP_INJECT_CH1" : "STOP_INJECT_CH2");
-        voltageGraph.setInjection(currentInjectionCh, false, 0.0);
+    private void stopInjection(int ch) {
+        cancelPendingTask(ch);
+        remainingRepeats[ch] = 0;
+        sendCommand("STOP_INJECT_CH" + (ch + 1));
+        voltageGraph.setInjection(ch, false, 0.0);
     }
 
-    private void cancelPendingTask() {
-        if (pendingTask != null && !pendingTask.isDone()) {
-            pendingTask.cancel(false);
+    private void cancelPendingTask(int ch) {
+        if (pendingTasks[ch] != null && !pendingTasks[ch].isDone()) {
+            pendingTasks[ch].cancel(false);
         }
-        pendingTask = null;
+        pendingTasks[ch] = null;
     }
 
     private void sendCommand(String cmd) {
@@ -940,12 +1034,12 @@ public class BidirectionalTest extends JFrame {
     // =========================================================================
     //  Slider ↔ Text field sync
     // =========================================================================
-    private void syncSliderFromField() {
+    private void syncSliderFromField(int ch) {
         try {
-            double v = Double.parseDouble(voltageField.getText().trim());
+            double v = Double.parseDouble(voltageFields[ch].getText().trim());
             v = Math.max(0.0, Math.min(V_REF, v));
-            voltageSlider.setValue((int) Math.round(v * 100));
-            sliderValueLabel.setText(String.format("%.2f V", v));
+            voltageSliders[ch].setValue((int) Math.round(v * 100));
+            sliderValueLabels[ch].setText(String.format("%.2f V", v));
         } catch (NumberFormatException ignored) { }
     }
 
