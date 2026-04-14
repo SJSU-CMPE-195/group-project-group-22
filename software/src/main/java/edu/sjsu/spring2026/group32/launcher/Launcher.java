@@ -164,7 +164,7 @@ public class Launcher extends JFrame {
 
     /** Two connection panels side-by-side, one per device. */
     private JPanel buildConnectionArea() {
-        JPanel p = new JPanel(new GridLayout(1, 2, 8, 0));
+        JPanel p = new JPanel(new GridLayout(2, 1, 8, 0));
         p.add(htzPanel);
         p.add(pongPanel);
         return p;
