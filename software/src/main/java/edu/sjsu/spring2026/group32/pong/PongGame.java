@@ -9,6 +9,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseMotionAdapter;
 import java.util.Map;
 
 /**
@@ -502,6 +505,61 @@ public class PongGame extends JPanel {
 
     private class GameCanvas extends JPanel {
 
+        // Hit-test rectangles populated during paintPaused; used by the mouse listener.
+        private final Rectangle[] speedRects  = new Rectangle[5];
+        private Rectangle checkboxRect  = null;
+        private Rectangle resumeRect    = null;
+        private Rectangle resetRect     = null;
+
+        // Current mouse position, used for hover highlighting in the pause overlay.
+        private int mouseX = -1, mouseY = -1;
+
+        GameCanvas() {
+            // Click handler
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (gameState != GameState.PAUSED) return;
+                    int mx = e.getX(), my = e.getY();
+
+                    // Speed buttons 1-5
+                    for (int i = 0; i < speedRects.length; i++) {
+                        if (speedRects[i] != null && speedRects[i].contains(mx, my)) {
+                            ballSpeedLevel = i;
+                            repaint();
+                            return;
+                        }
+                    }
+                    // Constant-speed checkbox (click anywhere on the row)
+                    if (checkboxRect != null && checkboxRect.contains(mx, my)) {
+                        constantSpeed = !constantSpeed;
+                        repaint();
+                        return;
+                    }
+                    // Resume button
+                    if (resumeRect != null && resumeRect.contains(mx, my)) {
+                        togglePause();
+                        return;
+                    }
+                    // Reset button
+                    if (resetRect != null && resetRect.contains(mx, my)) {
+                        resetGame();
+                    }
+                }
+            });
+
+            // Motion handler for hover highlight
+            addMouseMotionListener(new MouseMotionAdapter() {
+                @Override
+                public void mouseMoved(MouseEvent e) {
+                    if (gameState != GameState.PAUSED) return;
+                    mouseX = e.getX();
+                    mouseY = e.getY();
+                    repaint();
+                }
+            });
+        }
+
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
@@ -561,6 +619,10 @@ public class PongGame extends JPanel {
                     FIELD_HEIGHT / 2 + fm.getAscent() / 2 - 8);
         }
 
+        /**
+         * Draws the pause overlay.  All clickable element bounds are stored in the
+         * corresponding Rectangle fields so the MouseListener can hit-test them.
+         */
         private void paintPaused(Graphics g) {
             Graphics2D g2 = (Graphics2D) g;
             g.setColor(new Color(0, 0, 0, 160));
@@ -592,10 +654,17 @@ public class PongGame extends JPanel {
             for (int i = 0; i < 5; i++) {
                 boolean active = (i == ballSpeedLevel);
                 int rx = bx + i * (cellW + gap);
+                speedRects[i] = new Rectangle(rx, sy, cellW, cellW);
+                boolean hovered = speedRects[i].contains(mouseX, mouseY);
+
                 if (active) {
                     g.setColor(new Color(255, 200, 0));
                     g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
                     g.setColor(Color.BLACK);
+                } else if (hovered) {
+                    g.setColor(new Color(120, 100, 0));
+                    g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
+                    g.setColor(new Color(255, 220, 100));
                 } else {
                     g.setColor(new Color(80, 80, 80));
                     g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
@@ -610,11 +679,22 @@ public class PongGame extends JPanel {
             }
 
             // Constant-speed checkbox
-            int cby   = FIELD_HEIGHT / 2 + 36;
-            int cbSz  = 16;
-            int cbX   = FIELD_WIDTH / 2 - 84;
+            int cby  = FIELD_HEIGHT / 2 + 36;
+            int cbSz = 16;
+            int cbX  = FIELD_WIDTH / 2 - 84;
+
+            // Extend the hit area to include the label text
+            g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            fm = g.getFontMetrics();
+            String cbLabel = "Constant Speed  (C)";
+            int cbRowW = cbSz + 8 + fm.stringWidth(cbLabel);
+            checkboxRect = new Rectangle(cbX, cby, cbRowW, cbSz + 4);
+            boolean cbHovered = checkboxRect.contains(mouseX, mouseY);
+
             g2.setStroke(new BasicStroke(2f));
-            g.setColor(constantSpeed ? new Color(255, 200, 0) : new Color(100, 100, 100));
+            g.setColor(constantSpeed
+                    ? new Color(255, 200, 0)
+                    : (cbHovered ? new Color(160, 140, 60) : new Color(100, 100, 100)));
             g2.drawRoundRect(cbX, cby, cbSz, cbSz, 4, 4);
             if (constantSpeed) {
                 g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
@@ -623,19 +703,53 @@ public class PongGame extends JPanel {
                 g2.drawLine(cbX + 6, cby + 12, cbX + 13, cby + 4);
             }
             g2.setStroke(new BasicStroke(1f));
-            g.setFont(new Font("SansSerif", Font.PLAIN, 13));
-            fm = g.getFontMetrics();
-            g.setColor(new Color(210, 210, 210));
-            g.drawString("Constant Speed  (C)", cbX + cbSz + 8, cby + fm.getAscent() - 1);
+            g.setColor(cbHovered ? new Color(255, 240, 160) : new Color(210, 210, 210));
+            g.drawString(cbLabel, cbX + cbSz + 8, cby + fm.getAscent() - 1);
 
-            // Hint text
-            g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-            g.setColor(new Color(130, 130, 130));
+            // ---- Resume / Reset buttons --------------------------------------
+            int btnY  = FIELD_HEIGHT / 2 + 64;
+            int btnH  = 26;
+            int btnW  = 110;
+            int btnGap = 16;
+            int resumeX = FIELD_WIDTH / 2 - btnW - btnGap / 2;
+            int resetX  = FIELD_WIDTH / 2 + btnGap / 2;
+
+            resumeRect = new Rectangle(resumeX, btnY, btnW, btnH);
+            resetRect  = new Rectangle(resetX,  btnY, btnW, btnH);
+
+            paintButton(g2, resumeRect, "Resume  (ESC)", resumeRect.contains(mouseX, mouseY),
+                        new Color(40, 130, 60), new Color(60, 180, 80));
+            paintButton(g2, resetRect,  "Reset  (R)",   resetRect.contains(mouseX, mouseY),
+                        new Color(130, 50, 40), new Color(190, 70, 55));
+
+            // ---- Keyboard hint (small, dim) ----------------------------------
+            g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            g.setColor(new Color(90, 90, 90));
             fm = g.getFontMetrics();
-            String hint = "ESC to resume  R to reset  1-5 for speed  C for constant speed";
+            String hint = "1-5 speed  \u2022  C constant speed  \u2022  ESC resume  \u2022  R reset";
             g.drawString(hint,
                     FIELD_WIDTH / 2 - fm.stringWidth(hint) / 2,
-                    FIELD_HEIGHT / 2 + 66);
+                    FIELD_HEIGHT / 2 + 106);
+        }
+
+        /** Draws a labelled button rectangle with hover tinting. */
+        private void paintButton(Graphics2D g2, Rectangle r,
+                                 String label, boolean hovered,
+                                 Color baseColor, Color hoverColor) {
+            g2.setColor(hovered ? hoverColor : baseColor);
+            g2.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.setColor(hovered ? new Color(220, 255, 220) : new Color(160, 200, 160));
+            g2.drawRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+            g2.setStroke(new BasicStroke(1f));
+
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            FontMetrics fm = g2.getFontMetrics();
+            g2.setColor(Color.WHITE);
+            g2.drawString(label,
+                    r.x + r.width  / 2 - fm.stringWidth(label) / 2,
+                    r.y + r.height / 2 + fm.getAscent() / 2 - 2);
         }
     }
 
