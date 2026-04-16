@@ -31,14 +31,23 @@ jobs:
       - name: Resolve dependencies (pre-warm Mockito agent)
         run: mvn --batch-mode dependency:resolve -q
 
-      # ── 4. Build & run all tests ─────────────────────────────────────────────
-      #    -Djava.awt.headless=true  — required because Launcher, BidirectionalTest,
-      #    HitTheZone, and Pong all use Swing/AWT; without this flag the runner
-      #    fails trying to open a display that doesn't exist in CI.
-      - name: Build and test (headless)
+      # ── 4. Install Xvfb (virtual framebuffer) ────────────────────────────────
+      #    PoCTest instantiates PoC_HitTheZone (a JFrame subclass). JFrame cannot
+      #    be constructed when java.awt.headless=true, so we provide a virtual
+      #    display instead. xvfb-run sets DISPLAY automatically for the child
+      #    process, so no export is needed.
+      - name: Install Xvfb
+        run: sudo apt-get install -y xvfb
+
+      # ── 5. Build & run all tests under virtual display ───────────────────────
+      #    xvfb-run launches an in-memory X server for the duration of mvn verify,
+      #    allowing Swing/AWT components (JFrame, Timer, etc.) to be instantiated
+      #    without a physical screen. java.awt.headless is intentionally NOT set
+      #    to true here — doing so would re-enable HeadlessException for PoCTest.
+      - name: Build and test
         run: |
-          mvn --batch-mode verify \
-            -Djava.awt.headless=true
+          xvfb-run --auto-servernum \
+            mvn --batch-mode verify
 
       # ── 5. Upload the runnable JAR as a build artifact ───────────────────────
       #    The JAR includes all compiled classes for Launcher, BidirectionalTest,
