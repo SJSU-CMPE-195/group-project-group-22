@@ -1,0 +1,59 @@
+name: CI — Build & Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (Java 17, Maven)
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up JDK 17 ────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven          # caches ~/.m2/repository between runs
+
+      # ── 3. Pre-resolve Mockito agent so the surefire argLine path exists ─────
+      #    The parent pom references ${settings.localRepository}/...mockito-core.jar
+      #    in the surefire <argLine>. Resolving dependencies first guarantees the
+      #    jar is present before the test phase tries to reference it.
+      - name: Resolve dependencies (pre-warm Mockito agent)
+        run: mvn --batch-mode dependency:resolve -q
+
+      # ── 4. Build & run all tests ─────────────────────────────────────────────
+      #    -Djava.awt.headless=true  — required because Launcher, BidirectionalTest,
+      #    HitTheZone, and Pong all use Swing/AWT; without this flag the runner
+      #    fails trying to open a display that doesn't exist in CI.
+      - name: Build and test (headless)
+        run: |
+          mvn --batch-mode verify \
+            -Djava.awt.headless=true
+
+      # ── 5. Upload the runnable JAR as a build artifact ───────────────────────
+      #    The JAR includes all compiled classes for Launcher, BidirectionalTest,
+      #    HitTheZone, and Pong. Download it from the Actions "Artifacts" panel.
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-neural-network-jar
+          path: software/target/hardware-neural-network-*.jar
+          if-no-files-found: warn
+
+      # ── 6. Publish test results ──────────────────────────────────────────────
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v4
+        if: always()            # run even when tests fail so you still see the report
+        with:
+          report_paths: '**/target/surefire-reports/TEST-*.xml'
+          check_name: JUnit Test Results
