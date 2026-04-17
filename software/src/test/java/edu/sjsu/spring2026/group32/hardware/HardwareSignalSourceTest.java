@@ -55,7 +55,9 @@ class HardwareSignalSourceTest {
         
         // Simulates successful connection (connect() returns true) 
         when(mockConnectionManager.connect()).thenReturn(true);
-        when(mockConnectionManager.isConnected()).thenReturn(true);
+        when(mockConnectionManager.isConnected())
+            .thenReturn(false)
+            .thenReturn(true);
 
         // Returns a valid fake string of data for getNextLine() (e.g., "123456,1,0,2047").
         when(mockConnectionManager.getNextLine()).thenReturn("123456,1,0,2047");
