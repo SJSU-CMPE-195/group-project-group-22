@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  checks: write
+  issues: write
+  pull-requests: write
+
 jobs:
   build-and-test:
     name: Build & Test (Java 17, Maven)
@@ -77,3 +83,15 @@ jobs:
         with:
           report_paths: '**/target/surefire-reports/TEST-*.xml'
           check_name: JUnit Test Results
+
+      # -- 9. Post PR coverage summary --------------------------------------------
+      - name: Post JaCoCo coverage report
+        if: always() && github.event_name == 'pull_request'
+        uses: madrapps/jacoco-report@v1.7.1
+        with:
+          paths: software/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "JaCoCo Coverage Report"
+          update-comment: true
+          # min-coverage-overall: 80
+          # min-coverage-changed-files: 80
