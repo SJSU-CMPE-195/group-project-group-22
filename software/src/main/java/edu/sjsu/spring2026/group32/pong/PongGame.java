@@ -73,8 +73,12 @@ public class PongGame extends JPanel {
     // -------------------------------------------------------------------------
 
     private int topPaddleX, bottomPaddleX;
-    private int ballX, ballY, ballVelX, ballVelY;
-    private int topScore = 0, bottomScore = 0;
+    int ballX;
+    int ballY;
+    int ballVelX;
+    int ballVelY;
+    int topScore = 0;
+    int bottomScore = 0;
 
     /** 0-based index into SPEED_VEL_X / SPEED_VEL_Y; shown in pause overlay as levels 1-5. */
     private int ballSpeedLevel = 1; // default = level 2
@@ -354,7 +358,7 @@ public class PongGame extends JPanel {
         if (now - countdownStartMs >= COUNTDOWN_MS) gameState = GameState.PLAYING;
     }
 
-    private void tickPlaying() {
+    void tickPlaying() {
         // State snapshots
         PongState topState    = new PongState(topPaddleX,    ballX, ballY, FIELD_WIDTH);
         PongState bottomState = new PongState(bottomPaddleX, ballX, ballY, FIELD_WIDTH);

@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.pong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javax.swing.SwingUtilities;
 
@@ -73,27 +74,66 @@ class PongGameTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: Ball reverses vertical direction on top wall collision")
-    void ballReversesOnTopWall() {
-        // TODO: set ball to top edge, tick, assert dy reversed
+    @DisplayName("Ball exits top boundary — scores for bottom player")
+    void ballReversesOnTopWall() throws Exception {
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        int before = game.bottomScore;
+
+        // simulates ball exiting above the top boundary
+        game.ballY = -PongGame.BALL_SIZE - 1;
+        game.ballVelY = -5;
+        game.tickPlaying();
+
+        assertEquals(before + 1, game.bottomScore, "Bottom player should score when ball exits top");
+
     }
 
     @Test
-    @DisplayName("TODO: Ball reverses vertical direction on bottom wall collision")
-    void ballReversesOnBottomWall() {
-        // TODO: set ball to bottom edge, tick, assert dy reversed
+    @DisplayName("Ball exits bottom boundary — scores for top player")
+    void ballReversesOnBottomWall() throws Exception {
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        int before = game.topScore;
+
+        // simulates ball exiting below the bottom boundary
+        game.ballY = PongGame.FIELD_HEIGHT + 1;
+        game.ballVelY = 5;
+        game.tickPlaying();
+
+        assertEquals(before + 1, game.topScore, "Top player should score when ball exits bottom");
     }
 
     @Test
-    @DisplayName("TODO: Ball reverses horizontal direction on left wall collision")
-    void ballReversesOnLeftWall() {
-        // TODO: set ball to left edge, tick, assert dx reversed
+    @DisplayName("Ball reverses horizontal direction on left wall collision")
+    void ballReversesOnLeftWall() throws Exception {
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        // simulates ball at left edge moving left
+        game.ballX = 0;
+        game.ballVelX = -5;
+        game.ballVelY = 0;
+        game.tickPlaying();
+
+        assertTrue(game.ballVelX > 0, "Ball should reverse rightward after hitting left wall");
     }
 
     @Test
-    @DisplayName("TODO: Ball reverses horizontal direction on right wall collision")
-    void ballReversesOnRightWall() {
-        // TODO: set ball to right edge, tick, assert dx reversed
+    @DisplayName("Ball reverses horizontal direction on right wall collision")
+    void ballReversesOnRightWall() throws Exception {
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        // simulates ball at right edge moving right
+        game.ballX = PongGame.FIELD_WIDTH - PongGame.BALL_SIZE;
+        game.ballVelX = 5;
+        game.ballVelY = 0;
+        game.tickPlaying();
+
+        assertTrue(game.ballVelX < 0, "Ball should reverse leftward after hitting right wall");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -104,6 +144,7 @@ class PongGameTest {
     @DisplayName("TODO: Ball passing top paddle awards a point to bottom player")
     void ballPassingTopPaddleScoresForBottom() {
         // TODO: position ball above top paddle, tick, assert bottom score ++
+        
     }
 
     @Test
