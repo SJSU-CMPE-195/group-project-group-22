@@ -94,10 +94,10 @@ public class PongGame extends JPanel {
     // Players
     // -------------------------------------------------------------------------
 
-    private PlayerVariant topVariant    = PlayerVariant.AI_HARD;
+    PlayerVariant topVariant    = PlayerVariant.AI_HARD;
     private PlayerVariant bottomVariant = PlayerVariant.HUMAN;
 
-    private BasePlayer<PongState, PongAction> topPlayer;
+    BasePlayer<PongState, PongAction> topPlayer;
     private BasePlayer<PongState, PongAction> bottomPlayer;
     private HumanPlayer<PongState, PongAction> activeHumanPlayer;
 
@@ -305,7 +305,7 @@ public class PongGame extends JPanel {
     // Toolbar callbacks
     // =========================================================================
 
-    private void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
+    void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
         PlayerVariant other = (side == PongToolbar.Side.TOP) ? bottomVariant : topVariant;
         if (chosen == other) return;
 

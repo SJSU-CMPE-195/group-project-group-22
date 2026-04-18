@@ -9,6 +9,8 @@ import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.*;
 
+import edu.sjsu.spring2026.group32.pong.ui.PongToolbar;
+
 /**
  * Unit / integration tests for {@link PongGame}.
  *
@@ -62,7 +64,7 @@ class PongGameTest {
         SwingUtilities.invokeAndWait(() -> game.startCountdown());
 
         // sets countdownStartMs back 2 seconds 
-        game.countdownStartMs = System.currentTimeMillis() - 2000; // check abt this time /!\ 
+        game.countdownStartMs = System.currentTimeMillis() - 2500;
 
         game.tickCountdown(System.currentTimeMillis());
 
@@ -76,7 +78,7 @@ class PongGameTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Ball exits top boundary — scores for bottom player")
+    @DisplayName("Ball exits top boundary — scores for bottom player, no Y wall bounce exists")
     void ballReversesOnTopWall() throws Exception {
         SwingUtilities.invokeAndWait(() -> game.startCountdown());
         game.gameState = PongGame.GameState.PLAYING;
@@ -181,8 +183,16 @@ class PongGameTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: setPlayerVariant() replaces the active player for the given side")
-    void setPlayerVariantReplacesPlayer() {
-        // TODO: switch top player from HUMAN to AI_EASY, assert new player type
+    @DisplayName("setPlayerVariant() replaces the active player for the given side")
+    void setPlayerVariantReplacesPlayer() throws Exception{
+        // simulates switching top user from AI_HARD to (default val) to AI_EASY
+        SwingUtilities.invokeAndWait(() -> 
+            game.onVariantSelected(PongToolbar.Side.TOP, PlayerVariant.AI_EASY)
+        );
+
+        assertEquals(PlayerVariant.AI_EASY, game.topVariant, "Top variant should be AI_EASY after selection");
+
+        assertEquals("AI Easy", game.topPlayer.getName(), "Top player should be replaced with AI Easy instance");
+
     }
 }
