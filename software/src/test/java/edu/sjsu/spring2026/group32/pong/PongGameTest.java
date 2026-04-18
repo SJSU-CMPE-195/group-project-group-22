@@ -1,5 +1,7 @@
 package edu.sjsu.spring2026.group32.pong;
 
+import javax.swing.SwingUtilities;
+
 import org.junit.jupiter.api.*;
 
 /**
@@ -19,6 +21,18 @@ class PongGameTest {
 
     // TODO: construct a PongGame with two software AI players in @BeforeEach
     //       to avoid hardware dependencies.
+    private PongGame game;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        SwingUtilities.invokeAndWait(() -> game = new PongGame(null));
+    }
+
+    @AfterEach
+    void tearDown() {
+        if(game != null) game.stop();
+    }
+
 
     // ──────────────────────────────────────────────────────────────────────────
     // State machine

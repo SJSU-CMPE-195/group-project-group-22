@@ -16,7 +16,7 @@ import org.junit.jupiter.api.*;
  *
  * <p><b>NOTE:</b> {@code Launcher} creates a full Swing {@code JFrame} and
  * multiple game panels, requiring a real or virtual (xvfb) display.
- * All methods are boilerplate stubs marked with TODO.
+ * 
  */
 @DisplayName("Launcher Suite")
 class LauncherTest {
