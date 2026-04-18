@@ -1,5 +1,10 @@
 package edu.sjsu.spring2026.group32.launcher;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import javax.swing.SwingUtilities;
+
 import org.junit.jupiter.api.*;
 
 /**
@@ -11,20 +16,31 @@ import org.junit.jupiter.api.*;
  */
 @DisplayName("Launcher Suite")
 class LauncherTest {
-
-    // TODO: In @BeforeEach, invoke SwingUtilities.invokeAndWait to construct
-    //       the Launcher on the EDT, then hold a reference to it.
+    private Launcher launcher;
 
     // ──────────────────────────────────────────────────────────────────────────
     // Startup
     // ──────────────────────────────────────────────────────────────────────────
+
     @BeforeEach
-    
+    void setUp() throws Exception {
+        SwingUtilities.invokeAndWait(() -> launcher = new Launcher()); 
+
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        if(launcher != null) {
+            SwingUtilities.invokeAndWait(() -> launcher.dispose());
+        }
+    }
 
     @Test
-    @DisplayName("TODO: Launcher JFrame is visible after construction")
-    void launcherFrameIsVisible() {
-        // TODO: construct Launcher, assert JFrame.isVisible() == true
+    @DisplayName("Launcher JFrame is visible after construction") // checking if launcher actually makes window visible
+    void launcherFrameIsVisible() throws Exception {
+        SwingUtilities.invokeAndWait(() -> launcher.setVisible(true)); 
+        assertTrue(launcher.isVisible(), "Launcher JFrame should be visible after setVisible(true)");
+
     }
 
     @Test
