@@ -50,9 +50,9 @@ public class Launcher extends JFrame {
     SerialConnectionPanel pongPanel;
 
     /** Live manager for the HTZ device; null when disconnected. */
-    private SerialConnectionManager htzManager;
+    SerialConnectionManager htzManager;
     /** Live manager for the Pong device; null when disconnected. */
-    private SerialConnectionManager pongManager;
+    SerialConnectionManager pongManager;
 
     // ── Launch buttons ────────────────────────────────────────────────────────
     private final JButton launchBidirectional;
