@@ -64,9 +64,9 @@ public class PongGame extends JPanel {
     // State machine
     // -------------------------------------------------------------------------
 
-    private enum GameState { PAUSED, COUNTDOWN, PLAYING }
-    private volatile GameState gameState = GameState.PAUSED;
-    private long countdownStartMs;
+    enum GameState { PAUSED, COUNTDOWN, PLAYING }
+    volatile GameState gameState = GameState.PAUSED;
+    long countdownStartMs;
 
     // -------------------------------------------------------------------------
     // Game variables
@@ -350,7 +350,7 @@ public class PongGame extends JPanel {
         }
     }
 
-    private void tickCountdown(long now) {
+    void tickCountdown(long now) {
         if (now - countdownStartMs >= COUNTDOWN_MS) gameState = GameState.PLAYING;
     }
 
@@ -421,7 +421,7 @@ public class PongGame extends JPanel {
     // State transitions
     // =========================================================================
 
-    private void togglePause() {
+    void togglePause() {
         switch (gameState) {
             case PAUSED    -> startCountdown();
             case PLAYING,
@@ -436,7 +436,7 @@ public class PongGame extends JPanel {
         resetBall();
     }
 
-    private void startCountdown() {
+    void startCountdown() {
         gameState        = GameState.COUNTDOWN;
         countdownStartMs = System.currentTimeMillis();
         lockToolbars(true);

@@ -1,5 +1,7 @@
 package edu.sjsu.spring2026.group32.pong;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.*;
@@ -19,12 +21,11 @@ import org.junit.jupiter.api.*;
 @DisplayName("PongGame Suite")
 class PongGameTest {
 
-    // TODO: construct a PongGame with two software AI players in @BeforeEach
-    //       to avoid hardware dependencies.
     private PongGame game;
 
     @BeforeEach
     void setUp() throws Exception {
+        // constructs PongGame with two software AI players to avoid hardware dependencies 
         SwingUtilities.invokeAndWait(() -> game = new PongGame(null));
     }
 
@@ -39,21 +40,32 @@ class PongGameTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: Initial game state is PAUSED")
+    @DisplayName("Initial game state is PAUSED")
     void initialStateIsPaused() {
-        // TODO: instantiate PongGame, assert getGamePhase() == PAUSED (or equivalent)
+        assertEquals("PAUSED", game.gameState.name(), "Game should start in PAUSED state");
     }
 
     @Test
-    @DisplayName("TODO: Starting the game transitions state to COUNTDOWN")
-    void startTransitionsToCountdown() {
-        // TODO: call start() or equivalent, assert phase == COUNTDOWN
+    @DisplayName("Starting the game transitions state to COUNTDOWN")
+    void startTransitionsToCountdown() throws Exception {
+        SwingUtilities.invokeAndWait(() -> game.togglePause());
+        assertEquals("COUNTDOWN", game.gameState.name(), "Toggling pause from PAUSED should transition to COUNTDOWN");
     }
 
     @Test
-    @DisplayName("TODO: After countdown completes, state transitions to PLAYING")
-    void countdownTransitionsToPlaying() {
-        // TODO: advance time / ticks past countdown, assert phase == PLAYING
+    @DisplayName("After countdown completes, state transitions to PLAYING")
+    void countdownTransitionsToPlaying() throws Exception {
+        
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+
+        // sets countdownStartMs back 2 seconds 
+        game.countdownStartMs = System.currentTimeMillis() - 2000; // check abt this time /!\ 
+
+        game.tickCountdown(System.currentTimeMillis());
+
+        assertEquals("PLAYING", game.gameState.name(), "State should transition to PLAYING after countdown expires");
+
+
     }
 
     // ──────────────────────────────────────────────────────────────────────────
