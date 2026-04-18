@@ -12,7 +12,6 @@
     </parent>
 
     <artifactId>hardware-neural-network</artifactId>
-
     <dependencies>
         <dependency>
             <groupId>com.fazecast</groupId>

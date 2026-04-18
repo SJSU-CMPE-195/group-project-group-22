@@ -103,7 +103,7 @@ public class BidirectionalTest extends JFrame {
     // ── Terminal ──────────────────────────────────────────────────────────────
     private JTextArea        dataDisplay;
     private JButton          pauseBtn;
-    private final boolean displayPaused = false;
+    private boolean displayPaused = false;
 
     // ── Graph ─────────────────────────────────────────────────────────────────
     private VoltageGraph voltageGraph;
@@ -860,16 +860,21 @@ public class BidirectionalTest extends JFrame {
     //  Log area helpers
     // =========================================================================
     private void togglePause() {
-        if (displayPaused) {
+        if (!displayPaused) {
+            // About to pause — log the message first while displayPaused is still false
+            // (addLogEntry won't write to the display once displayPaused is true).
+            appendLog("── Output paused ──");
+            displayPaused = true;
             pauseBtn.setText("▶ Resume");
             pauseBtn.setToolTipText("Resume terminal output");
-            appendLog("── Output paused ──");
         } else {
+            // About to resume — flip the flag first, then flush buffered entries.
+            displayPaused = false;
             pauseBtn.setText("⏸ Pause");
             pauseBtn.setToolTipText("Pause terminal output (graph and labels keep updating)");
-            appendLog("── Output resumed ──");
             // Flush everything that arrived while paused into the display.
             rebuildLogDisplay();
+            appendLog("── Output resumed ──");
         }
     }
 
@@ -1226,8 +1231,9 @@ public class BidirectionalTest extends JFrame {
                     int    x   = ML + (int) Math.round((double) i / (pts - 1) * pw);
                     int    y   = MT + yPx(v, ph);
 
-                    // Capture hover reference from the first visible channel.
-                    if (hoverRefCh < 0 && hoverX >= ML && hoverX <= ML + pw) {
+                    // Capture hover reference: find the data point closest to hoverX
+                    // across all visible channels.
+                    if (hoverX >= ML && hoverX <= ML + pw) {
                         if (hoverRefIdx < 0 ||
                                 Math.abs(x - hoverX) < Math.abs(hoverPxSnap - hoverX)) {
                             hoverRefIdx = idx;

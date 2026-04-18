@@ -104,12 +104,14 @@ void loop() {
     // 1. Process any commands from Java
     handleIncomingCommands();
 
-    // 2. Read each active channel
+    // 2. Read each active channel — always sample real hardware so that
+    //    the serial stream and LED reflect the neuron's actual response,
+    //    even while injection is driving the DAC input.
     int rawAdc[2];
-    rawAdc[0] = injecting[0] ? injectedRaw[0] : analogRead(ADC_PIN_CH1);
+    rawAdc[0] = analogRead(ADC_PIN_CH1);
 
 #if CHANNEL_COUNT >= 2
-    rawAdc[1] = injecting[1] ? injectedRaw[1] : analogRead(ADC_PIN_CH2);
+    rawAdc[1] = analogRead(ADC_PIN_CH2);
 #endif
 
     // 3. Drive DAC outputs (injection → DAC, else 0 V)

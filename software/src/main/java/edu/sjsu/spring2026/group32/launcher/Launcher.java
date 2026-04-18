@@ -271,7 +271,7 @@ public class Launcher extends JFrame {
 
         PongHardwareAI hwPlayer = null;
 
-        if (pongManager != null && pongManager.isConnected()) {
+        if (pongManager != null && pongManager.isConnected() && pongManager.getDeviceChannelCount() >= 2) {
             // 6-neuron config: two ADC channels share the same serial connection.
             NeuralSignalParser   parserL  = new NeuralSignalParser(0); // GPIO34 = LEFT
             NeuralSignalParser   parserR  = new NeuralSignalParser(1); // GPIO35 = RIGHT

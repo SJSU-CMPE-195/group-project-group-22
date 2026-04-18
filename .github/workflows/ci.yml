@@ -1,0 +1,97 @@
+name: CI — Build & Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  checks: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  build-and-test:
+    name: Build & Test (Java 17, Maven)
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up JDK 17 ────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven          # caches ~/.m2/repository between runs
+
+      # ── 3. Pre-resolve Mockito agent so the surefire argLine path exists ─────
+      #    The parent pom references ${settings.localRepository}/...mockito-core.jar
+      #    in the surefire <argLine>. Resolving dependencies first guarantees the
+      #    jar is present before the test phase tries to reference it.
+      - name: Resolve dependencies (pre-warm Mockito agent)
+        run: mvn --batch-mode dependency:resolve -q
+
+      # ── 4. Install Xvfb (virtual framebuffer) ────────────────────────────────
+      #    PoCTest instantiates PoC_HitTheZone (a JFrame subclass). JFrame cannot
+      #    be constructed when java.awt.headless=true, so we provide a virtual
+      #    display instead. xvfb-run sets DISPLAY automatically for the child
+      #    process, so no export is needed.
+      - name: Install Xvfb
+        run: sudo apt-get install -y xvfb
+
+      # ── 5. Build & run all tests under virtual display ───────────────────────
+      #    xvfb-run launches an in-memory X server for the duration of mvn verify,
+      #    allowing Swing/AWT components (JFrame, Timer, etc.) to be instantiated
+      #    without a physical screen. java.awt.headless is intentionally NOT set
+      #    to true here — doing so would re-enable HeadlessException for PoCTest.
+      - name: Build and test
+        run: |
+          xvfb-run --auto-servernum \
+            mvn --batch-mode verify
+
+      # ── 5. Upload the runnable JAR as a build artifact ───────────────────────
+      #    The JAR includes all compiled classes for Launcher, BidirectionalTest,
+      #    HitTheZone, and Pong. Download it from the Actions "Artifacts" panel.
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-neural-network-jar
+          path: software/target/hardware-neural-network-*.jar
+          if-no-files-found: warn
+
+      # -- 7. Upload JaCoCo coverage report ---------------------------------------
+      #    JaCoCo writes HTML, XML, and CSV to target/site/jacoco/ during verify.
+      #    Uploading it lets reviewers browse line-by-line coverage from Actions.
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-coverage-report
+          path: software/target/site/jacoco/
+          if-no-files-found: warn
+
+      # -- 8. Publish test results ------------------------------------------------
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v4
+        if: always()            # run even when tests fail so you still see the report
+        with:
+          report_paths: '**/target/surefire-reports/TEST-*.xml'
+          check_name: JUnit Test Results
+
+      # -- 9. Post PR coverage summary --------------------------------------------
+      - name: Post JaCoCo coverage report
+        if: always() && github.event_name == 'pull_request'
+        uses: madrapps/jacoco-report@v1.7.1
+        with:
+          paths: software/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "JaCoCo Coverage Report"
+          update-comment: true
+          # min-coverage-overall: 80
+          # min-coverage-changed-files: 80
