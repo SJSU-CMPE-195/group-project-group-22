@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.launcher;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javax.swing.SwingUtilities;
@@ -44,15 +45,16 @@ class LauncherTest {
     }
 
     @Test
-    @DisplayName("TODO: Launcher contains the Pong game panel")
+    @DisplayName("Launcher contains the Pong game panel")
     void launcherContainsPongPanel() {
-        // TODO: assert that the Launcher's content pane has a PongGame component
+        assertNotNull(launcher.pongPanel, "Pong SerialConnectionPanel should be initialized");
     }
 
     @Test
-    @DisplayName("TODO: Launcher contains the HitTheZone panel")
+    @DisplayName("Launcher contains the HitTheZone panel")
     void launcherContainsHitTheZonePanel() {
-        // TODO: assert that the Launcher's content pane has a PoC_HitTheZone component
+        assertNotNull(launcher.htzPanel, "HTZ SerialConnectionPanel should be initialized");
+
     }
 
     // ──────────────────────────────────────────────────────────────────────────

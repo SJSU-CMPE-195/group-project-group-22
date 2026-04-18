@@ -46,8 +46,8 @@ public class Launcher extends JFrame {
             DateTimeFormatter.ofPattern("HH:mm:ss");
 
     // ── Per-device connection panels ──────────────────────────────────────────
-    private final SerialConnectionPanel htzPanel;
-    private final SerialConnectionPanel pongPanel;
+    SerialConnectionPanel htzPanel;
+    SerialConnectionPanel pongPanel;
 
     /** Live manager for the HTZ device; null when disconnected. */
     private SerialConnectionManager htzManager;
