@@ -11,6 +11,21 @@
         <relativePath>../pom.xml</relativePath> </parent>
 
     <artifactId>hardware-neural-network</artifactId>
+
+    <build>
+        <plugins>
+            <!--
+              Activates the three JaCoCo executions declared in the parent's
+              pluginManagement: prepare-agent, report, and check.
+              No extra configuration needed here; everything is inherited.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
         <dependency>
             <groupId>com.fazecast</groupId>

@@ -19,6 +19,7 @@
         <mockito.version>5.18.0</mockito.version>
         <serialcomm.version>[2.11.0]</serialcomm.version>
         <junit.version>5.10.0</junit.version>
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <build>
@@ -34,10 +35,75 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.5</version>
                     <configuration>
+                        <!--
+                          @{argLine} is late-binding: JaCoCo's prepare-agent goal sets
+                          the argLine property before the test phase runs, so the JaCoCo
+                          -javaagent is automatically prepended here. The Mockito agent
+                          is appended after it on the next line.
+                        -->
                         <argLine>
+                            @{argLine}
                             -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
                         </argLine>
                     </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                    <executions>
+                        <!--
+                          (1) prepare-agent: binds to initialize phase by default.
+                          Injects the JaCoCo -javaagent into argLine so Surefire
+                          picks it up via @{argLine} in the Surefire config above.
+                        -->
+                        <execution>
+                            <id>jacoco-prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+
+                        <!--
+                          (2) report: generates HTML, XML, and CSV coverage reports
+                          under target/site/jacoco/ after all tests complete.
+                        -->
+                        <execution>
+                            <id>jacoco-report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+
+                        <!--
+                          (3) check: enforces a minimum instruction coverage ratio.
+                          Currently 0.00 so the build does not fail before tests exist.
+                          TODO: raise to 0.80 once 80%+ coverage is achieved.
+                        -->
+                        <execution>
+                            <id>jacoco-check</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                            <configuration>
+                                <rules>
+                                    <rule>
+                                        <element>BUNDLE</element>
+                                        <limits>
+                                            <limit>
+                                                <counter>INSTRUCTION</counter>
+                                                <value>COVEREDRATIO</value>
+                                                <minimum>0.00</minimum>
+                                            </limit>
+                                        </limits>
+                                    </rule>
+                                </rules>
+                            </configuration>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>

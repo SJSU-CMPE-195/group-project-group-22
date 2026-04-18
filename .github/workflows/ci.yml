@@ -59,7 +59,18 @@ jobs:
           path: software/target/hardware-neural-network-*.jar
           if-no-files-found: warn
 
-      # ── 6. Publish test results ──────────────────────────────────────────────
+      # -- 7. Upload JaCoCo coverage report ---------------------------------------
+      #    JaCoCo writes HTML, XML, and CSV to target/site/jacoco/ during verify.
+      #    Uploading it lets reviewers browse line-by-line coverage from Actions.
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-coverage-report
+          path: software/target/site/jacoco/
+          if-no-files-found: warn
+
+      # -- 8. Publish test results ------------------------------------------------
       - name: Publish test report
         uses: mikepenz/action-junit-report@v4
         if: always()            # run even when tests fail so you still see the report
