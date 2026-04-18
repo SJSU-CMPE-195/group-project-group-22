@@ -3,6 +3,8 @@ package edu.sjsu.spring2026.group32.pong;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.InvocationTargetException;
+
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.*;
@@ -141,16 +143,37 @@ class PongGameTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: Ball passing top paddle awards a point to bottom player")
-    void ballPassingTopPaddleScoresForBottom() {
-        // TODO: position ball above top paddle, tick, assert bottom score ++
+    @DisplayName("Ball passing top paddle awards a point to bottom player")
+    void ballPassingTopPaddleScoresForBottom() throws Exception {
+        SwingUtilities.invokeAndWait( () -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        int before = game.bottomScore;
+
+        // simulates ball exiting above the top boundary (missed by top paddle)
+        game.ballY = -PongGame.BALL_SIZE - 1;
+        game.ballVelY = -5; 
+        game.tickPlaying();
+
+        assertEquals(before + 1, game.bottomScore, "Bottom player should score when ball passes top paddle");
         
     }
 
     @Test
-    @DisplayName("TODO: Ball passing bottom paddle awards a point to top player")
-    void ballPassingBottomPaddleScoresForTop() {
-        // TODO: position ball below bottom paddle, tick, assert top score ++
+    @DisplayName("Ball passing bottom paddle awards a point to top player")
+    void ballPassingBottomPaddleScoresForTop() throws Exception {
+        SwingUtilities.invokeAndWait( () -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        int before = game.topScore; 
+
+        // simulates ball exiting below bottom boundary (missed by bottom paddle)
+        game.ballY = PongGame.FIELD_HEIGHT + 1;
+        game.ballVelY = 5; 
+        game.tickPlaying();
+
+        assertEquals(before + 1, game.topScore, "Top player should score when ball passes bottom paddle");
+
     }
 
     // ──────────────────────────────────────────────────────────────────────────
