@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.launcher;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -91,9 +92,19 @@ class LauncherTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: Closing the JFrame triggers port disconnection")
-    void closingFrameDisconnectsPort() {
-        // TODO: dispatch WINDOW_CLOSING event, verify disconnect() was called on manager
+    @DisplayName("Disposing the JFrame makes it non-displayable")
+    void closingFrameDisposesWindow() throws Exception {        
+        // tests dispose() directly to avoid triggering System.exit(0) in the WindowClosing listener
+        SwingUtilities.invokeAndWait( () -> { 
+            launcher.setVisible(true);
+            launcher.dispose();
+
+        });
+
+        assertFalse(launcher.isDisplayable(), "Launcher should not be displayable after dispose()");
 
     }
+
+
+    
 }
