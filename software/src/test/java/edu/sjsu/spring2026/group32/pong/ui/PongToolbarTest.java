@@ -1,6 +1,12 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import javax.swing.SwingUtilities;
+
 import org.junit.jupiter.api.*;
+
+import edu.sjsu.spring2026.group32.pong.PlayerVariant;
 
 /**
  * Unit / integration tests for {@link PongToolbar}.
@@ -17,23 +23,39 @@ import org.junit.jupiter.api.*;
 @DisplayName("PongToolbar Suite")
 class PongToolbarTest {
 
-    // TODO: inject a PongGame stub or mock so PongToolbar can be constructed
-    //       without triggering the full game initialization.
+    private PongToolbar topToolbar;
+    private PongToolbar bottomToolbar;
+    private Scoreboard  scoreboard;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        SwingUtilities.invokeAndWait( () -> {
+            scoreboard = new Scoreboard();
+            
+            // hardware unavailable by default (tests that need it can override it locally)
+            topToolbar = new PongToolbar(PongToolbar.Side.TOP, PlayerVariant.AI_HARD, false, scoreboard);
+            bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, PlayerVariant.HUMAN, false, scoreboard);
+
+        });
+
+
+    }
 
     // ──────────────────────────────────────────────────────────────────────────
     // Construction
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: PongToolbar constructs without error for TOP position")
+    @DisplayName("PongToolbar constructs without error for TOP position")
     void constructsForTopPosition() {
-        // TODO: instantiate PongToolbar(PongGame, TOP) and assert non-null
+        assertNotNull(topToolbar, "TOP toolbar should be constructed successfully");
     }
 
     @Test
-    @DisplayName("TODO: PongToolbar constructs without error for BOTTOM position")
+    @DisplayName("PongToolbar constructs without error for BOTTOM position")
     void constructsForBottomPosition() {
-        // TODO: instantiate PongToolbar(PongGame, BOTTOM) and assert non-null
+        assertNotNull(bottomToolbar, "BOTTOM toolbarshould be constructed successfully");
+        
     }
 
     // ──────────────────────────────────────────────────────────────────────────
