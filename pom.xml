@@ -52,6 +52,50 @@
                     <groupId>org.jacoco</groupId>
                     <artifactId>jacoco-maven-plugin</artifactId>
                     <version>${jacoco.version}</version>
+
+                    <!--
+                      Plugin-level excludes: applied to both the report and check goals.
+                      Classes are excluded when they are not meaningfully testable:
+                        - Swing UI components (require a display; logic is rendering, not business)
+                        - Enums (auto-generated values()/valueOf() skew coverage metrics)
+                        - Records / DTOs (auto-generated accessors, equals, hashCode, toString)
+                        - HardwareSignalSource (tightly coupled to physical serial hardware)
+                      Interfaces are omitted here because they produce no bytecode instructions
+                      and therefore never appear in JaCoCo's instruction counter.
+                    -->
+                    <configuration>
+                        <excludes>
+                            <!--
+                              Each pattern uses a trailing * to capture both the outer class
+                              and any compiler-generated inner / anonymous classes
+                              (e.g. PongGame$GameCanvas, BidirectionalTest$VoltageGraph).
+                              Without the wildcard, JaCoCo only drops the outer class entry
+                              while still counting all $ inner classes — which skews the ratio.
+                            -->
+
+                            <!-- Swing UI — require a real or virtual display to exercise meaningfully -->
+                            <exclude>edu/sjsu/spring2026/group32/launcher/Launcher*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/launcher/SerialConnectionPanel*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/ui/PongToolbar*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/ui/Scoreboard*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/PongGame*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/BidirectionalTest*.class</exclude>
+
+                            <!-- Enums — only auto-generated switch/valueOf bytecode; logic tested via callers -->
+                            <exclude>edu/sjsu/spring2026/group32/player/PlayerType*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/PongAction*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/PlayerVariant*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/sandbox/HitTheZoneAction*.class</exclude>
+
+                            <!-- Records / DTOs — all methods are compiler-generated -->
+                            <exclude>edu/sjsu/spring2026/group32/pong/PongState*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/sandbox/HitTheZoneState*.class</exclude>
+
+                            <!-- Hardware-coupled — depends on physical serial device; not mockable at unit level -->
+                            <exclude>edu/sjsu/spring2026/group32/hardware/HardwareSignalSource*.class</exclude>
+                        </excludes>
+                    </configuration>
+
                     <executions>
                         <!--
                           (1) prepare-agent: binds to initialize phase by default.
@@ -68,6 +112,9 @@
                         <!--
                           (2) report: generates HTML, XML, and CSV coverage reports
                           under target/site/jacoco/ after all tests complete.
+                          Excluded classes (see plugin-level <configuration>) are
+                          omitted from the report so the percentage reflects only
+                          meaningfully testable code.
                         -->
                         <execution>
                             <id>jacoco-report</id>
