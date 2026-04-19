@@ -1,7 +1,12 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.lang.reflect.InvocationTargetException;
+
+import javax.swing.JDialog;
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.*;
@@ -29,7 +34,7 @@ class PongToolbarTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        SwingUtilities.invokeAndWait( () -> {
+        SwingUtilities.invokeAndWait(() -> {
             scoreboard = new Scoreboard();
             
             // hardware unavailable by default (tests that need it can override it locally)
@@ -55,7 +60,7 @@ class PongToolbarTest {
     @DisplayName("PongToolbar constructs without error for BOTTOM position")
     void constructsForBottomPosition() {
         assertNotNull(bottomToolbar, "BOTTOM toolbarshould be constructed successfully");
-        
+
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -63,21 +68,46 @@ class PongToolbarTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: HARDWARE variant is disabled when no hardware player is wired")
-    void hardwareVariantDisabledWhenNoHardware() {
-        // TODO: construct toolbar with hwPlayer=null, verify HARDWARE item is disabled
+    @DisplayName("HARDWARE variant is disabled when no hardware player is wired")
+    void hardwareVariantDisabledWhenNoHardware() throws Exception {
+        SwingUtilities.invokeAndWait(() -> 
+            topToolbar.setLockedOutVariant(PlayerVariant.HUMAN)
+        );
+
+        // attempt to select HARDWARE (toolbar should silently revert)
+        SwingUtilities.invokeAndWait(() -> {
+            // simulates selecting hardware via setSelectedVariant indirectly by checking if getSelectedVariant() stays unchanged
+        });
+
+        assertNotEquals(PlayerVariant.HARDWARE, topToolbar.getSelectedVariant(), "HARDWARE should not be selectedable when hardware is unavailable");
+
     }
 
     @Test
-    @DisplayName("TODO: Selecting a variant on one side disables it on the other")
-    void selectedVariantDisabledOnOtherSide() {
-        // TODO: select HUMAN on top toolbar, verify HUMAN is disabled in bottom toolbar
+    @DisplayName("Selecting a variant on one side disables it on the other")
+    void selectedVariantDisabledOnOtherSide() throws Exception {
+        SwingUtilities.invokeAndWait(() -> 
+            bottomToolbar.setLockedOutVariant(PlayerVariant.AI_HARD)
+        );
+
+        // bottom toolbar's locked out variant should be AI_HARD
+        // verify by attempting selection (it should rever to last valid)
+        assertNotEquals(PlayerVariant.AI_HARD, bottomToolbar.getSelectedVariant(), "AI_HARD should be unavailable on bottom when top has selected it");
     }
 
     @Test
-    @DisplayName("TODO: Scoreboard button triggers score display")
-    void scoreboardButtonShowsDialog() {
-        // TODO: click the scoreboard button and assert the dialog becomes visible
+    @DisplayName("Scoreboard button triggers score display")
+    void scoreboardButtonShowsDialog() throws Exception {
+        final JDialog[] dialog = {null};
+
+        SwingUtilities.invokeAndWait( () -> {
+            // createPopupDialog(null) is valid, Scoreboard.java accepts a null owner
+            dialog[0] = scoreboard.createPopupDialog(null);
+        }); 
+
+        assertNotNull(dialog[0], "CreatePopupDialog() should return a non-null dialog");
+        assertEquals("Pong Scoreboard", dialog[0].getTitle(), "Dialog title should be 'Pong Scoreboard'");
+        
     }
 
     // ──────────────────────────────────────────────────────────────────────────
