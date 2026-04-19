@@ -99,14 +99,13 @@ class HumanPlayerTest {
     // ──────────────────────────────────────────────────────────────────────────
     // keyTyped — always a no-op
     // ──────────────────────────────────────────────────────────────────────────
-
+  
     @Test
     @DisplayName("keyTyped does not affect the current action")
     void keyTypedIsNoOp() {
         player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
-        // KEY_TYPED requires a valid keyChar — CHAR_UNDEFINED is not allowed
-        player.keyTyped(new KeyEvent(src, KeyEvent.KEY_TYPED,
-                System.currentTimeMillis(), 0, KeyEvent.VK_UNDEFINED, 'a'));
+        // KeyEvent.KEY_TYPED can't be an undefined char
+        player.keyTyped(keyEvent(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED, 'a'));
         assertEquals(PongAction.LEFT, player.getNextMove(DUMMY_STATE));
     }
 
@@ -149,10 +148,14 @@ class HumanPlayerTest {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Helper
+    // Helpers
     // ──────────────────────────────────────────────────────────────────────────
 
     private KeyEvent keyEvent(int id, int keyCode) {
         return new KeyEvent(src, id, System.currentTimeMillis(), 0, keyCode, KeyEvent.CHAR_UNDEFINED);
+    }
+
+    private KeyEvent keyEvent(int id, int keyCode, char c) {
+        return new KeyEvent(src, id, System.currentTimeMillis(), 0, keyCode, c);
     }
 }
