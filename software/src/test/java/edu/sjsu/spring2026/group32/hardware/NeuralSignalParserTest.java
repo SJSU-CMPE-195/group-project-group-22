@@ -55,6 +55,7 @@ class NeuralSignalParserTest {
         assertEquals(0.0, parser.parseVoltage(null),0.0001);
     }
 
+
     // New tests
 
     @Test
@@ -70,7 +71,9 @@ class NeuralSignalParserTest {
         assertTrue(v2 > 0.0 && v2 < 3.3, "Smoothed value should be between min and max");
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // Channel selection
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Channel index 1 reads parts[4] (GPIO35 dual-channel config)")
@@ -93,7 +96,9 @@ class NeuralSignalParserTest {
         assertEquals(1.649, voltage, 0.01, "Channel 0 parser should read column 3 only");
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // Filter state
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("resetFilter() restores initial state so next reading seeds EMA fresh")

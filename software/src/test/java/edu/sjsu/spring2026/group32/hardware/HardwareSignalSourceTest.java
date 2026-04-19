@@ -88,7 +88,9 @@ class HardwareSignalSourceTest {
         verify(mockConnectionManager, never()).connect();
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // Voltage reading
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("getNextVoltage() returns 0.0 when getNextLine() returns null")
@@ -117,7 +119,9 @@ class HardwareSignalSourceTest {
         verify(mockConnectionManager).disconnect();
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // Reconnection
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Reconnect attempt is throttled by 2-second cooldown")
@@ -138,7 +142,9 @@ class HardwareSignalSourceTest {
         verify(mockConnectionManager, times(2)).connect();
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // Shutdown
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("close() calls disconnect() on the underlying connection manager")
