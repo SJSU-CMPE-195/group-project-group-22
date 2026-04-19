@@ -93,4 +93,137 @@ class SerialConnectionManagerTest {
         // Verifies closePort() was called once on the mock device
         verify(mockDevice, times(1)).closePort();
     }
+
+    
+    // New tests
+
+    @Test
+    @DisplayName("Should use a custom readTimeoutMs when supplied via extended constructor")
+    void testCustomReadTimeout() {
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier, 1);
+        connectionManager.connect();
+
+        verify(mockDevice).setComPortTimeouts(1, 1, 0);
+    }
+
+    // Manual Connection (connectTo)
+
+    @Test
+    @DisplayName("connectTo() opens the given port and configures baud rate / timeout")
+    void testConnectTo() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        boolean result = connectionManager.connectTo(mockDevice);
+
+        assertTrue(result, "connectTo() should return true when openPort() succeeds");
+        verify(mockDevice).setBaudRate(115200);
+        verify(mockDevice).setComPortTimeouts(1, 100, 0);
+        verify(mockDevice).openPort();
+    }
+
+    @Test
+    @DisplayName("connectTo() returns false and clears comPort when openPort() fails")
+    void testConnectToFailsWhenPortCannotOpen() {
+        when(mockDevice.openPort()).thenReturn(false);
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        boolean result = connectionManager.connectTo(mockDevice);
+
+        assertFalse(result, "connectTo() should return false when openPort() fails");
+        assertFalse(connectionManager.isConnected(), "Manager should not be connected after failed connectTo()");
+    }
+
+    // Connection state
+
+    @Test
+    @DisplayName("isConnected() returns false before any connection attempt")
+    void testIsConnectedFalseInitially() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{});
+        assertFalse(connectionManager.isConnected());
+    }
+
+    @Test
+    @DisplayName("isConnected() returns true after a successful connect()")
+    void testIsConnectedTrueAfterConnect() {
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+        connectionManager.connect();
+        assertTrue(connectionManager.isConnected());
+    }
+
+    @Test
+    @DisplayName("isConnected() returns false after disconnect()")
+    void testIsConnectedFalseAfterDisconnect() {
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+        connectionManager.connect();
+        connectionManager.disconnect();
+        assertFalse(connectionManager.isConnected());
+    }
+
+    // Reading
+
+    @Test
+    @DisplayName("getNextLine() returns null when stream is exhausted")
+    void testGetNextLineReturnsNullWhenExhausted() {
+        when(mockDevice.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+        connectionManager.connect();
+
+        assertNull(connectionManager.getNextLine(), "getNextLine() should return null when stream is empty");
+    }
+
+    @Test
+    @DisplayName("Non-compatible port descriptor is skipped by connect()")
+    void testNonCompatiblePortIsSkipped() {
+        when(mockDevice.getDescriptivePortName()).thenReturn("Bluetooth Port (COM5)");
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+
+        boolean result = connectionManager.connect();
+
+        assertFalse(result, "Non-compatible port should not be connected");
+        verify(mockDevice, never()).openPort();
+    }
+
+    // Device handshake
+
+    @Test
+    @DisplayName("readInfoHandshake() returns false when not connected")
+    void testReadInfoHandshakeReturnsFalseWhenNotConnected() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{});
+        assertFalse(connectionManager.readInfoHandshake(5));
+    }
+
+    @Test
+    @DisplayName("readInfoHandshake() parses #INFO: line and populates device name and channel count")
+    void testReadInfoHandshakeParsesInfoLine() {
+        String handshake = "#INFO:NeuralSignal,CH=2\n";
+        when(mockDevice.getInputStream()).thenReturn(new ByteArrayInputStream(handshake.getBytes()));
+
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+        connectionManager.connect();
+
+        boolean result = connectionManager.readInfoHandshake(5);
+
+        assertTrue(result);
+        assertEquals("NeuralSignal", connectionManager.getDeviceName());
+        assertEquals(2, connectionManager.getDeviceChannelCount());
+    }
+
+    @Test
+    @DisplayName("disconnect() resets device name and channel count to defaults")
+    void testDisconnectResetsDeviceInfo() {
+        String handshake = "#INFO:NeuralSignal,CH=2\n";
+        when(mockDevice.getInputStream()).thenReturn(new ByteArrayInputStream(handshake.getBytes()));
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+        connectionManager.connect();
+        connectionManager.readInfoHandshake(5);
+        connectionManager.disconnect();
+
+        assertEquals("", connectionManager.getDeviceName());
+        assertEquals(0, connectionManager.getDeviceChannelCount());
+    }
 }
