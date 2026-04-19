@@ -104,7 +104,9 @@ class HumanPlayerTest {
     @DisplayName("keyTyped does not affect the current action")
     void keyTypedIsNoOp() {
         player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
-        player.keyTyped(keyEvent(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED));
+        // KEY_TYPED requires a valid keyChar — CHAR_UNDEFINED is not allowed
+        player.keyTyped(new KeyEvent(src, KeyEvent.KEY_TYPED,
+                System.currentTimeMillis(), 0, KeyEvent.VK_UNDEFINED, 'a'));
         assertEquals(PongAction.LEFT, player.getNextMove(DUMMY_STATE));
     }
 
