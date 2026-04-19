@@ -88,4 +88,85 @@ class PoCTest {
         assertEquals(originalX, game.ballX, "Ball should not move while paused");
 
     }
+
+    // ── New tests ─────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Test 5: Ball should reverse direction when hitting left wall")
+    void testLeftWallBounce() {
+        game.ballX    = 0;
+        game.direction = -PoC_HitTheZone.SPEED;
+
+        game.onTick();
+
+        assertTrue(game.direction > 0,
+                "Direction should be positive after hitting the left wall");
+    }
+
+    @Test
+    @DisplayName("Test 6: Ball moves each tick when not paused")
+    void testBallMovesWhenNotPaused() {
+        game.isPaused  = false;
+        game.ballX     = PoC_HitTheZone.START_X;
+        game.direction = PoC_HitTheZone.SPEED;
+
+        int beforeX = game.ballX;
+        game.onTick();
+
+        assertNotEquals(beforeX, game.ballX, "Ball should move when game is not paused");
+    }
+
+    @Test
+    @DisplayName("Test 7: processScore does nothing when ball center is outside the zone")
+    void testProcessScoreIgnoresOutOfZoneAttempt() {
+        // ballX=0 → center=10, well outside ZONE_START (~370)
+        game.ballX       = 0;
+        game.canScore[0] = true;
+        int hitsBefore    = game.hits[0];
+        int attemptsBefore = game.attempts[0];
+
+        game.processScore(0);
+
+        assertEquals(hitsBefore,         game.hits[0],     "hits should not change when ball is outside zone");
+        assertEquals(attemptsBefore + 1, game.attempts[0], "attempts should still increment");
+    }
+
+    @Test
+    @DisplayName("Test 8: totalPasses is cleared by resetGame()")
+    void testTotalPassesClearedOnReset() {
+        game.totalPasses = 7;
+        game.resetGame();
+        assertEquals(0, game.totalPasses, "Reset should clear totalPasses to 0");
+    }
+
+    @Test
+    @DisplayName("Test 9: processScore increments both hits and attempts when ball is in zone and canScore=true")
+    void testProcessScoreIncrementsHitsAndAttempts() {
+        // ZONE_START = (WIDTH - ZONE_WIDTH) / 2 = (820 - 80) / 2 = 370
+        // ballX set so center = ZONE_START (inside zone)
+        game.ballX       = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
+        game.canScore[0] = true;
+        int hitsBefore    = game.hits[0];
+        int attemptBefore = game.attempts[0];
+
+        game.processScore(0);
+
+        assertEquals(hitsBefore + 1,    game.hits[0],     "hits should increment on successful score");
+        assertEquals(attemptBefore + 1, game.attempts[0], "attempts should always increment");
+    }
+
+    @Test
+    @DisplayName("Test 10: processScore increments only attempts when canScore=false")
+    void testProcessScoreIncrementsOnlyAttemptsWhenCannotScore() {
+        // Ball is inside the zone but canScore=false (zone exit already occurred)
+        game.ballX       = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
+        game.canScore[0] = false;
+        int hitsBefore    = game.hits[0];
+        int attemptBefore = game.attempts[0];
+
+        game.processScore(0);
+
+        assertEquals(hitsBefore,        game.hits[0],     "hits should NOT change when canScore=false");
+        assertEquals(attemptBefore + 1, game.attempts[0], "attempts should still increment");
+    }
 }
