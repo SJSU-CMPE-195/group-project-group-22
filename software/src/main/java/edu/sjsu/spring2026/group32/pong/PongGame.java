@@ -64,17 +64,21 @@ public class PongGame extends JPanel {
     // State machine
     // -------------------------------------------------------------------------
 
-    private enum GameState { PAUSED, COUNTDOWN, PLAYING }
-    private volatile GameState gameState = GameState.PAUSED;
-    private long countdownStartMs;
+    enum GameState { PAUSED, COUNTDOWN, PLAYING }
+    volatile GameState gameState = GameState.PAUSED;
+    long countdownStartMs;
 
     // -------------------------------------------------------------------------
     // Game variables
     // -------------------------------------------------------------------------
 
     private int topPaddleX, bottomPaddleX;
-    private int ballX, ballY, ballVelX, ballVelY;
-    private int topScore = 0, bottomScore = 0;
+    int ballX;
+    int ballY;
+    int ballVelX;
+    int ballVelY;
+    int topScore = 0;
+    int bottomScore = 0;
 
     /** 0-based index into SPEED_VEL_X / SPEED_VEL_Y; shown in pause overlay as levels 1-5. */
     private int ballSpeedLevel = 1; // default = level 2
@@ -90,10 +94,10 @@ public class PongGame extends JPanel {
     // Players
     // -------------------------------------------------------------------------
 
-    private PlayerVariant topVariant    = PlayerVariant.AI_HARD;
+    PlayerVariant topVariant    = PlayerVariant.AI_HARD;
     private PlayerVariant bottomVariant = PlayerVariant.HUMAN;
 
-    private BasePlayer<PongState, PongAction> topPlayer;
+    BasePlayer<PongState, PongAction> topPlayer;
     private BasePlayer<PongState, PongAction> bottomPlayer;
     private HumanPlayer<PongState, PongAction> activeHumanPlayer;
 
@@ -301,7 +305,7 @@ public class PongGame extends JPanel {
     // Toolbar callbacks
     // =========================================================================
 
-    private void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
+    void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
         PlayerVariant other = (side == PongToolbar.Side.TOP) ? bottomVariant : topVariant;
         if (chosen == other) return;
 
@@ -350,11 +354,11 @@ public class PongGame extends JPanel {
         }
     }
 
-    private void tickCountdown(long now) {
+    void tickCountdown(long now) {
         if (now - countdownStartMs >= COUNTDOWN_MS) gameState = GameState.PLAYING;
     }
 
-    private void tickPlaying() {
+    void tickPlaying() {
         // State snapshots
         PongState topState    = new PongState(topPaddleX,    ballX, ballY, FIELD_WIDTH);
         PongState bottomState = new PongState(bottomPaddleX, ballX, ballY, FIELD_WIDTH);
@@ -421,7 +425,7 @@ public class PongGame extends JPanel {
     // State transitions
     // =========================================================================
 
-    private void togglePause() {
+    void togglePause() {
         switch (gameState) {
             case PAUSED    -> startCountdown();
             case PLAYING,
@@ -436,7 +440,7 @@ public class PongGame extends JPanel {
         resetBall();
     }
 
-    private void startCountdown() {
+    void startCountdown() {
         gameState        = GameState.COUNTDOWN;
         countdownStartMs = System.currentTimeMillis();
         lockToolbars(true);

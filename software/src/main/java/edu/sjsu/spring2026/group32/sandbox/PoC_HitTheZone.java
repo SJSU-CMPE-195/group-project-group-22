@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.sandbox;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
 import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.serial.RealSerialDevice;
@@ -10,7 +11,6 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-import java.awt.KeyboardFocusManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -87,6 +87,7 @@ public class PoC_HitTheZone extends JFrame {
     // Full GUI constructor
     // ======================================================================
 
+    @GeneratedExcludeFromCoverage
     public PoC_HitTheZone(List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
         super("Hit The Zone");
 
@@ -281,6 +282,7 @@ public class PoC_HitTheZone extends JFrame {
         }
     }
 
+    @GeneratedExcludeFromCoverage
     protected void togglePause() {
         isPaused = !isPaused;
         pauseButton.setText(isPaused ? "Resume (Esc)" : "Pause (Esc)");
@@ -316,6 +318,7 @@ public class PoC_HitTheZone extends JFrame {
     // HUD
     // ======================================================================
 
+    @GeneratedExcludeFromCoverage
     protected void updateHud() {
         if (isPaused) return;
 
