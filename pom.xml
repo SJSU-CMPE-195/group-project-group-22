@@ -76,10 +76,16 @@
                             <!-- Swing UI — require a real or virtual display to exercise meaningfully -->
                             <exclude>edu/sjsu/spring2026/group32/launcher/Launcher*.class</exclude>
                             <exclude>edu/sjsu/spring2026/group32/launcher/SerialConnectionPanel*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hardware/serial/RealSerialDevice.class</exclude>
+
                             <exclude>edu/sjsu/spring2026/group32/pong/ui/PongToolbar*.class</exclude>
                             <exclude>edu/sjsu/spring2026/group32/pong/ui/Scoreboard*.class</exclude>
                             <exclude>edu/sjsu/spring2026/group32/pong/PongGame*.class</exclude>
                             <exclude>edu/sjsu/spring2026/group32/BidirectionalTest*.class</exclude>
+
+                            <!-- PoC_HitTheZone: Swing rendering and UI methods untestable in headless mode -->
+                            <exclude>edu/sjsu/spring2026/group32/sandbox/PoC_HitTheZone$GamePanel.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/sandbox/PoC_HitTheZone$*.class</exclude>
 
                             <!-- Enums — only auto-generated switch/valueOf bytecode; logic tested via callers -->
                             <exclude>edu/sjsu/spring2026/group32/player/PlayerType*.class</exclude>
