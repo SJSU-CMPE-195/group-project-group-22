@@ -1,114 +1,160 @@
 package edu.sjsu.spring2026.group32.sandbox;
 
-import edu.sjsu.spring2026.group32.hardware.BaseSignalSource;
 import edu.sjsu.spring2026.group32.player.PlayerType;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link HitTheZoneHardwareAI}.
+ * Unit tests for {@link HitTheZoneSoftwareAI}.
  *
- * <p>{@link BaseSignalSource} is a single-abstract-method interface, so a
- * lambda is used as a test stub — no mocking framework required.
+ * <p>Key behavioral facts:
+ * <ul>
+ *   <li>With {@code maxJitterTicks=0} the AI scores on <em>every</em> tick it
+ *       is in the zone (countdown resets to 0 immediately after each SCORE).</li>
+ *   <li>With {@code maxJitterTicks=N>0} the AI waits 0–N ticks per scoring
+ *       opportunity and therefore scores at most once every {@code N+1} ticks.</li>
+ *   <li>The "once per zone entry" edge-detection is enforced by the game loop
+ *       ({@code lastActions} / {@code canScore}), <em>not</em> by this class.</li>
+ *   <li>On zone exit the internal countdown is reset to {@code -1} so the
+ *       next entry arms a fresh countdown.</li>
+ * </ul>
  */
+@DisplayName("HitTheZoneHardwareAI Suite")
 class HitTheZoneHardwareAITest {
 
-    private HitTheZoneHardwareAI player;
+    private static final HitTheZoneState IN_ZONE  = new HitTheZoneState(true);
+    private static final HitTheZoneState OUT_ZONE = new HitTheZoneState(false);
 
-    /** Creates a signal source that always returns the given fixed voltage. */
-    private static BaseSignalSource fixed(double voltage) {
-        // Return a BaseSignalSource lambda whose getNextVoltage() always returns voltage.
-        return () -> voltage;
-    }
-
-    @BeforeEach
-    void setUp() {
-        // Simulates a default player with the 1.0V voltage threshold and always-hot signal source 2.0 V
-        player = new HitTheZoneHardwareAI("bot", fixed(2.0),1.0);
-    }
-
-    // ------------------------------------------------------------------
-    // Basic action mapping
-    // ------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────────────────
+    // Zero-jitter (instant reaction)
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Returns SCORE when in zone and voltage meets threshold")
-    void scoreWhenInZoneAndVoltageHigh() {
-        assertEquals(HitTheZoneAction.SCORE, player.getNextMove(new HitTheZoneState(true)));
+    @DisplayName("Zero jitter: scores on very first tick in zone")
+    void zeroJitter_scoresOnFirstTick() {
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 0);
+        assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));
     }
 
     @Test
-    @DisplayName("Returns null when in zone but voltage is below threshold")
-    void noScoreWhenVoltageLow() {
-        // Hardware with voltage fixed voltage 0.5 and threshold: 1.0 
-        HitTheZoneHardwareAI lowPlayer = new HitTheZoneHardwareAI("Bot", fixed(0.5), 1.0);
-        assertNull(lowPlayer.getNextMove(new HitTheZoneState(true)));
+    @DisplayName("Zero jitter: scores on every consecutive tick in zone (game loop enforces single-score)")
+    void zeroJitter_scoresOnEveryConsecutiveTick() {
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 0);
+        assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));
+        assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));
+        assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));
+
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Out-of-zone behaviour
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Returns null when ball is outside the zone")
+    void returnsNullWhenOutsideZone() {
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 0);
+        assertNull(ai.getNextMove(OUT_ZONE));
     }
 
     @Test
-    @DisplayName("Returns null when outside zone regardless of voltage")
-    void noScoreWhenOutsideZone() {
-    
-        // Hardware with voltage fixed voltage 3.3 and threshold: 1.0 
-        HitTheZoneHardwareAI hotPlayer = new HitTheZoneHardwareAI("Bot", fixed(3.3), 1.0);
-        
-        // Zone check must gate the voltage check, even max voltage should not score outside zone
-        assertNull(hotPlayer.getNextMove(new HitTheZoneState(false)));
-
+    @DisplayName("Returns null on multiple consecutive out-of-zone ticks")
+    void returnsNullOnMultipleOutOfZoneTicks() {
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 0);
+        assertNull(ai.getNextMove(OUT_ZONE));
+        assertNull(ai.getNextMove(OUT_ZONE));
+        assertNull(ai.getNextMove(OUT_ZONE));
     }
 
-    // ------------------------------------------------------------------
-    // Threshold boundary
-    // ------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────────────────
+    // Zone re-entry
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Returns SCORE at exactly the threshold voltage (inclusive)")
-    void scoreAtExactThreshold() {
+    @DisplayName("Zone re-entry resets countdown so AI scores again on re-entry (zero jitter)")
+    void zeroJitter_zoneReEntryRestartsCountdown() {
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 0);
 
-        // Hardware with fixed voltage 1.0 and voltage threshold 1.0 
-        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(1.0), 1.0);
-        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(true)));
+        // first zone entry --> score
+        assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));
 
-    }
+        // exit zone --> countdown reset to -1
+        assertNull(ai.getNextMove(OUT_ZONE));
 
-    @Test
-    @DisplayName("Returns null just below the threshold voltage")
-    void noScoreJustBelowThreshold() {
-
-        // Simulates hardware with fixed voltage 0.99 and voltage threshold 1.0 
-        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(0.99), 1.0);
-        assertNull(p.getNextMove(new HitTheZoneState(true)));
+        // re-enters zone --> countdown re-armed --> score immediately (jitter = 0)
+        assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));
     }
 
     @Test
-    @DisplayName("Custom threshold is respected")
-    void customThresholdRespected() {
+    @DisplayName("Zone exit during countdown discards pending countdown")
+    void zoneExitDuringCountdownDiscardsIt() {
+        // w/ maxJitterTicks = 100, first tick arms a countdown of 0-100.
+        // the AI should score within maxJitterTicks + 1 ticks of re-entry.
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 100);
 
-        // Simulates hardware with fixed voltage = 2.0 and voltageThreshold = 2.5 
-        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 2.5);
-        assertNull(p.getNextMove(new HitTheZoneState(true)));
+        ai.getNextMove(IN_ZONE);
+        // exiting, discards whatever countdown was set
+        ai.getNextMove(OUT_ZONE);
 
+        // after re-entry, the AI should score at most in 101 ticks
+        boolean scored = false;
+        for (int i = 0; i <= 101; i++) {
+            if (HitTheZoneAction.SCORE == ai.getNextMove(IN_ZONE)) {
+                scored = true;
+                break;
+            }
+        }
+        assertTrue(scored, "AI must score within maxJitterTicks+1 ticks after re-entry");
     }
 
-    // ------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────────────────
+    // Non-zero jitter: timing guarantee
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Non-zero jitter: AI scores exactly once within maxJitterTicks+1 ticks of zone entry")
+    void nonZeroJitter_scoresWithinWindow() {
+        // maxJitterTicks = 5 --> AI scores between tick 1 and tick 6 (inclusive)
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 5);
+
+        int scoreCount = 0;
+        for (int tick = 1; tick <= 6; tick++) {
+            if (HitTheZoneAction.SCORE == ai.getNextMove(IN_ZONE)) {
+                scoreCount++;
+                break; // stop after first score to match real game behaviour
+            }
+        }
+        assertEquals(1, scoreCount, "AI must score exactly once in the first maxJitterTicks+1 ticks");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Negative jitter clamping
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Negative maxJitterTicks is clamped to zero (instant reaction)")
+    void negativeJitterClampedToZero() {
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", -99);
+        // clamped should behave identically to jitter = 0
+        assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Metadata
-    // ------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("getName() returns the name passed to the constructor")
     void getNameReturnsConstructorValue() {
-        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Neural", fixed(2.0), 1.0);
-        assertEquals("Neural", p.getName());
-
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("TestBot", 0);
+        assertEquals("TestBot", ai.getName());
     }
 
     @Test
-    @DisplayName("getType() returns HARDWARE")
-    void getTypeReturnsHardware() {
-        assertEquals(PlayerType.HARDWARE, player.getType());
-
+    @DisplayName("getType() returns PlayerType.SOFTWARE")
+    void getTypeReturnsSoftware() {
+        HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 0);
+        assertEquals(PlayerType.SOFTWARE, ai.getType());
     }
 }
