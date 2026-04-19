@@ -55,7 +55,7 @@ jobs:
           xvfb-run --auto-servernum \
             mvn --batch-mode verify
 
-      # ── 5. Upload the runnable JAR as a build artifact ───────────────────────
+      # ── 6. Upload the runnable JAR as a build artifact ───────────────────────
       #    The JAR includes all compiled classes for Launcher, BidirectionalTest,
       #    HitTheZone, and Pong. Download it from the Actions "Artifacts" panel.
       - name: Upload JAR artifact
