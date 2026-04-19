@@ -1,6 +1,17 @@
 # Hardware Spiking Neural Network (SNN)
 
+[![CI](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml/badge.svg)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-80%25%2B-brightgreen)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
+
 This project is a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the game Pong. It is comprised of software game and AI model made in Java and a hardware neural network. 
+
+## Deployed Application
+
+The latest runnable JAR is published as a GitHub Actions artifact on every successful push to `main`.
+
+**[View latest CI run & download artifacts →](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)**
+
+From the most recent successful run, download `hardware-neural-network-jar` from the **Artifacts** panel, then follow the [Running the Application](#running-the-application) instructions below.
 
 ## Team - (Group 32)
 - Jonathon Fleming | [@JellyF02](https://github.com/JellyF02) | jonathon.fleming@sjsu.edu |
@@ -76,6 +87,42 @@ run the PoC
     mvn exec:java -Dexec.mainClass="edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone"
     ```
 
+
+## Running Tests
+
+### Unit & Integration Tests
+
+Navigate to the `software` directory and run the full test suite with JaCoCo coverage:
+
+```bash
+cd group-project-group-22/software
+mvn verify
+```
+
+> **Note:** Tests that instantiate Swing components (e.g. `PoCTest`) require a display. On Linux/CI, prefix the command with `xvfb-run --auto-servernum`.
+
+### Test Coverage Report
+
+JaCoCo generates an HTML report at `software/target/site/jacoco/index.html` after `mvn verify`. Open it in a browser to browse line-by-line coverage.
+
+The latest coverage report is also uploaded as the **`jacoco-coverage-report`** artifact on every CI run — see [Actions](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml).
+
+### Stress / Performance Tests
+
+To run only the throughput benchmarks (no Swing required):
+
+```bash
+cd group-project-group-22/software
+mvn test -Dgroups=stress
+```
+
+Results are printed to the console and documented in [`docs/evaluation/stress-test-results.md`](docs/evaluation/stress-test-results.md).
+
+### Run a Specific Test Class
+
+```bash
+mvn test -Dtest=NeuralSignalParserTest
+```
 
 ## Usage
 Basic instructions on how to use the application
