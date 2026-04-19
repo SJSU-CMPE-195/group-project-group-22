@@ -38,7 +38,7 @@ public class PongToolbar extends JPanel {
     private final Scoreboard scoreboard;
     private final boolean    hardwareAvailable;
 
-    private final JComboBox<PlayerVariant> dropdown;
+    final JComboBox<PlayerVariant> dropdown;
     private PlayerVariant lastValidSelection;
     private PlayerVariant lockedOutVariant;     // the other side's current choice
     private Consumer<PlayerVariant> onVariantChanged;

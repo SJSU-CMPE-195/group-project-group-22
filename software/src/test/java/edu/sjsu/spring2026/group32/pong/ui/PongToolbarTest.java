@@ -1,8 +1,10 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.InvocationTargetException;
 
@@ -28,7 +30,7 @@ import edu.sjsu.spring2026.group32.pong.PlayerVariant;
 @DisplayName("PongToolbar Suite")
 class PongToolbarTest {
 
-    private PongToolbar topToolbar;
+    PongToolbar topToolbar;
     private PongToolbar bottomToolbar;
     private Scoreboard  scoreboard;
 
@@ -115,14 +117,30 @@ class PongToolbarTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TODO: Variant dropdown is locked while game is in PLAYING state")
-    void dropdownLockedDuringPlay() {
-        // TODO: transition game to PLAYING, assert dropdown is disabled
+    @DisplayName("Variant dropdown is locked while game is in PLAYING state")
+    void dropdownLockedDuringPlay() throws Exception {
+        SwingUtilities.invokeAndWait(() ->
+            topToolbar.setSelectionLocked(true)
+        );
+
+        assertFalse(topToolbar.dropdown.isEnabled(), "Dropdown should be disabled during PLAYING state");
+        
     }
 
     @Test
-    @DisplayName("TODO: Variant dropdown is unlocked when game returns to PAUSED state")
-    void dropdownUnlockedWhenPaused() {
-        // TODO: transition game to PAUSED, assert dropdown is enabled
+    @DisplayName("Variant dropdown is unlocked when game returns to PAUSED state")
+    void dropdownUnlockedWhenPaused() throws Exception {
+
+        // simulates PongGame calling lockToolbars(false) when returning to PAUSED
+        SwingUtilities.invokeAndWait(() -> {
+            topToolbar.setSelectionLocked(true); // lock first 
+            topToolbar.setSelectionLocked(false); // unlock
+        });
+
+        SwingUtilities.invokeAndWait(() ->
+            assertTrue(topToolbar.isEnabled(), "Toolbar dropdown should be unlocked when game is PAUSED")
+        );
+
+
     }
 }
