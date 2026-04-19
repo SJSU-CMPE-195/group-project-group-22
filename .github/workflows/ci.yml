@@ -6,16 +6,14 @@ on:
   pull_request:
     branches: [ main ]
 
-permissions:
-  contents: read
-  checks: write
-  issues: write
-  pull-requests: write
-
 jobs:
   build-and-test:
     name: Build & Test (Java 17, Maven)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────────
@@ -78,7 +76,7 @@ jobs:
 
       # -- 8. Publish test results ------------------------------------------------
       - name: Publish test report
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386 # v6.4.0
         if: always()            # run even when tests fail so you still see the report
         with:
           report_paths: '**/target/surefire-reports/TEST-*.xml'
@@ -87,7 +85,7 @@ jobs:
       # -- 9. Post PR coverage summary --------------------------------------------
       - name: Post JaCoCo coverage report
         if: always() && github.event_name == 'pull_request'
-        uses: madrapps/jacoco-report@v1.7.1
+        uses: madrapps/jacoco-report@50d3aff4548aa991e6753342d9ba291084e63848 # v1.7.2
         with:
           paths: software/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
