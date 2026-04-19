@@ -16,10 +16,6 @@ import edu.sjsu.spring2026.group32.pong.ui.PongToolbar;
  * rendering, {@code javax.swing.Timer}, and AWT event dispatch.  Tests require
  * either a real display or a virtual one ({@code xvfb-run} on CI).
  *
- * <p>All test methods are boilerplate stubs marked with TODO.  To implement
- * them, construct a {@code PongGame} instance inside {@code setUp()} (with
- * players injected via the appropriate constructor / factory), then call
- * public methods or use reflection to trigger state transitions.
  */
 @DisplayName("PongGame Suite")
 class PongGameTest {
