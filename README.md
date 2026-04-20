@@ -3,7 +3,7 @@
 [![CI](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml/badge.svg)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-80%25%2B-brightgreen)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
 
-This project is a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the game Pong. It is comprised of software game and AI model made in Java and a hardware neural network.
+This project is a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the games HitTheZone and Pong. There is a launcher with two software games. Each game has their own Java software AI model(s) and a hardware neural network AI model.
 
 ## Table of Contents
 
@@ -31,10 +31,12 @@ From the most recent successful run, download `hardware-neural-network-jar` from
 
 ## Team - (Group 32)
 
-- Jonathon Fleming | [@JellyF02](https://github.com/JellyF02) | jonathon.fleming@sjsu.edu |
-- Andrew Neidhart | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
-- Raymund Mercader | [@ray-sjsu](https://github.com/ray-sjsu) | raymund.mercader@sjsu.edu |
-- Katrina Weers | [@Katrina Weers](https://github.com/Trina-W) | katrina.weers@sjsu.edu |
+| Name | GitHub | Email |
+|---|---|---|
+| Jonathon Fleming | [@JellyF02](https://github.com/JellyF02) | jonathon.fleming@sjsu.edu |
+| Andrew Neidhart | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
+| Raymund Mercader | [@ray-sjsu](https://github.com/ray-sjsu) | raymund.mercader@sjsu.edu |
+| Katrina Weers | [@Trina-W](https://github.com/Trina-W) | katrina.weers@sjsu.edu |
 
 ---
 
@@ -86,8 +88,9 @@ The firmware lives in `hardware/firmware/`. There are two pre-configured `.ino` 
 **Steps:**
 
 1. Open the desired `.ino` file in **Arduino IDE**:
-   - `NeuralSerial_SingleChannel_3Neuron.ino` — or —
-   - `NeuralSerial_DualChannel_6Neuron.ino`
+    - `NeuralSerial_SingleChannel_3Neuron.ino`
+    - — or —
+    - `NeuralSerial_DualChannel_6Neuron.ino`
 2. Near the top of the file, locate the configuration block and confirm or change `CHANNEL_COUNT`:
    ```cpp
    // Set CHANNEL_COUNT to 1 for 3-neuron HitTheZone config.
@@ -139,7 +142,7 @@ A serial communication tester. It receives both Launcher-managed connections (Hi
 
 ### Hit The Zone
 
-A proof-of-concept demo that pits the hardware neural network against software AI bots and a human player. The ESP32 (3-neuron, single-channel config) reads from **GPIO34** and plays as the "Neural" player. See the [Usage](#usage) section for controls and rules.
+A small game demo that pits the hardware neural network against software AI bots and a human player. The ESP32 (3-neuron, single-channel config) reads from **GPIO34** and plays as the "Neural" player. See the [Usage](#usage) section for controls and rules.
 
 ### Pong Game
 
@@ -166,7 +169,7 @@ cd group-project-group-22/software
 mvn verify
 ```
 
-> **Note:** Tests that instantiate Swing components (e.g. `PoCTest`) require a display. On Linux/CI, prefix the command with `xvfb-run --auto-servernum`.
+> **Note:** Tests that instantiate Swing components require a display. On Linux/CI, prefix the command with `xvfb-run --auto-servernum`.
 
 ### Test Coverage Report
 
@@ -195,14 +198,14 @@ mvn test -Dtest=NeuralSignalParserTest
 
 ## Usage
 
-The Hit The Zone demo showcases the hardware neural network against software bots, hardware AI, and a human player.
+The Hit The Zone game demo showcases the hardware neural network against software bots, hardware AI, and a human player.
 
 Players:
 - **Bot Alpha / Beta:** software AI players
 - **Human (user):** presses Space when the ball is inside the yellow zone to score
 - **Hardware:** ESP32 neural network player (neuron)
 
-![proofofconcept](poc-screenshot.png)*Proof of Concept Screen*
+![hitthezonegamedemo](hit-the-zone-game-demo.png)*Game - Hit The Zone Screen*
 
 Controls:
 - **Space:** Hits the ball when inside zone
@@ -226,14 +229,14 @@ Brief overview of folder/file organization.
 
 ### Software
 - `src/`
-  - `main/`
-    - `hardware/` — Java program for connecting to ESP32
-    - `launcher/` — Launcher hub and serial connection panels
-    - `player/` — core player abstractions and implementations
-    - `pong/` — fully developed Pong game
-    - `sandbox/` — Hit The Zone PoC (`PoC_HitTheZone.java`)
-  - `test/` — JUnit and Mockito test cases
-    - `hardware/` — hardware test cases
-    - `sandbox/` — PoC test cases
-    - `launcher/` — Launcher test cases
+    - `main/`
+        - `hardware/` — Java program for connecting to ESP32
+        - `launcher/` — Launcher hub and serial connection panels
+        - `player/` — core player abstractions and implementations
+        - `pong/` — fully developed Pong game
+        - `sandbox/` — Hit The Zone game demo
+    - `test/` — JUnit and Mockito test cases
+        - `hardware/` — hardware test cases
+        - `sandbox/` — Hit The Zone game demo test cases
+        - `launcher/` — Launcher test cases
 - `pom.xml` — Maven dependencies
