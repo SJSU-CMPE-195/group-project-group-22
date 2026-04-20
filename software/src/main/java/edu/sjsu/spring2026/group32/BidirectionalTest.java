@@ -1,8 +1,6 @@
 package edu.sjsu.spring2026.group32;
 
-import edu.sjsu.spring2026.group32.hardware.serial.RealSerialDevice;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
-import edu.sjsu.spring2026.group32.hardware.serial.SerialDevice;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
@@ -26,72 +24,68 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Test — interactive Swing tool for bidirectional ESP32 ↔ Java serial testing.
+ * Interactive Swing tool for bidirectional ESP32 ↔ Java serial testing.
+ *
+ * <p>Always launched from {@link edu.sjsu.spring2026.group32.launcher.Launcher}, which owns
+ * both {@link SerialConnectionManager} instances (one per device).  This window
+ * never opens or closes a serial port — it only reads from and writes to ports
+ * that are already managed by the Launcher.</p>
+ *
+ * <p>A device selector at the top lets the user switch between:</p>
+ * <ul>
+ *   <li>HTZ — 3-neuron (single channel, GPIO34)</li>
+ *   <li>Pong — 6-neuron (dual channel, GPIO34 + GPIO35)</li>
+ * </ul>
  *
  * <p>Left column: dark terminal showing live CSV lines.<br>
- * Right column: scrolling voltage graph (0 – 3.3 V) with optional injection
+ * Right column: scrolling voltage graph (0–3.3 V) with optional injection
  * target line.</p>
  *
  * <p>Firmware counterpart: hardware/firmware/Test.ino</p>
  *
  * Protocol (Java → ESP32):
  * <pre>
- *   INJECT_V:&lt;volts&gt;   inject a voltage (0.00 – 3.30 V)
- *   INJECT:&lt;raw&gt;       inject a raw ADC value (0 – 4095)
- *   STOP_INJECT         revert to real ADC readings
- *   STATUS              request a one-line status reply
+ *   INJECT_V_CH1:&lt;volts&gt;   inject a voltage (0.00 – 3.30 V) on channel 1
+ *   INJECT_V_CH2:&lt;volts&gt;   inject a voltage (0.00 – 3.30 V) on channel 2
+ *   STOP_INJECT_CH1         revert channel 1 to real ADC readings
+ *   STOP_INJECT_CH2         revert channel 2 to real ADC readings
+ *   STATUS                  request a one-line status reply
  * </pre>
  */
 public class BidirectionalTest extends JFrame {
 
     // ── Serial constants ──────────────────────────────────────────────────────
-    private static final int    BAUD_RATE = 115200;
     private static final int    MAX_LINES = 500;
     private static final double V_REF     = 3.3;
     private static final int    ADC_MAX   = 4095;
 
-    // ── Mode ──────────────────────────────────────────────────────────────────
-    /**
-     * {@code true}  → standalone: owns the connection UI and manages its own port.<br>
-     * {@code false} → launched: receives an already-open {@link SerialConnectionManager}
-     *                 from {@link edu.sjsu.spring2026.group32.launcher.Launcher};
-     *                 the connection panel is hidden and the port is not closed on exit.
-     */
-    private final boolean standaloneMode;
+    // ── Device managers (owned by Launcher) ───────────────────────────────────
+    private final SerialConnectionManager htzManager;
+    private final SerialConnectionManager pongManager;
 
-    // ── Serial state ──────────────────────────────────────────────────────────
+    // ── Active connection ─────────────────────────────────────────────────────
     private SerialConnectionManager connectionManager;
     private ExecutorService         readerThread;
     private final AtomicBoolean     running = new AtomicBoolean(false);
 
-    // ── Connection panel ──────────────────────────────────────────────────────
-    private JComboBox<PortItem> portSelector;
-    private JButton             refreshBtn;
-    private JButton             connectBtn;
-    private JButton             disconnectBtn;
-    private JLabel              statusLabel;
-    private JLabel              statusDot;
-    private JCheckBox           autoFilterCheck;
-
-    /** Substrings (case-insensitive) found in the descriptive name of USB-UART
-     *  bridges commonly soldered onto ESP32 development boards. */
-    private static final String[] ESP32_BRIDGE_KEYWORDS = {
-        "CP210", "CH340", "CH341", "FT232", "FTDI", "ESP32", "ESP8266",
-        "Silicon Laboratories", "Silicon Labs"
-    };
+    // ── Device selector ───────────────────────────────────────────────────────
+    private JRadioButton htzRadio;
+    private JRadioButton pongRadio;
+    private JLabel       htzStatusLabel;
+    private JLabel       pongStatusLabel;
 
     // ── Summary strip ─────────────────────────────────────────────────────────
-    private JLabel    rawLabel;
-    private JLabel    voltageLabel;
-    private JLabel    ch2RawLabel;
-    private JLabel    ch2VoltageLabel;
-    private JLabel    modeLabel;
+    private JLabel rawLabel;
+    private JLabel voltageLabel;
+    private JLabel ch2RawLabel;
+    private JLabel ch2VoltageLabel;
+    private JLabel modeLabel;
 
-    // ── Channel checkboxes (filter the graph traces and the log together) ───────
+    // ── Channel checkboxes ────────────────────────────────────────────────────
     private JCheckBox ch1Check;
     private JCheckBox ch2Check;
 
-    // ── Log filtering ──────────────────────────────────────────────────────────
+    // ── Log filtering ─────────────────────────────────────────────────────────
     /** Channel tag for system/status messages — always shown regardless of filter. */
     private static final int LOG_SYSTEM     = -1;
     private static final int MAX_LOG_ENTRIES = 1000;
@@ -101,15 +95,16 @@ public class BidirectionalTest extends JFrame {
     private boolean updatingChannelFilter = false;
 
     // ── Terminal ──────────────────────────────────────────────────────────────
-    private JTextArea        dataDisplay;
-    private JButton          pauseBtn;
-    private boolean displayPaused = false;
+    private JTextArea dataDisplay;
+    private JButton   pauseBtn;
+    private boolean   displayPaused = false;
 
     // ── Graph ─────────────────────────────────────────────────────────────────
     private VoltageGraph voltageGraph;
 
     // ── Injection panels (index 0 = Ch1, index 1 = Ch2) ──────────────────────
     // Ch2 panel is hidden until dual-channel firmware data arrives.
+    private JPanel               ch2InjectionPanel;
     private final JTextField[]   voltageFields      = new JTextField[2];
     private final JSlider[]      voltageSliders     = new JSlider[2];
     private final JButton[]      injectBtns         = new JButton[2];
@@ -122,7 +117,6 @@ public class BidirectionalTest extends JFrame {
     private final JSpinner[]     repeatSpinners     = new JSpinner[2];   // repeat count
     private final JCheckBox[]    infiniteChecks     = new JCheckBox[2];  // repeat indefinitely
     private final JPanel[]       intervalOptsPanels = new JPanel[2];     // shown only in interval mode
-    private JPanel               ch2InjectionPanel; // hidden until dual-channel data arrives
 
     // ── Injection scheduler ───────────────────────────────────────────────────
     private final ScheduledExecutorService injScheduler =
@@ -140,77 +134,52 @@ public class BidirectionalTest extends JFrame {
             DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
 
     // =========================================================================
-    //  Entry point
-    // =========================================================================
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new BidirectionalTest().setVisible(true));
-    }
-
-    // =========================================================================
-    //  Constructors
+    //  Constructor
     // =========================================================================
 
     /**
-     * Standalone constructor — shows the full Serial Connection panel so the
-     * user can pick a COM port directly from this window.
-     * Use this when running {@code BidirectionalTest} as its own entry point.
-     */
-    public BidirectionalTest() {
-        super("ESP32 ↔ Java Serial Test");
-        this.standaloneMode = true;
-
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        addWindowListener(new WindowAdapter() {
-            @Override public void windowClosing(WindowEvent e) {
-                disconnect();
-                dispose();
-            }
-        });
-
-        buildUI();
-        refreshPorts();
-
-        setMinimumSize(new Dimension(1000, 600));
-        pack();
-        setLocationRelativeTo(null);
-    }
-
-    /**
-     * Launcher-injected constructor.  The COM port is already open; this window
-     * hides the connection panel and does <em>not</em> close the port when
-     * disposed — the {@link edu.sjsu.spring2026.group32.launcher.Launcher}
-     * retains ownership.
+     * Constructs a BidirectionalTest window that can monitor both
+     * Launcher-managed ESP32 devices.  Either manager may be {@code null} if
+     * that device is not currently connected; the corresponding radio button
+     * is shown as disabled in that case.
      *
-     * @param connectionManager an already-connected serial manager provided
-     *                          by the Launcher
+     * <p>This window never opens or closes any port — the Launcher retains
+     * ownership of both connections.</p>
+     *
+     * @param htzManager  manager for the Hit The Zone device
+     *                    (3-neuron, single channel), or {@code null} if not connected
+     * @param pongManager manager for the Pong device
+     *                    (6-neuron, dual channel), or {@code null} if not connected
      */
-    public BidirectionalTest(SerialConnectionManager connectionManager) {
+    public BidirectionalTest(SerialConnectionManager htzManager,
+                             SerialConnectionManager pongManager) {
         super("ESP32 ↔ Java Serial Test  [via Launcher]");
-        this.standaloneMode    = false;
-        this.connectionManager = connectionManager;
+        this.htzManager  = htzManager;
+        this.pongManager = pongManager;
 
         // DISPOSE, not EXIT — the Launcher must keep running.
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent e) {
-                // Stop reading but do NOT close the port — the Launcher owns it.
+                // Stop reading but do NOT close either port — the Launcher owns them.
                 stopReadLoop();
-                appendLog("── Closed (port stays open in Launcher) ──");
+                appendLog("── Closed (ports stay open in Launcher) ──");
             }
         });
 
         buildUI();
 
-        // Already connected: reset graph, silence injection, start reading.
-        voltageGraph.reset();
-        voltageGraph.setInjection(0, false, 0.0);
-        voltageGraph.setInjection(1, false, 0.0);
-        connectionManager.sendLine("STOP_INJECT");
-        startReadLoop();
-        injectBtns[0].setEnabled(true);
-        stopInjectBtns[0].setEnabled(true);
-        appendLog("── Connected (launched from Launcher) ──");
-        appendLog("Injection off by default.");
+        // Default selection: prefer HTZ; fall back to Pong; idle if neither connected.
+        if (htzManager != null && htzManager.isConnected()) {
+            htzRadio.setSelected(true);
+            switchToDevice(htzManager, "HTZ — 3-neuron");
+        } else if (pongManager != null && pongManager.isConnected()) {
+            pongRadio.setSelected(true);
+            switchToDevice(pongManager, "Pong — 6-neuron");
+        } else {
+            appendLog("── No devices connected. Connect a device in the Launcher and reopen. ──");
+            setConnectedState(false);
+        }
 
         setMinimumSize(new Dimension(1000, 600));
         pack();
@@ -225,11 +194,8 @@ public class BidirectionalTest extends JFrame {
         root.setBorder(new EmptyBorder(8, 8, 8, 8));
         setContentPane(root);
 
-        // The connection panel is only shown in standalone mode.
-        // When launched from Launcher, the port is already open and the
-        // Launcher's SerialConnectionPanel owns the connection UI.
-        if (standaloneMode) root.add(buildConnectionPanel(), BorderLayout.NORTH);
-        root.add(buildCenterPanel(), BorderLayout.CENTER);
+        root.add(buildDeviceSelectorPanel(), BorderLayout.NORTH);
+        root.add(buildCenterPanel(),         BorderLayout.CENTER);
 
         // Injection area: 1-column, 2-row stack.
         // Ch2 panel is hidden until dual-channel firmware data arrives.
@@ -241,51 +207,82 @@ public class BidirectionalTest extends JFrame {
         root.add(injWrapper, BorderLayout.SOUTH);
     }
 
-    // ── Connection panel ──────────────────────────────────────────────────────
-    private JPanel buildConnectionPanel() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        p.setBorder(new TitledBorder("Serial Connection"));
+    // ── Device selector ───────────────────────────────────────────────────────
 
-        portSelector  = new JComboBox<>();
-        portSelector.setPreferredSize(new Dimension(340, 26));
+    /**
+     * Builds the device selector panel that replaces the old per-window
+     * SerialConnectionPanel.  The Launcher owns both ports; this panel only
+     * lets the user choose which one to monitor.
+     */
+    private JPanel buildDeviceSelectorPanel() {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
+        p.setBorder(new TitledBorder("Device  (connections managed by Launcher)"));
 
-        refreshBtn    = new JButton("↺  Refresh");
-        connectBtn    = new JButton("Connect");
-        disconnectBtn = new JButton("Disconnect");
-        disconnectBtn.setEnabled(false);
+        htzRadio  = new JRadioButton("HTZ — 3-neuron (single ch)");
+        pongRadio = new JRadioButton("Pong — 6-neuron (dual ch)");
+        ButtonGroup grp = new ButtonGroup();
+        grp.add(htzRadio);
+        grp.add(pongRadio);
 
-        statusDot   = new JLabel("●");
-        statusDot.setForeground(Color.RED);
-        statusLabel = new JLabel("Disconnected");
+        htzStatusLabel  = makeDeviceStatusLabel(htzManager);
+        pongStatusLabel = makeDeviceStatusLabel(pongManager);
 
-        connectBtn.setBackground(new Color(70, 160, 70));
-        connectBtn.setForeground(Color.WHITE);
-        connectBtn.setOpaque(true);
+        // Only enable a radio button when its device is actually connected.
+        htzRadio .setEnabled(htzManager  != null && htzManager .isConnected());
+        pongRadio.setEnabled(pongManager != null && pongManager.isConnected());
 
-        disconnectBtn.setBackground(new Color(190, 60, 60));
-        disconnectBtn.setForeground(Color.WHITE);
-        disconnectBtn.setOpaque(true);
+        htzRadio.addActionListener(e -> {
+            if (htzManager != null && htzManager.isConnected()) {
+                switchToDevice(htzManager, "HTZ — 3-neuron");
+            }
+        });
+        pongRadio.addActionListener(e -> {
+            if (pongManager != null && pongManager.isConnected()) {
+                switchToDevice(pongManager, "Pong — 6-neuron");
+            }
+        });
 
-        autoFilterCheck = new JCheckBox("ESP32 only", true);
-        autoFilterCheck.setToolTipText(
-                "When checked, only shows ports whose device name matches a known ESP32 USB-UART bridge");
-        autoFilterCheck.addItemListener(e -> refreshPorts());
-
-        p.add(new JLabel("COM Port:"));
-        p.add(portSelector);
-        p.add(autoFilterCheck);
-        p.add(refreshBtn);
-        p.add(connectBtn);
-        p.add(disconnectBtn);
-        p.add(Box.createHorizontalStrut(12));
-        p.add(statusDot);
-        p.add(statusLabel);
-
-        refreshBtn.addActionListener(e -> refreshPorts());
-        connectBtn.addActionListener(e -> connect());
-        disconnectBtn.addActionListener(e -> disconnect());
+        p.add(htzRadio);
+        p.add(htzStatusLabel);
+        p.add(Box.createHorizontalStrut(20));
+        p.add(pongRadio);
+        p.add(pongStatusLabel);
 
         return p;
+    }
+
+    private JLabel makeDeviceStatusLabel(SerialConnectionManager mgr) {
+        boolean connected = mgr != null && mgr.isConnected();
+        JLabel lbl = new JLabel(connected ? "● Connected" : "● Not connected");
+        lbl.setForeground(connected ? new Color(40, 190, 40) : Color.RED);
+        lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        return lbl;
+    }
+
+    /**
+     * Switches the active serial device.  Stops the current read loop, resets
+     * the graph and Ch2 panels, then starts reading from the new manager.
+     */
+    private void switchToDevice(SerialConnectionManager mgr, String label) {
+        stopReadLoop();
+        connectionManager = mgr;
+
+        // Clear log and graph for the new device context.
+        appendLog("── Switched to: " + label + " ──");
+        voltageGraph.reset();
+        voltageGraph.setInjection(0, false, 0.0);
+        voltageGraph.setInjection(1, false, 0.0);
+
+        // Hide Ch2 panel until dual-channel data arrives from the new device.
+        if (ch2InjectionPanel != null) ch2InjectionPanel.setVisible(false);
+        if (ch2RawLabel      != null) ch2RawLabel    .setVisible(false);
+        if (ch2VoltageLabel  != null) ch2VoltageLabel.setVisible(false);
+        if (ch2Check         != null) ch2Check.setSelected(false);
+
+        connectionManager.sendLine("STOP_INJECT");
+        startReadLoop();
+        setConnectedState(true);
+        appendLog("Injection off by default.");
     }
 
     // ── Center: two-column split (terminal | graph) ───────────────────────────
@@ -320,8 +317,6 @@ public class BidirectionalTest extends JFrame {
 
         // Each listener enforces "not-none": unchecking the last checked box is
         // rejected so graph and log always show at least one channel.
-        // The updatingChannelFilter guard prevents the corrective setSelected()
-        // call from re-entering and looping.
         ch1Check.addItemListener(e -> {
             if (updatingChannelFilter) return;
             if (!ch1Check.isSelected() && !ch2Check.isSelected()) {
@@ -516,102 +511,12 @@ public class BidirectionalTest extends JFrame {
     }
 
     // =========================================================================
-    //  Port management
+    //  Read loop
     // =========================================================================
-    private void refreshPorts() {
-        // Remember which port is currently selected so we can restore it.
-        PortItem prev = (PortItem) portSelector.getSelectedItem();
-        String prevName = (prev != null && !prev.isPlaceholder())
-                ? prev.device.getSystemPortName() : null;
-
-        portSelector.removeAllItems();
-        portSelector.addItem(new PortItem(null));   // blank placeholder always first
-
-        SerialDevice[] all = RealSerialDevice.getRealPorts();
-        boolean filter = autoFilterCheck != null && autoFilterCheck.isSelected();
-
-        int shown = 0;
-        int reselect = -1;   // combo index to restore
-        for (SerialDevice d : all) {
-            if (filter && !looksLikeEsp32Bridge(d)) continue;
-            portSelector.addItem(new PortItem(d));
-            shown++;
-            // +1 because index 0 is the placeholder
-            if (d.getSystemPortName().equals(prevName)) reselect = shown;
-        }
-
-        if (reselect >= 0) {
-            portSelector.setSelectedIndex(reselect);   // restore previous selection
-        }
-        // else: leave the placeholder selected (index 0)
-
-        if (shown == 0) {
-            if (filter && all.length > 0) {
-                appendLog(String.format(
-                        "No ESP32 ports found (%d other port(s) hidden by filter). " +
-                        "Uncheck 'ESP32 only' to see all.", all.length));
-            } else {
-                appendLog("No serial ports found. Plug in the ESP32 and press Refresh.");
-            }
-        } else {
-            String filterNote = filter ? " (ESP32 filter on)" : "";
-            appendLog(String.format("Found %d port(s)%s. Select your ESP32 and press Connect.",
-                    shown, filterNote));
-        }
-    }
-
-    /** Returns true if the port's descriptive name contains a keyword associated
-     *  with a USB-UART bridge chip used on ESP32 dev boards. */
-    private static boolean looksLikeEsp32Bridge(SerialDevice d) {
-        String name = d.getDescriptivePortName().toUpperCase();
-        for (String kw : ESP32_BRIDGE_KEYWORDS) {
-            if (name.contains(kw.toUpperCase())) return true;
-        }
-        return false;
-    }
-
-    // =========================================================================
-    //  Connect / Disconnect
-    // =========================================================================
-    private void connect() {
-        PortItem item = (PortItem) portSelector.getSelectedItem();
-        if (item == null || item.device == null) {
-            JOptionPane.showMessageDialog(this,
-                    "No port selected. Press Refresh and choose your ESP32.",
-                    "No Port", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        // 2000 ms semi-blocking: return as soon as ≥1 byte arrives, or after 2 s.
-        // The ESP32 sends every ~10 ms, so 2000 ms only fires on genuine silence.
-        connectionManager = new SerialConnectionManager(RealSerialDevice::getRealPorts, 2000);
-
-        if (!connectionManager.connectTo(item.device)) {
-            JOptionPane.showMessageDialog(this,
-                    "Could not open " + item.device.getSystemPortName() +
-                    ".\nIs another application using it?",
-                    "Connection Failed", JOptionPane.ERROR_MESSAGE);
-            connectionManager = null;
-            return;
-        }
-
-        // Ensure the ESP32 starts in real-ADC mode regardless of prior session state.
-        connectionManager.sendLine("STOP_INJECT");
-
-        voltageGraph.reset();
-        voltageGraph.setInjection(0, false, 0.0);
-        voltageGraph.setInjection(1, false, 0.0);
-
-        startReadLoop();
-        setConnectedState(true, item.toString());
-        appendLog("── Connected: " + item + " ──");
-        appendLog("Injection off by default.");
-    }
 
     /**
-     * Stops the serial read thread without closing the underlying port.
-     * Used by the launched-mode window listener so the Launcher retains
-     * ownership of the connection.
+     * Stops the serial read loop without closing the underlying port.
+     * The Launcher retains ownership of the connection.
      */
     private void stopReadLoop() {
         if (!running.getAndSet(false)) return;
@@ -623,60 +528,6 @@ public class BidirectionalTest extends JFrame {
         }
     }
 
-    /** Full disconnect — stops the read loop AND closes the port. Standalone only. */
-    private void disconnect() {
-        stopReadLoop();
-
-        if (connectionManager != null) {
-            connectionManager.disconnect();
-            connectionManager = null;
-        }
-
-        setConnectedState(false, null);
-        appendLog("── Disconnected ──");
-    }
-
-    private void setConnectedState(boolean connected, String portLabel) {
-        SwingUtilities.invokeLater(() -> {
-            // These UI components only exist in standalone mode.
-            if (standaloneMode) {
-                connectBtn   .setEnabled(!connected);
-                disconnectBtn.setEnabled( connected);
-                refreshBtn   .setEnabled(!connected);
-                portSelector .setEnabled(!connected);
-
-                if (connected) {
-                    statusDot.setForeground(new Color(40, 190, 40));
-                    statusLabel.setText("Connected: " + portLabel);
-                } else {
-                    statusDot.setForeground(Color.RED);
-                    statusLabel.setText("Disconnected");
-                }
-            }
-
-            injectBtns[0]    .setEnabled(connected);
-            stopInjectBtns[0].setEnabled(connected);
-            // Ch2 buttons are only enabled when connected AND the panel is visible
-            if (ch2InjectionPanel != null && ch2InjectionPanel.isVisible()) {
-                injectBtns[1]    .setEnabled(connected);
-                stopInjectBtns[1].setEnabled(connected);
-            }
-
-            if (!connected) {
-                rawLabel        .setText("Ch1 ADC: —");
-                voltageLabel    .setText("Ch1: — V");
-                modeLabel       .setText("Mode: —");
-                ch2RawLabel    .setVisible(false);
-                ch2VoltageLabel.setVisible(false);
-                // Hide the Ch2 injection panel until dual-channel data arrives again
-                if (ch2InjectionPanel != null) ch2InjectionPanel.setVisible(false);
-            }
-        });
-    }
-
-    // =========================================================================
-    //  Serial read loop
-    // =========================================================================
     private void startReadLoop() {
         running.set(true);
         readerThread = Executors.newSingleThreadExecutor(r -> {
@@ -700,17 +551,18 @@ public class BidirectionalTest extends JFrame {
                         // (no bytes arrived within the 2 s window) rather than a
                         // physical disconnection.  Check the port first.
                         if (!running.get()) {
-                            break;  // deliberate disconnect() was called — exit quietly
+                            break;  // deliberate stopReadLoop() was called — exit quietly
                         }
                         if (connectionManager != null && connectionManager.isConnected()) {
                             // Port is still alive — just a quiet moment; keep looping.
                             continue;
                         }
-                        // Port has actually closed — report and clean up.
+                        // Port has actually closed — report and stop.
                         final String msg = readEx.getMessage();
                         SwingUtilities.invokeLater(() -> {
                             appendLog("Connection lost: " + msg);
-                            disconnect();
+                            stopReadLoop();
+                            setConnectedState(false);
                         });
                         break;
                     }
@@ -721,7 +573,8 @@ public class BidirectionalTest extends JFrame {
                     final String msg = outerEx.getMessage();
                     SwingUtilities.invokeLater(() -> {
                         appendLog("Reader error: " + msg);
-                        disconnect();
+                        stopReadLoop();
+                        setConnectedState(false);
                     });
                 }
             }
@@ -840,12 +693,6 @@ public class BidirectionalTest extends JFrame {
                 voltageGraph.setInjection(0, false, 0.0);
                 voltageGraph.setInjection(1, false, 0.0);
             }
-            // Update mode label only if no channel is still injecting
-            boolean anyInjecting = false;
-            for (int i = 0; i < 2; i++) {
-                // Check graph state as the authoritative source
-                // (setInjection already updated internal state)
-            }
             modeLabel.setText("Mode: NORMAL");
             modeLabel.setForeground(new Color(40, 160, 40));
         } else if (statusPayload.contains("NORMAL")) {
@@ -857,22 +704,43 @@ public class BidirectionalTest extends JFrame {
     }
 
     // =========================================================================
+    //  Connected-state UI update
+    // =========================================================================
+    private void setConnectedState(boolean connected) {
+        SwingUtilities.invokeLater(() -> {
+            injectBtns[0]    .setEnabled(connected);
+            stopInjectBtns[0].setEnabled(connected);
+            // Ch2 buttons are only enabled when connected AND the panel is visible
+            if (ch2InjectionPanel != null && ch2InjectionPanel.isVisible()) {
+                injectBtns[1]    .setEnabled(connected);
+                stopInjectBtns[1].setEnabled(connected);
+            }
+
+            if (!connected) {
+                rawLabel        .setText("Ch1 ADC: —");
+                voltageLabel    .setText("Ch1: — V");
+                modeLabel       .setText("Mode: —");
+                ch2RawLabel    .setVisible(false);
+                ch2VoltageLabel.setVisible(false);
+                // Hide the Ch2 injection panel until dual-channel data arrives again
+                if (ch2InjectionPanel != null) ch2InjectionPanel.setVisible(false);
+            }
+        });
+    }
+
+    // =========================================================================
     //  Log area helpers
     // =========================================================================
     private void togglePause() {
         if (!displayPaused) {
-            // About to pause — log the message first while displayPaused is still false
-            // (addLogEntry won't write to the display once displayPaused is true).
             appendLog("── Output paused ──");
             displayPaused = true;
             pauseBtn.setText("▶ Resume");
             pauseBtn.setToolTipText("Resume terminal output");
         } else {
-            // About to resume — flip the flag first, then flush buffered entries.
             displayPaused = false;
             pauseBtn.setText("⏸ Pause");
             pauseBtn.setToolTipText("Pause terminal output (graph and labels keep updating)");
-            // Flush everything that arrived while paused into the display.
             rebuildLogDisplay();
             appendLog("── Output resumed ──");
         }
@@ -1207,8 +1075,6 @@ public class BidirectionalTest extends JFrame {
             }
 
             // ── Voltage traces (one per visible channel) ──────────────────────
-            // We also record hover info for the tooltip.
-            // Primary reference for hover position = first visible channel with data.
             int    hoverRefIdx = -1;
             int    hoverRefCh  = -1;
             int    hoverPxSnap = hoverX;
@@ -1231,8 +1097,6 @@ public class BidirectionalTest extends JFrame {
                     int    x   = ML + (int) Math.round((double) i / (pts - 1) * pw);
                     int    y   = MT + yPx(v, ph);
 
-                    // Capture hover reference: find the data point closest to hoverX
-                    // across all visible channels.
                     if (hoverX >= ML && hoverX <= ML + pw) {
                         if (hoverRefIdx < 0 ||
                                 Math.abs(x - hoverX) < Math.abs(hoverPxSnap - hoverX)) {
@@ -1269,17 +1133,12 @@ public class BidirectionalTest extends JFrame {
 
             // ── Hover crosshair + tooltip ─────────────────────────────────────
             if (hoverRefIdx >= 0) {
-                // Vertical crosshair
                 g2.setStroke(new BasicStroke(1f));
                 g2.setColor(HOVER_C);
                 g2.drawLine(hoverPxSnap, MT, hoverPxSnap, MT + ph);
 
-                // Dots + channel label on each visible channel at hover position.
-                // Both channels are sampled at the same rate so we use the same
-                // relative offset within each channel's ring buffer.
                 int refPts    = Math.min(counts[hoverRefCh], pw);
                 int refOldest = (heads[hoverRefCh] - refPts + BUFFER) % BUFFER;
-                // Compute i (sample offset) that gave hoverRefIdx.
                 int hoverI = (hoverRefIdx - refOldest + BUFFER) % BUFFER;
 
                 for (int ch = 0; ch < NUM_CHANNELS; ch++) {
@@ -1297,7 +1156,6 @@ public class BidirectionalTest extends JFrame {
                     g2.fillOval(hoverPxSnap - 2, dotY - 2, 5, 5);
                 }
 
-                // Tooltip — timestamp + one row per visible channel
                 g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
                 FontMetrics tfm = g2.getFontMetrics();
 
@@ -1305,7 +1163,6 @@ public class BidirectionalTest extends JFrame {
                         ? tBufs[hoverRefCh][hoverRefIdx] : "—";
                 String tLine  = String.format("t = %d ms", msBufs[hoverRefCh][hoverRefIdx]);
 
-                // Collect channel lines
                 java.util.List<String[]> chLines = new java.util.ArrayList<>();
                 for (int ch = 0; ch < NUM_CHANNELS; ch++) {
                     if (!visible[ch] || counts[ch] < 2) continue;
@@ -1321,10 +1178,9 @@ public class BidirectionalTest extends JFrame {
                 }
 
                 int lh = tfm.getHeight();
-                int rows = 2 + chLines.size() * 2; // ts + t + 2 rows per channel
+                int rows = 2 + chLines.size() * 2;
                 int th = lh * rows + 10;
 
-                // Measure tooltip width
                 int tw = tfm.stringWidth(tsLine);
                 tw = Math.max(tw, tfm.stringWidth(tLine));
                 for (String[] pair : chLines) {
@@ -1352,7 +1208,6 @@ public class BidirectionalTest extends JFrame {
                 g2.drawString(tLine, tx + 7, ty + lh * row++);
                 for (int ci = 0; ci < chLines.size(); ci++) {
                     g2.setColor(TRACE_COLORS[
-                            // find which channel index this entry corresponds to
                             chLines.size() == 1
                                 ? (visible[0] ? 0 : 1)
                                 : ci]);
@@ -1379,20 +1234,4 @@ public class BidirectionalTest extends JFrame {
             return plotH - (int) Math.round(Math.min(v, V_REF) / V_REF * plotH);
         }
     }
-
-    // =========================================================================
-        //  PortItem — combo box display model
-        // =========================================================================
-        private record PortItem(SerialDevice device) {
-
-        boolean isPlaceholder() {
-            return device == null;
-        }
-
-            @Override
-            public String toString() {
-                if (device == null) return "---";
-                return device.getSystemPortName() + "  —  " + device.getDescriptivePortName();
-            }
-        }
 }

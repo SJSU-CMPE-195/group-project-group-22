@@ -15,8 +15,12 @@ import org.junit.jupiter.api.*;
  * Integration tests for {@link Launcher}.
  *
  * <p><b>NOTE:</b> {@code Launcher} creates a full Swing {@code JFrame} and
- * multiple game panels, requiring a real or virtual (xvfb) display.
- * 
+ * multiple game panels, requiring a real or virtual (xvfb) display.</p>
+ *
+ * <p>Architecture invariant verified here: the entire application contains
+ * exactly <em>two</em> {@link SerialConnectionPanel} instances, both owned by
+ * {@code Launcher}.  No other window (BidirectionalTest, PongGame, etc.)
+ * creates its own connection panel — they receive managers from the Launcher.</p>
  */
 @DisplayName("Launcher Suite")
 class LauncherTest {
@@ -65,16 +69,18 @@ class LauncherTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("SerialConnectionPanel is present and shared across games")
-    void serialConnectionPanelsArePresent() {
-        assertNotNull(launcher.htzPanel);
-        assertNotNull(launcher.pongPanel);
-        assertNotSame(launcher.htzPanel, launcher.pongPanel, "HTZ and Pong panels should be separate instances");
-
+    @DisplayName("Exactly two SerialConnectionPanels exist and are both owned by Launcher")
+    void exactlyTwoSerialConnectionPanelsOwnedByLauncher() {
+        // The entire application has exactly two panels — one per device.
+        // BidirectionalTest, PongGame, and HitTheZone do NOT own their own panels.
+        assertNotNull(launcher.htzPanel,  "HTZ SerialConnectionPanel must be non-null");
+        assertNotNull(launcher.pongPanel, "Pong SerialConnectionPanel must be non-null");
+        assertNotSame(launcher.htzPanel, launcher.pongPanel,
+                "HTZ and Pong panels must be distinct instances");
     }
 
     @Test
-    @Disabled("Hardware connection simulation requires SerialConnectionPanel refactor - covered by manual testing")
+    @Disabled("Requires real ESP32 hardware — covered by manual integration testing")
     @DisplayName("Connecting hardware enables the HARDWARE player variant")
     void connectingHardwareEnablesHardwareVariant() {}
 

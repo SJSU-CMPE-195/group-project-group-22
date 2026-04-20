@@ -29,16 +29,18 @@ import java.util.Map;
 
 /**
  * Central launch hub for all ESP32-backed programs.
- * Each game has its own dedicated ESP32 device and SerialConnectionPanel.
- * Programs can always be launched; hardware players are included only when
- * the corresponding port is connected.
- *   Hit The Zone -- 3-neuron config, single ADC channel (GPIO34).
- *   Pong         -- 6-neuron config, dual ADC channels:
- *                   GPIO34 = LEFT, GPIO35 = RIGHT.
- *                   Both channels combine into a single PongHardwareAI
- *                   for bidirectional horizontal control.
- *   Bidirectional Test -- generic; opens with its own standalone
- *                         connection panel and works with either firmware.
+ * There are exactly two {@link SerialConnectionPanel} instances in the entire
+ * application, both owned by this class.  No other window manages its own port.
+ *
+ * <ul>
+ *   <li>Hit The Zone  — 3-neuron config, single ADC channel (GPIO34).</li>
+ *   <li>Pong          — 6-neuron config, dual ADC channels:
+ *                       GPIO34 = LEFT, GPIO35 = RIGHT.
+ *                       Both channels combine into a single PongHardwareAI.</li>
+ *   <li>Bidirectional Test — receives both Launcher-managed connections
+ *                            (htzManager + pongManager) and lets the user
+ *                            switch between them via a device selector.</li>
+ * </ul>
  */
 public class Launcher extends JFrame {
 
@@ -116,7 +118,7 @@ public class Launcher extends JFrame {
 
         // ── Launch buttons (always enabled) ───────────────────────────────────
         launchBidirectional = makeLaunchButton("Bidirectional Test",
-                "Generic serial tester — opens with its own connection panel",
+                "Serial tester — uses the two Launcher connections",
                 new Color(60, 120, 200));
 
         launchHitTheZone    = makeLaunchButton("Hit The Zone",
@@ -177,7 +179,7 @@ public class Launcher extends JFrame {
                 new EmptyBorder(8, 8, 8, 8)));
 
         p.add(wrapLaunchButton(launchBidirectional,
-                "Works with any ESP32\nfirmware or channel count"));
+                "HTZ + Pong connections\npassed from Launcher"));
         p.add(wrapLaunchButton(launchHitTheZone,
                 "Hardware AI added when\nHTZ device is connected"));
         p.add(wrapLaunchButton(launchPong,
@@ -213,12 +215,15 @@ public class Launcher extends JFrame {
     // =========================================================================
 
     /**
-     * BidirectionalTest always runs in standalone mode with its own connection
-     * panel — it is generic and not tied to either game device.
+     * Opens BidirectionalTest with both Launcher-managed connections.
+     * The HTZ manager (3-neuron) and the Pong manager (6-neuron) are passed
+     * directly; either may be null if that device is not yet connected.
+     * The test window never opens or closes any port — the Launcher retains
+     * ownership of both connections.
      */
     private void openBidirectionalTest() {
-        log("Launching Bidirectional Test (standalone)…");
-        BidirectionalTest frame = new BidirectionalTest();
+        log("Launching Bidirectional Test…");
+        BidirectionalTest frame = new BidirectionalTest(htzManager, pongManager);
         trackLaunchedWindow(frame, "Bidirectional Test");
         frame.setVisible(true);
     }
