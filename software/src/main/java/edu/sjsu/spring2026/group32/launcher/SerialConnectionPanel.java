@@ -7,6 +7,9 @@ import edu.sjsu.spring2026.group32.hardware.serial.SerialDevice;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Reusable Swing panel that provides a complete Serial Connection UI:
@@ -49,6 +52,10 @@ public class SerialConnectionPanel extends JPanel {
     // ── State ─────────────────────────────────────────────────────────────────
     private SerialConnectionManager connectionManager;
     private ConnectionListener       listener;
+
+    // ── Disconnect watchdog ───────────────────────────────────────────────────
+    /** Polls the firmware stream heartbeat once per second to detect USB removal. */
+    private ScheduledExecutorService watchdog;
 
     // ── Log sink (optional) ───────────────────────────────────────────────────
     /** Optional callback for status/log messages. May be null. */
@@ -140,6 +147,7 @@ public class SerialConnectionPanel extends JPanel {
      */
     public void disconnect() {
         if (connectionManager == null) return;
+        stopWatchdog();
         connectionManager.disconnect();
         connectionManager = null;
         setConnectedState(false, null);
@@ -233,6 +241,63 @@ public class SerialConnectionPanel extends JPanel {
         log("── Connected: " + label + " ──");
 
         if (listener != null) listener.onConnected(connectionManager, label);
+        startWatchdog();
+    }
+
+    // =========================================================================
+    //  Disconnect watchdog
+    // =========================================================================
+
+    /**
+     * Starts a 1-second polling loop that detects surprise USB removal by
+     * watching the firmware's data stream rather than OS-level port state.
+     *
+     * <p>The ESP32 firmware sends a CSV line every 10 ms. Each successful
+     * {@link SerialConnectionManager#getNextLine()} call updates a heartbeat
+     * timestamp. If 3 000 ms pass without a line — 300 missed frames — the
+     * device is treated as gone and the disconnect flow is triggered.</p>
+     *
+     * <p>A secondary {@code isConnected()} check catches cases where a read
+     * exception already caused the manager to self-disconnect (e.g. a Scanner
+     * IOException surfaced before the heartbeat timeout).</p>
+     */
+    private void startWatchdog() {
+        stopWatchdog();
+        watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "serial-watchdog");
+            t.setDaemon(true);
+            return t;
+        });
+        watchdog.scheduleAtFixedRate(() -> {
+            if (connectionManager == null) return;
+            boolean streamSilent  = connectionManager.isRxTimedOut();
+            boolean managerClosed = !connectionManager.isConnected();
+            if (streamSilent || managerClosed) {
+                SwingUtilities.invokeLater(this::handleUnexpectedDisconnect);
+            }
+        }, 1, 1, TimeUnit.SECONDS);
+    }
+
+    private void stopWatchdog() {
+        if (watchdog != null) {
+            watchdog.shutdownNow();
+            watchdog = null;
+        }
+    }
+
+    /**
+     * Called on the EDT when the watchdog detects the port has dropped.
+     * Resets all UI controls and notifies the registered listener.
+     */
+    private void handleUnexpectedDisconnect() {
+        if (connectionManager == null) return; // already handled
+        log("⚠ Device disconnected unexpectedly.");
+        try { connectionManager.disconnect(); } catch (Exception ignored) {}
+        connectionManager = null;
+        portSelector.setSelectedIndex(0);       // reset to "-- Select a port --"
+        setConnectedState(false, null);
+        refreshPorts();
+        if (listener != null) listener.onDisconnected();
     }
 
     // =========================================================================

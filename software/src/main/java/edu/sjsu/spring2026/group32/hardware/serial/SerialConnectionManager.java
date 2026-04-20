@@ -79,6 +79,7 @@ public class SerialConnectionManager {
             // BidirectionalTest ignores the Scanner and reads via getInputStream() directly.
             this.scanner = new Scanner(comPort.getInputStream());
             initWriter();
+            lastRxMs = System.currentTimeMillis(); // seed heartbeat
             return true;
         }
 
@@ -108,12 +109,35 @@ public class SerialConnectionManager {
     //  Read helpers
     // =========================================================================
 
-    /** Blocking line read via the internal Scanner (auto-connect path only). */
+    /**
+     * Blocking line read via the internal Scanner.
+     * Also checks {@link java.util.Scanner#ioException()} after a failed read —
+     * on Windows this is how USB-removal surfaces, since the underlying
+     * InputStream throws an IOException that Scanner stores rather than
+     * re-throwing. When detected, the port is disconnected immediately so
+     * callers (and the SerialConnectionPanel watchdog) see isConnected()==false.
+     */
     public String getNextLine() {
-        if (scanner != null && scanner.hasNextLine()) {
-            return scanner.nextLine();
+        if (scanner == null) return null;
+        try {
+            if (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                lastRxMs = System.currentTimeMillis(); // heartbeat — device is alive
+                return line;
+            }
+            // hasNextLine() returned false — check whether the Scanner hit an
+            // IOException internally (e.g. device physically removed on Windows).
+            if (scanner.ioException() != null) {
+                System.err.println(">>> Serial read error (device removed?): "
+                        + scanner.ioException().getMessage());
+                disconnect();
+            }
+            return null;
+        } catch (Exception e) {
+            System.err.println(">>> Serial read exception: " + e.getMessage());
+            disconnect();
+            return null;
         }
-        return null; // Return null if no data is ready, letting the parser handle it
     }
 
     /**
@@ -138,6 +162,35 @@ public class SerialConnectionManager {
             lineWriter.println(command);
             lineWriter.flush();
         }
+    }
+
+    // =========================================================================
+    //  Stream heartbeat
+    // =========================================================================
+
+    /**
+     * Timestamp (ms, wall clock) of the last line successfully returned by
+     * {@link #getNextLine()}.  Seeded to "now" when a port is opened so that
+     * the watchdog does not fire before the first data frame arrives.
+     * {@code volatile} so the SerialConnectionPanel watchdog thread can read
+     * it without synchronisation overhead.
+     */
+    private volatile long lastRxMs = 0;
+
+    /**
+     * How long (ms) without a received line before the connection is considered
+     * lost.  The firmware sends a frame every 10 ms; 3 000 ms = 300 missed
+     * frames, which is far beyond any normal OS scheduling jitter.
+     */
+    private static final long RX_TIMEOUT_MS = 3_000;
+
+    /** @return wall-clock ms of the last received line, or 0 if never connected. */
+    public long getLastRxMs() { return lastRxMs; }
+
+    /** @return true if no line has been received within {@link #RX_TIMEOUT_MS}. */
+    public boolean isRxTimedOut() {
+        return lastRxMs > 0
+            && (System.currentTimeMillis() - lastRxMs) > RX_TIMEOUT_MS;
     }
 
     // =========================================================================

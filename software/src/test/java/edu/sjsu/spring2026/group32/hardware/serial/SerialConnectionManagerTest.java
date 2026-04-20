@@ -269,6 +269,116 @@ class SerialConnectionManagerTest {
         assertFalse(connectionManager.readInfoHandshake(3), "Should return false when no #INFO: line found within maxAttempts");
         assertEquals("", connectionManager.getDeviceName(), "deviceName should remain empty when handshake fails");
         assertEquals(0, connectionManager.getDeviceChannelCount(), "deviceChannelCount should remain 0 when handshake fails");
-        
+    }
+
+    // -------------------------------------------------------------------------
+    // Heartbeat — lastRxMs / isRxTimedOut
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getLastRxMs() returns 0 before any connection")
+    void testLastRxMsIsZeroBeforeConnection() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{});
+        assertEquals(0, connectionManager.getLastRxMs(),
+            "lastRxMs should be 0 before any connection is made");
+    }
+
+    @Test
+    @DisplayName("getLastRxMs() is seeded to a non-zero value immediately after connectTo()")
+    void testLastRxMsSeededAfterConnectTo() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        long before = System.currentTimeMillis();
+        connectionManager.connectTo(mockDevice);
+        long after = System.currentTimeMillis();
+
+        long lastRx = connectionManager.getLastRxMs();
+        assertTrue(lastRx >= before && lastRx <= after,
+            "lastRxMs should be seeded to the current time when the port is opened");
+    }
+
+    @Test
+    @DisplayName("getLastRxMs() advances each time getNextLine() returns a line")
+    void testLastRxMsUpdatesOnSuccessfulRead() throws InterruptedException {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{mockDevice});
+        connectionManager.connect();
+
+        long afterConnect = connectionManager.getLastRxMs();
+        Thread.sleep(5); // ensure wall-clock advances before the next read
+        connectionManager.getNextLine(); // reads "first_line"
+
+        assertTrue(connectionManager.getLastRxMs() >= afterConnect,
+            "lastRxMs should be updated after a successful line read");
+    }
+
+    @Test
+    @DisplayName("getLastRxMs() does not advance when getNextLine() returns null (empty stream)")
+    void testLastRxMsDoesNotUpdateOnEmptyRead() throws InterruptedException {
+        when(mockDevice.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{mockDevice});
+        connectionManager.connect();
+
+        long afterConnect = connectionManager.getLastRxMs();
+        Thread.sleep(5);
+        connectionManager.getNextLine(); // stream empty → null
+
+        assertEquals(afterConnect, connectionManager.getLastRxMs(),
+            "lastRxMs should not change when getNextLine() returns null");
+    }
+
+    @Test
+    @DisplayName("isRxTimedOut() returns false when never connected (lastRxMs is 0)")
+    void testIsRxTimedOutFalseWhenNeverConnected() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{});
+        assertFalse(connectionManager.isRxTimedOut(),
+            "isRxTimedOut() should return false when never connected");
+    }
+
+    @Test
+    @DisplayName("isRxTimedOut() returns false immediately after connection (heartbeat just seeded)")
+    void testIsRxTimedOutFalseRightAfterConnect() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+
+        assertFalse(connectionManager.isRxTimedOut(),
+            "isRxTimedOut() should be false immediately after connecting");
+    }
+
+    @Test
+    @DisplayName("isRxTimedOut() returns true when lastRxMs is older than 3 seconds")
+    void testIsRxTimedOutTrueWhenStale() throws Exception {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+
+        // Backdate lastRxMs via reflection to simulate 5 seconds of silence
+        java.lang.reflect.Field field = SerialConnectionManager.class.getDeclaredField("lastRxMs");
+        field.setAccessible(true);
+        field.setLong(connectionManager, System.currentTimeMillis() - 5_000);
+
+        assertTrue(connectionManager.isRxTimedOut(),
+            "isRxTimedOut() should return true when no data received for > 3 seconds");
+    }
+
+    // -------------------------------------------------------------------------
+    // getNextLine() — self-disconnect on IOException
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getNextLine() disconnects and returns null when the stream throws IOException")
+    void testGetNextLineDisconnectsOnIOException() {
+        // A stream that immediately throws IOException — simulates a yanked USB cable
+        java.io.InputStream failingStream = new java.io.InputStream() {
+            @Override public int read() throws java.io.IOException {
+                throw new java.io.IOException("Simulated USB removal");
+            }
+        };
+        when(mockDevice.getInputStream()).thenReturn(failingStream);
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{mockDevice});
+        connectionManager.connect();
+
+        String line = connectionManager.getNextLine();
+
+        assertNull(line, "getNextLine() should return null when the stream throws IOException");
+        assertFalse(connectionManager.isConnected(),
+            "Manager should be disconnected after a stream IOException");
     }
 }
