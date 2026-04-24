@@ -284,16 +284,15 @@ class SerialConnectionManagerTest {
     }
 
     @Test
-    @DisplayName("getLastRxMs() is seeded to a non-zero value immediately after connectTo()")
-    void testLastRxMsSeededAfterConnectTo() {
+    @DisplayName("getLastRxMs() remains 0 after connectTo() — heartbeat is not seeded at connect time")
+    void testLastRxMsNotSeededAfterConnectTo() {
+        // The seed was intentionally removed so the idle Launcher watchdog does not
+        // fire isRxTimedOut() before any program has started reading.
         connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
-        long before = System.currentTimeMillis();
         connectionManager.connectTo(mockDevice);
-        long after = System.currentTimeMillis();
 
-        long lastRx = connectionManager.getLastRxMs();
-        assertTrue(lastRx >= before && lastRx <= after,
-            "lastRxMs should be seeded to the current time when the port is opened");
+        assertEquals(0, connectionManager.getLastRxMs(),
+            "lastRxMs should stay 0 after connectTo(); it only advances when a real consumer reads");
     }
 
     @Test
@@ -356,6 +355,76 @@ class SerialConnectionManagerTest {
 
         assertTrue(connectionManager.isRxTimedOut(),
             "isRxTimedOut() should return true when no data received for > 3 seconds");
+    }
+
+    // -------------------------------------------------------------------------
+    // Heartbeat — readInfoHandshake / refreshHeartbeat interaction
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("readInfoHandshake() does not update lastRxMs — handshake reads are not consumer activity")
+    void testReadInfoHandshakeDoesNotUpdateLastRxMs() {
+        // Root cause of the 3-second idle-Launcher disconnect bug:
+        // readInfoHandshake() was calling getNextLine(), which seeded lastRxMs.
+        // The fix uses readNextLineRaw() internally, which skips the heartbeat update.
+        String handshake = "#INFO:NeuralSignal,CH=1\n";
+        when(mockDevice.getInputStream()).thenReturn(new ByteArrayInputStream(handshake.getBytes()));
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+
+        connectionManager.readInfoHandshake(5);
+
+        assertEquals(0, connectionManager.getLastRxMs(),
+            "readInfoHandshake() must not update lastRxMs; only real consumer reads should start the clock");
+    }
+
+    @Test
+    @DisplayName("isRxTimedOut() stays false after connectTo() + readInfoHandshake() — no spurious watchdog disconnect")
+    void testIsRxTimedOutFalseAfterConnectAndHandshake() {
+        // Regression test for the bug where the idle Launcher disconnected after 3 s.
+        // Sequence: connect → handshake → no program running → watchdog must NOT fire.
+        String handshake = "#INFO:NeuralSignal,CH=1\n";
+        when(mockDevice.getInputStream()).thenReturn(new ByteArrayInputStream(handshake.getBytes()));
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+        connectionManager.readInfoHandshake(5);
+
+        assertFalse(connectionManager.isRxTimedOut(),
+            "isRxTimedOut() must remain false after connect + handshake so the idle Launcher watchdog does not disconnect");
+    }
+
+    @Test
+    @DisplayName("refreshHeartbeat() updates lastRxMs to approximately the current wall-clock time")
+    void testRefreshHeartbeatUpdatesLastRxMs() throws InterruptedException {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+
+        long before = System.currentTimeMillis();
+        Thread.sleep(2); // ensure wall-clock has advanced
+        connectionManager.refreshHeartbeat();
+        long after = System.currentTimeMillis();
+
+        long ts = connectionManager.getLastRxMs();
+        assertTrue(ts >= before && ts <= after,
+            "refreshHeartbeat() should set lastRxMs to the current wall-clock time");
+    }
+
+    @Test
+    @DisplayName("isRxTimedOut() returns true after refreshHeartbeat() if that timestamp is subsequently backdated")
+    void testIsRxTimedOutTrueAfterRefreshWhenStale() throws Exception {
+        // Verifies that once a real consumer has started (refreshHeartbeat called),
+        // the timeout can still fire if data stops — e.g. USB removed mid-session.
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+        connectionManager.refreshHeartbeat(); // simulate consumer starting
+
+        // Backdate to simulate 5 seconds of silence after a consumer was active
+        java.lang.reflect.Field field = SerialConnectionManager.class.getDeclaredField("lastRxMs");
+        field.setAccessible(true);
+        field.setLong(connectionManager, System.currentTimeMillis() - 5_000);
+
+        assertTrue(connectionManager.isRxTimedOut(),
+            "isRxTimedOut() should return true when data has been silent for > 3 s after a consumer was active");
     }
 
     // -------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
 import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.serial.RealSerialDevice;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
+import edu.sjsu.spring2026.group32.launcher.ConnectionStatusPanel;
 import edu.sjsu.spring2026.group32.player.*;
 import javax.swing.*;
 import java.awt.*;
@@ -87,8 +88,26 @@ public class PoC_HitTheZone extends JFrame {
     // Full GUI constructor
     // ======================================================================
 
+    /**
+     * Convenience constructor for launching without a hardware connection.
+     * Equivalent to {@link #PoC_HitTheZone(List, SerialConnectionManager)
+     * PoC_HitTheZone(players, null)}.
+     */
     @GeneratedExcludeFromCoverage
     public PoC_HitTheZone(List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
+        this(players, null);
+    }
+
+    /**
+     * Full GUI constructor.
+     *
+     * @param players    the player list (software AI, human, hardware AI, etc.)
+     * @param htzManager the HTZ serial connection, or {@code null} if no hardware
+     *                   is connected; used only to populate the hardware-status bar
+     */
+    @GeneratedExcludeFromCoverage
+    public PoC_HitTheZone(List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players,
+                          SerialConnectionManager htzManager) {
         super("Hit The Zone");
 
         this.players     = players;
@@ -104,6 +123,11 @@ public class PoC_HitTheZone extends JFrame {
         // ---- Top HUD -----------------------------------------------------
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setBorder(BorderFactory.createEmptyBorder(6, 8, 4, 8));
+
+        // Hardware status bar sits at the very top of the HUD.
+        ConnectionStatusPanel statusPanel = new ConnectionStatusPanel();
+        statusPanel.addDevice("HTZ", htzManager);
+        topPanel.add(statusPanel, BorderLayout.NORTH);
 
         playerLabels = new JLabel[n];
         JPanel playerRow = new JPanel(new GridLayout(n, 1, 0, 2));

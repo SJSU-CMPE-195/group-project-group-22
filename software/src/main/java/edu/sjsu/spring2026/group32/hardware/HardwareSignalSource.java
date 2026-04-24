@@ -8,7 +8,7 @@ public class HardwareSignalSource implements BaseSignalSource {
 
     // Cooldown variables for reconnection
     private long lastReconnectAttemptTime = 0;
-    private static final long RECONNECT_COOLDOWN_MS = 2000; // Wait 2 seconds between attempts
+    private static final long RECONNECT_COOLDOWN_MS = 5000; // Wait X ms between attempts
 
     public HardwareSignalSource(SerialConnectionManager connectionManager, NeuralSignalParser parser) {
         this.connectionManager = connectionManager;

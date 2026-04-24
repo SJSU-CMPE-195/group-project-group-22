@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32;
 
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
+import edu.sjsu.spring2026.group32.launcher.ConnectionStatusPanel;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
@@ -69,10 +70,9 @@ public class BidirectionalTest extends JFrame {
     private final AtomicBoolean     running = new AtomicBoolean(false);
 
     // ── Device selector ───────────────────────────────────────────────────────
-    private JRadioButton htzRadio;
-    private JRadioButton pongRadio;
-    private JLabel       htzStatusLabel;
-    private JLabel       pongStatusLabel;
+    private JRadioButton          htzRadio;
+    private JRadioButton          pongRadio;
+    private ConnectionStatusPanel deviceStatusPanel;
 
     // ── Summary strip ─────────────────────────────────────────────────────────
     private JLabel rawLabel;
@@ -224,9 +224,6 @@ public class BidirectionalTest extends JFrame {
         grp.add(htzRadio);
         grp.add(pongRadio);
 
-        htzStatusLabel  = makeDeviceStatusLabel(htzManager);
-        pongStatusLabel = makeDeviceStatusLabel(pongManager);
-
         // Only enable a radio button when its device is actually connected.
         htzRadio .setEnabled(htzManager  != null && htzManager .isConnected());
         pongRadio.setEnabled(pongManager != null && pongManager.isConnected());
@@ -242,21 +239,17 @@ public class BidirectionalTest extends JFrame {
             }
         });
 
+        deviceStatusPanel = new ConnectionStatusPanel();
+        deviceStatusPanel.addDevice("HTZ",  htzManager);
+        deviceStatusPanel.addDevice("Pong", pongManager);
+
         p.add(htzRadio);
-        p.add(htzStatusLabel);
         p.add(Box.createHorizontalStrut(20));
         p.add(pongRadio);
-        p.add(pongStatusLabel);
+        p.add(Box.createHorizontalStrut(20));
+        p.add(deviceStatusPanel);
 
         return p;
-    }
-
-    private JLabel makeDeviceStatusLabel(SerialConnectionManager mgr) {
-        boolean connected = mgr != null && mgr.isConnected();
-        JLabel lbl = new JLabel(connected ? "● Connected" : "● Not connected");
-        lbl.setForeground(connected ? new Color(40, 190, 40) : Color.RED);
-        lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
-        return lbl;
     }
 
     /**
@@ -544,6 +537,12 @@ public class BidirectionalTest extends JFrame {
                     try {
                         String line = reader.readLine();
                         if (line != null && !line.isBlank()) {
+                            // Keep the SerialConnectionPanel watchdog alive.
+                            // The watchdog tracks heartbeats via getNextLine(), but
+                            // this read loop bypasses that path and reads raw bytes
+                            // directly.  Without this call, lastRxMs stales out after
+                            // 3 s and the watchdog closes the port underneath us.
+                            connectionManager.refreshHeartbeat();
                             handleIncomingLine(line.trim());
                         }
                     } catch (java.io.IOException readEx) {

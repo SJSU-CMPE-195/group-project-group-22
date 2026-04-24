@@ -255,7 +255,7 @@ public class Launcher extends JFrame {
                 Map.of(KeyEvent.VK_SPACE, HitTheZoneAction.SCORE);
         players.add(new HumanPlayer<>("Human", bindings, null));
 
-        PoC_HitTheZone frame = new PoC_HitTheZone(players);
+        PoC_HitTheZone frame = new PoC_HitTheZone(players, htzManager);
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         trackLaunchedWindow(frame, "Hit The Zone");
         frame.setVisible(true);
@@ -298,7 +298,11 @@ public class Launcher extends JFrame {
         JFrame frame = new JFrame("Pong");
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setResizable(false);
-        frame.add(gamePanel);
+
+        ConnectionStatusPanel pongStatus = new ConnectionStatusPanel();
+        pongStatus.addDevice("Pong", pongManager);
+        frame.add(pongStatus,  BorderLayout.NORTH);
+        frame.add(gamePanel,   BorderLayout.CENTER);
         frame.pack();
         frame.setLocationRelativeTo(null);
 

@@ -79,7 +79,6 @@ public class SerialConnectionManager {
             // BidirectionalTest ignores the Scanner and reads via getInputStream() directly.
             this.scanner = new Scanner(comPort.getInputStream());
             initWriter();
-            lastRxMs = System.currentTimeMillis(); // seed heartbeat
             return true;
         }
 
@@ -127,6 +126,37 @@ public class SerialConnectionManager {
             }
             // hasNextLine() returned false — check whether the Scanner hit an
             // IOException internally (e.g. device physically removed on Windows).
+            if (scanner.ioException() != null) {
+                System.err.println(">>> Serial read error (device removed?): "
+                        + scanner.ioException().getMessage());
+                disconnect();
+            }
+            return null;
+        } catch (Exception e) {
+            System.err.println(">>> Serial read exception: " + e.getMessage());
+            disconnect();
+            return null;
+        }
+    }
+
+    /**
+     * Reads one line via the Scanner without updating the heartbeat timestamp.
+     *
+     * <p>Used internally by {@link #readInfoHandshake} so that the one-time
+     * capability exchange at connect time does not make the watchdog believe a
+     * real consumer is active.  If the handshake updated {@code lastRxMs}, the
+     * 3-second timeout would start ticking immediately after connect, causing a
+     * spurious "Device disconnected unexpectedly" when the Launcher is idle
+     * (no game or test window open yet).</p>
+     *
+     * <p>All error handling is identical to {@link #getNextLine()}.</p>
+     */
+    private String readNextLineRaw() {
+        if (scanner == null) return null;
+        try {
+            if (scanner.hasNextLine()) {
+                return scanner.nextLine(); // no lastRxMs update
+            }
             if (scanner.ioException() != null) {
                 System.err.println(">>> Serial read error (device removed?): "
                         + scanner.ioException().getMessage());
@@ -193,6 +223,22 @@ public class SerialConnectionManager {
             && (System.currentTimeMillis() - lastRxMs) > RX_TIMEOUT_MS;
     }
 
+    /**
+     * Updates the receive heartbeat timestamp to "now".
+     *
+     * <p>Callers that read from the port via {@link #getInputStream()} directly
+     * (e.g. {@link edu.sjsu.spring2026.group32.BidirectionalTest}) must call
+     * this whenever they successfully receive a line, so that the
+     * {@link edu.sjsu.spring2026.group32.launcher.SerialConnectionPanel} watchdog
+     * does not mistake a healthy connection for a dead one.</p>
+     *
+     * <p>{@link #getNextLine()} calls this automatically, so callers that go
+     * through the Scanner path do not need to call it explicitly.</p>
+     */
+    public void refreshHeartbeat() {
+        lastRxMs = System.currentTimeMillis();
+    }
+
     // =========================================================================
     //  Device capability info (populated by readInfoHandshake)
     // =========================================================================
@@ -224,7 +270,9 @@ public class SerialConnectionManager {
         if (!isConnected()) return false;
         sendLine("INFO?");
         for (int i = 0; i < maxAttempts; i++) {
-            String line = getNextLine();
+            // Use readNextLineRaw() so the handshake does not seed lastRxMs.
+            // See readNextLineRaw() javadoc for the full rationale.
+            String line = readNextLineRaw();
             if (line != null && line.startsWith("#INFO:")) {
                 parseInfo(line);
                 return true;
