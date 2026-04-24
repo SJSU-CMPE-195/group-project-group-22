@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *       is in the zone (countdown resets to 0 immediately after each SCORE).</li>
  *   <li>With {@code maxJitterTicks=N>0} the AI waits 0–N ticks per scoring
  *       opportunity and therefore scores at most once every {@code N+1} ticks.</li>
- *   <li>The "once per zone entry" edge-detection is enforced by the game loop
- *       ({@code lastActions} / {@code canScore}), <em>not</em> by this class.</li>
+ *   <li>The game loop allows repeated {@code SCORE} actions during a live pass,
+ *       so zero-jitter AI can chain multiple hits while the ball stays in-zone.</li>
  *   <li>On zone exit the internal countdown is reset to {@code -1} so the
  *       next entry arms a fresh countdown.</li>
  * </ul>
@@ -38,7 +38,7 @@ class HitTheZoneSoftwareAITest {
     }
 
     @Test
-    @DisplayName("Zero jitter: scores on every consecutive tick in zone (game loop enforces single-score)")
+    @DisplayName("Zero jitter: scores on every consecutive tick in zone")
     void zeroJitter_scoresOnEveryConsecutiveTick() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("bot", 0);
         // countdown resets to 0 immediately after each SCORE --> scores every tick

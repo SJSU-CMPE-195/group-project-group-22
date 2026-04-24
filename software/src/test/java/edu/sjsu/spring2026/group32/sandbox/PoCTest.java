@@ -5,13 +5,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import edu.sjsu.spring2026.group32.player.BasePlayer;
+import edu.sjsu.spring2026.group32.player.HumanPlayer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.awt.Component;
+import java.awt.event.KeyEvent;
 import java.util.List;
+import java.util.Map;
 
 class PoCTest {
 
@@ -43,18 +47,17 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("Test 2: Scoring should only be possible once per zone entry")
-    void testScoreLockout() {
+    @DisplayName("Test 2: Scoring can happen multiple times during one zone pass")
+    void testMultipleScoresPerZonePass() {
         // simulates ball center on the zone boundary with scoring armed
         game.ballX = PoC_HitTheZone.ZONE_START - (PoC_HitTheZone.BALL_DIAM / 2); // center lands on ZONE_START
         game.canScore[0] = true; 
         game.inZone = true; 
 
         game.processScore(0);
-        game.canScore[0] = false; // simulates zone exit where moveBall() clears canScore on zone exit
         game.processScore(0);
 
-        assertEquals(1, game.hits[0], "Should only score once per zone entry");
+        assertEquals(2, game.hits[0], "Should allow repeated hits while the ball remains in the zone");
         assertEquals(2, game.attempts[0], "Both attempts should be counted"); 
 
     }
@@ -235,8 +238,8 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("Test 15: onTick() edge detection blocks duplicate consecutive actions")
-    void testOnTickEdgeDetection() {
+    @DisplayName("Test 15: onTick() allows duplicate consecutive SCORE actions")
+    void testOnTickAllowsMultipleScoresPerPass() {
         // simulates a player that always returns SCORE — edge detection should only process it on the first tick, blocking the second identical action
         BasePlayer<HitTheZoneState, HitTheZoneAction> mockPlayer = mock(BasePlayer.class);
         when(mockPlayer.getNextMove(any())).thenReturn(HitTheZoneAction.SCORE);
@@ -254,7 +257,43 @@ class PoCTest {
         game.canScore[0] = true;
         game.onTick();
 
-        assertEquals(1, game.hits[0], "Edge detection should only process SCORE once even if returned on consecutive ticks");
+        assertEquals(2, game.hits[0], "Consecutive SCORE actions should each count while the pass is still active");
+    }
+
+    @Test
+    @DisplayName("Test 16: Human player must tap SCORE instead of holding it")
+    void testHumanScoreRequiresTap() {
+        HumanPlayer<HitTheZoneState, HitTheZoneAction> human = new HumanPlayer<>(
+                "Human",
+                Map.of(KeyEvent.VK_SPACE, HitTheZoneAction.SCORE),
+                null
+        );
+
+        game = new PoC_HitTheZone(true, List.of(human)) {
+            @Override protected void updateHud() {}
+        };
+
+        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
+        game.canScore[0] = true;
+        game.inZone = true;
+
+        Component src = mock(Component.class);
+        human.keyPressed(new KeyEvent(
+                src, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0,
+                KeyEvent.VK_SPACE, KeyEvent.CHAR_UNDEFINED));
+        game.onTick();
+        game.onTick();
+
+        human.keyReleased(new KeyEvent(
+                src, KeyEvent.KEY_RELEASED, System.currentTimeMillis(), 0,
+                KeyEvent.VK_SPACE, KeyEvent.CHAR_UNDEFINED));
+        human.keyPressed(new KeyEvent(
+                src, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0,
+                KeyEvent.VK_SPACE, KeyEvent.CHAR_UNDEFINED));
+        game.onTick();
+
+        assertEquals(2, game.hits[0], "Human should score once per tap, not once per held tick");
+        assertEquals(2, game.attempts[0], "Only distinct taps should be processed as score attempts");
     }
 
 

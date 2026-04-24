@@ -44,9 +44,9 @@ public class PoC_HitTheZone extends JFrame {
     final int[]              attempts;
     final boolean[]          canScore;
     /**
-     * Edge-detection: an action is only processed on the tick it first appears.
-     * IMPORTANT: reset to null on every new zone entry so a press that fired
-     * outside the zone cannot block the player's first press inside it.
+     * Debounces non-scoring control actions so held keys do not repeatedly
+     * pause or reset the game. SCORE is intentionally excluded so players can
+     * land multiple hits during a single zone pass.
      */
     private final HitTheZoneAction[] lastActions;
 
@@ -299,11 +299,16 @@ public class PoC_HitTheZone extends JFrame {
         for (int i = 0; i < players.size(); i++) {
             HitTheZoneAction action = players.get(i).getNextMove(state);
 
-            if (action != null && action != lastActions[i]) {
-                switch (action) {
-                    case SCORE -> processScore(i);
-                    case PAUSE -> togglePause();
-                    case RESET -> resetGame();
+            if (action == HitTheZoneAction.SCORE) {
+                boolean isHumanScorePress = players.get(i).getType() == PlayerType.HUMAN;
+                if (!isHumanScorePress || action != lastActions[i]) {
+                    processScore(i);
+                }
+            } else if (action != null && action != lastActions[i]) {
+                if (action == HitTheZoneAction.PAUSE) {
+                    togglePause();
+                } else if (action == HitTheZoneAction.RESET) {
+                    resetGame();
                 }
             }
             lastActions[i] = action;
@@ -328,7 +333,7 @@ public class PoC_HitTheZone extends JFrame {
         boolean nowInZone = centerX >= ZONE_START && centerX <= (ZONE_START + ZONE_WIDTH);
 
         if (!inZone && nowInZone) {
-            // Zone entry: arm scoring and clear edge-detection for all players.
+            // Zone entry: arm scoring and clear debounced control actions.
             totalPasses++;
             for (int i = 0; i < canScore.length; i++) {
                 canScore[i]    = true;
