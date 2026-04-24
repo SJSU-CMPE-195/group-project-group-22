@@ -2,7 +2,7 @@ package edu.sjsu.spring2026.group32.hardware;
 
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 
-public class HardwareSignalSource implements BaseSignalSource {
+public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
     private final SerialConnectionManager connectionManager;
     private final NeuralSignalParser parser;
 
@@ -31,12 +31,20 @@ public class HardwareSignalSource implements BaseSignalSource {
 
         // 2. Try to read data
         try {
-            String rawLine = connectionManager.getNextLine();
+            String rawLine;
 
-            // If scanner returns null or throws an exception, it usually means the device was unplugged
-            if (rawLine == null) {
-                return 0.0;
-            }
+            // Skip firmware status/info lines (sent in response to inject/stop commands
+            // and on boot). Passing them to NeuralSignalParser would cause a parse error
+            // that would incorrectly disconnect the port.
+            //   STATUS,INJECT_START,CH1,…   – inject acknowledgement
+            //   STATUS,INJECT_STOPPED,CH1   – stop acknowledgement
+            //   STATUS,BOOT,…               – startup message
+            //   #INFO:…                     – capability announcement
+            do {
+                rawLine = connectionManager.getNextLine();
+                if (rawLine == null) return 0.0;
+            } while (rawLine.startsWith("STATUS") || rawLine.startsWith("#"));
+
             return parser.parseVoltage(rawLine);
 
         } catch (Exception e) {
@@ -59,6 +67,41 @@ public class HardwareSignalSource implements BaseSignalSource {
             connectionManager.connect();
         }
     }
+
+    // ---- VoltageInjector ----------------------------------------------------
+
+    /**
+     * Sends a NeuralSerial-compatible voltage injection command for the requested
+     * 1-based channel.
+     */
+    @Override
+    public void injectVoltage(int channel, double volts) {
+        validateChannel(channel);
+        connectionManager.sendLine(String.format("INJECT_V_CH%d:%.3f", channel, volts));
+    }
+
+    /**
+     * Stops injection on a specific channel, or all channels when {@code channel}
+     * is {@code 0}.
+     */
+    @Override
+    public void stopInjection(int channel) {
+        if (channel == 0) {
+            connectionManager.sendLine("STOP_INJECT");
+            return;
+        }
+
+        validateChannel(channel);
+        connectionManager.sendLine("STOP_INJECT_CH" + channel);
+    }
+
+    private static void validateChannel(int channel) {
+        if (channel < 1) {
+            throw new IllegalArgumentException("Channel must be >= 1");
+        }
+    }
+
+    // ---- Lifecycle ----------------------------------------------------------
 
     public void close() {
         connectionManager.disconnect();
