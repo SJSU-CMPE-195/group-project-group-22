@@ -1,6 +1,6 @@
 package edu.sjsu.spring2026.group32.launcher;
 
-import edu.sjsu.spring2026.group32.BidirectionalTest;
+import edu.sjsu.spring2026.group32.bidirectionaltest.BidirectionalTest;
 import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
 import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
@@ -242,11 +242,13 @@ public class Launcher extends JFrame {
 
         if (htzManager != null && htzManager.isConnected()) {
             // 3-neuron config: single channel (GPIO34 = channel 0).
+            // src implements both BaseSignalSource (spike reading) and VoltageInjector
+            // (INJECT_V_CH1 / STOP_INJECT_CH1 commands), so it is passed for both roles.
             NeuralSignalParser   parser   = new NeuralSignalParser(0);
             HardwareSignalSource src      = new HardwareSignalSource(htzManager, parser);
-            HitTheZoneHardwareAI hwPlayer = new HitTheZoneHardwareAI("Neural", src);
+            HitTheZoneHardwareAI hwPlayer = new HitTheZoneHardwareAI("Neural", src, src);
             players.add(hwPlayer);
-            log("  → Hardware AI added (HTZ device, ch 0 / GPIO34).");
+            log("  → Hardware AI added (HTZ device, ch 0 / GPIO34, injection enabled).");
         } else {
             log("  → HTZ device not connected. Launching without neural player.");
         }

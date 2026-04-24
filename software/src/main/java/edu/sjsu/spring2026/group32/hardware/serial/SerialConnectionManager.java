@@ -76,7 +76,7 @@ public class SerialConnectionManager {
             System.out.println(">>> Serial Connection Established: " + port.getSystemPortName());
             // Initialize Scanner so HardwareSignalSource.getNextLine() works when the
             // Launcher passes this manager to a game's hardware stack.
-            // BidirectionalTest ignores the Scanner and reads via getInputStream() directly.
+            // bidirectionaltest.BidirectionalTest ignores the Scanner and reads via getInputStream() directly.
             this.scanner = new Scanner(comPort.getInputStream());
             initWriter();
             return true;
@@ -227,7 +227,7 @@ public class SerialConnectionManager {
      * Updates the receive heartbeat timestamp to "now".
      *
      * <p>Callers that read from the port via {@link #getInputStream()} directly
-     * (e.g. {@link edu.sjsu.spring2026.group32.BidirectionalTest}) must call
+     * (e.g. {@link edu.sjsu.spring2026.group32.bidirectionaltest.BidirectionalTest}) must call
      * this whenever they successfully receive a line, so that the
      * {@link edu.sjsu.spring2026.group32.launcher.SerialConnectionPanel} watchdog
      * does not mistake a healthy connection for a dead one.</p>
