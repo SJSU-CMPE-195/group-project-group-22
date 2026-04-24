@@ -1,5 +1,9 @@
 package edu.sjsu.spring2026.group32.pong;
 
+import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
+import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
+import edu.sjsu.spring2026.group32.launcher.ConnectionStatusPanel;
 import edu.sjsu.spring2026.group32.player.BasePlayer;
 import edu.sjsu.spring2026.group32.player.HumanPlayer;
 import edu.sjsu.spring2026.group32.pong.ui.PongToolbar;
@@ -12,6 +16,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.Map;
 
 /**
@@ -169,6 +175,46 @@ public class PongGame extends JPanel {
 
         resetBall();
         lockToolbars(false); // start PAUSED, toolbars unlocked
+    }
+
+    /**
+     * Launcher-facing entry point that keeps Pong's hardware assembly inside
+     * the Pong module instead of in {@code Launcher}.
+     */
+    public static JFrame launchFromLauncher(SerialConnectionManager pongManager) {
+        PongGame game = new PongGame(createHardwarePlayer(pongManager));
+
+        JFrame frame = new JFrame("Pong");
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.setResizable(false);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                game.stop();
+            }
+        });
+
+        ConnectionStatusPanel pongStatus = new ConnectionStatusPanel();
+        pongStatus.addDevice("Pong", pongManager);
+        frame.add(pongStatus, BorderLayout.NORTH);
+        frame.add(game, BorderLayout.CENTER);
+        frame.pack();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+        game.start();
+        return frame;
+    }
+
+    static PongHardwareAI createHardwarePlayer(SerialConnectionManager pongManager) {
+        if (pongManager == null || !pongManager.isConnected() || pongManager.getDeviceChannelCount() < 2) {
+            return null;
+        }
+
+        NeuralSignalParser leftParser = new NeuralSignalParser(0);
+        NeuralSignalParser rightParser = new NeuralSignalParser(1);
+        HardwareSignalSource leftSource = new HardwareSignalSource(pongManager, leftParser);
+        HardwareSignalSource rightSource = new HardwareSignalSource(pongManager, rightParser);
+        return new PongHardwareAI("Hardware", leftSource, rightSource);
     }
 
     // =========================================================================

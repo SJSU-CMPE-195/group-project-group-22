@@ -208,6 +208,38 @@ public class PoC_HitTheZone extends JFrame {
         togglePause();
     }
 
+    /**
+     * Launcher-facing entry point that keeps Hit The Zone player assembly in
+     * the game module.
+     */
+    @GeneratedExcludeFromCoverage
+    public static PoC_HitTheZone launchFromLauncher(SerialConnectionManager htzManager) {
+        PoC_HitTheZone frame = new PoC_HitTheZone(createDefaultPlayers(htzManager), htzManager);
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        return frame;
+    }
+
+    /**
+     * Builds the default roster for launcher-driven runs.
+     */
+    static List<BasePlayer<HitTheZoneState, HitTheZoneAction>> createDefaultPlayers(
+            SerialConnectionManager htzManager) {
+        List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players = new ArrayList<>();
+        players.add(new HitTheZoneSoftwareAI("Bot Alpha", 3));
+        players.add(new HitTheZoneSoftwareAI("Bot Beta", 9));
+
+        if (htzManager != null && htzManager.isConnected()) {
+            NeuralSignalParser parser = new NeuralSignalParser(0);
+            HardwareSignalSource src = new HardwareSignalSource(htzManager, parser);
+            players.add(new HitTheZoneHardwareAI("Neural", src, src));
+        }
+
+        Map<Integer, HitTheZoneAction> bindings =
+                Map.of(KeyEvent.VK_SPACE, HitTheZoneAction.SCORE);
+        players.add(new HumanPlayer<>("Human", bindings, null));
+        return players;
+    }
+
     // ======================================================================
     // Key bindings
     // ======================================================================
@@ -475,7 +507,9 @@ public class PoC_HitTheZone extends JFrame {
         SerialConnectionManager scm    = new SerialConnectionManager(RealSerialDevice::getRealPorts);
         NeuralSignalParser      parser = new NeuralSignalParser();
         HardwareSignalSource    src    = new HardwareSignalSource(scm, parser);
-        HitTheZoneHardwareAI    hwPlayer = new HitTheZoneHardwareAI("Neural", src);
+        // src implements both BaseSignalSource (spike reading) and VoltageInjector
+        // (inject/stop commands), so it is passed for both roles.
+        HitTheZoneHardwareAI    hwPlayer = new HitTheZoneHardwareAI("Neural", src, src);
 
         // Release the serial port when the JVM exits (window close or Ctrl-C).
         Runtime.getRuntime().addShutdownHook(new Thread(hwPlayer::close));
@@ -487,6 +521,7 @@ public class PoC_HitTheZone extends JFrame {
                 new HumanPlayer<>("Human", bindings, null)
         );
 
-        SwingUtilities.invokeLater(() -> new PoC_HitTheZone(players));
+        // scm is still passed for the hardware-status bar in the HUD.
+        SwingUtilities.invokeLater(() -> new PoC_HitTheZone(players, scm));
     }
 }
