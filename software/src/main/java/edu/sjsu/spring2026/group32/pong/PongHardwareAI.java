@@ -2,6 +2,7 @@ package edu.sjsu.spring2026.group32.pong;
 
 import edu.sjsu.spring2026.group32.hardware.BaseSignalSource;
 import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.NeuralHardwareConfig;
 import edu.sjsu.spring2026.group32.player.BasePlayer;
 import edu.sjsu.spring2026.group32.player.PlayerType;
 
@@ -28,9 +29,6 @@ import edu.sjsu.spring2026.group32.player.PlayerType;
  */
 public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
 
-    /** Default firing threshold (volts). */
-    private static final double DEFAULT_THRESHOLD = 2.0;
-
     private final String           name;
     private final BaseSignalSource leftSource;
     private final BaseSignalSource rightSource;
@@ -55,7 +53,7 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     }
 
     /**
-     * Convenience constructor using the default 2.0 V threshold.
+     * Convenience constructor using the shared default firing threshold.
      *
      * @param name        display name shown in scoreboard and overlays
      * @param leftSource  signal source for LEFT movement (channel 0 / GPIO34)
@@ -64,7 +62,7 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     public PongHardwareAI(String name,
                           BaseSignalSource leftSource,
                           BaseSignalSource rightSource) {
-        this(name, leftSource, rightSource, DEFAULT_THRESHOLD);
+        this(name, leftSource, rightSource, NeuralHardwareConfig.DEFAULT_FIRING_THRESHOLD_VOLTS);
     }
 
     /**
