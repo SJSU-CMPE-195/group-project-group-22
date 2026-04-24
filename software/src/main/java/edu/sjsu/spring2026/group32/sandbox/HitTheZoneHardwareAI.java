@@ -161,6 +161,20 @@ public class HitTheZoneHardwareAI
     // =========================================================================
 
     /**
+     * Stops any active injection without taking ownership of the serial port.
+     *
+     * <p>This is used by Launcher-managed windows that share a live
+     * {@link edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager}:
+     * the game must stop stimulating the hardware when its window closes, but
+     * it must not disconnect the shared port out from under the Launcher.</p>
+     */
+    public void stopInjectionOnly() {
+        injector.stopInjection();
+        wasInZone  = false;
+        wasFiring  = false;
+    }
+
+    /**
      * Stops any active injection, then releases the underlying serial port.
      * Register as a JVM shutdown hook so ports are always freed:
      * <pre>{@code
@@ -169,7 +183,7 @@ public class HitTheZoneHardwareAI
      */
     @Override
     public void close() {
-        injector.stopInjection(); // ensure hardware isn't left injecting
+        stopInjectionOnly();
         super.close();            // disconnect the serial port
     }
 }

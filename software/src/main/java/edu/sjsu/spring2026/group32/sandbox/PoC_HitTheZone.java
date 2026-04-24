@@ -58,6 +58,7 @@ public class PoC_HitTheZone extends JFrame {
     protected boolean isPaused    = false;
     /** Total game time in milliseconds — frozen while paused. */
     protected long    elapsedMs   = 0;
+    private boolean   shutdownStarted = false;
 
     // ---- Swing -----------------------------------------------------------
     private  final JLabel[]        playerLabels;
@@ -217,6 +218,30 @@ public class PoC_HitTheZone extends JFrame {
         PoC_HitTheZone frame = new PoC_HitTheZone(createDefaultPlayers(htzManager), htzManager);
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         return frame;
+    }
+
+    @Override
+    public void dispose() {
+        shutdownForWindowClose();
+        super.dispose();
+    }
+
+    private void shutdownForWindowClose() {
+        if (shutdownStarted) {
+            return;
+        }
+        shutdownStarted = true;
+
+        if (tick != null) {
+            tick.stop();
+        }
+        isPaused = true;
+
+        for (BasePlayer<HitTheZoneState, HitTheZoneAction> player : players) {
+            if (player instanceof HitTheZoneHardwareAI hardwarePlayer) {
+                hardwarePlayer.stopInjectionOnly();
+            }
+        }
     }
 
     /**

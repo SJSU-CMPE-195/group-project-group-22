@@ -212,6 +212,17 @@ public class SerialConnectionManager {
         }
     }
 
+    /**
+     * Best-effort safety stop for any active NeuralSerial voltage injection.
+     *
+     * <p>Launcher-owned ports are shared across multiple windows. Sending
+     * {@code STOP_INJECT} before a disconnect prevents the ESP32 from being
+     * left driving its DAC when the app or a controlling window closes.</p>
+     */
+    public void stopAllInjection() {
+        sendLine("STOP_INJECT");
+    }
+
     // =========================================================================
     //  Stream heartbeat
     // =========================================================================
@@ -341,9 +352,13 @@ public class SerialConnectionManager {
     }
 
     public void disconnect() {
+        if (isConnected()) {
+            stopAllInjection();
+        }
         if (lineWriter != null) { lineWriter.close(); lineWriter = null; }
         if (scanner   != null) { scanner.close();    scanner   = null; }
         if (comPort   != null) { comPort.closePort(); comPort  = null; }
+        clearHeartbeat();
         deviceName         = "";
         deviceChannelCount = 0;
     }

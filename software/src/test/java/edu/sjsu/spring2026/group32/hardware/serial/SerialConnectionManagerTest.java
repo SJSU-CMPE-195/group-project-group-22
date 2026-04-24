@@ -2,6 +2,7 @@ package edu.sjsu.spring2026.group32.hardware.serial;
 
 import org.junit.jupiter.api.*;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,6 +27,7 @@ class SerialConnectionManagerTest {
         String fakeStreamData = "first_line\nsecond_line\n";
         ByteArrayInputStream mockStream = new ByteArrayInputStream(fakeStreamData.getBytes());
         when(mockDevice.getInputStream()).thenReturn(mockStream);
+        when(mockDevice.getOutputStream()).thenReturn(new ByteArrayOutputStream());
     }
 
     // -------------------------------------------------------------------------
@@ -262,6 +264,23 @@ class SerialConnectionManagerTest {
 
         assertEquals("", connectionManager.getDeviceName());
         assertEquals(0,  connectionManager.getDeviceChannelCount());
+    }
+
+    @Test
+    @DisplayName("disconnect() sends STOP_INJECT before closing the port")
+    void testDisconnectStopsInjectionBeforeClose() {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        when(mockDevice.getOutputStream()).thenReturn(output);
+
+        Supplier<SerialDevice[]> supplier = () -> new SerialDevice[]{mockDevice};
+        connectionManager = new SerialConnectionManager(supplier);
+        connectionManager.connect();
+
+        connectionManager.disconnect();
+
+        assertTrue(output.toString().contains("STOP_INJECT"),
+            "disconnect() must send STOP_INJECT so the firmware is not left injecting");
+        verify(mockDevice, times(1)).closePort();
     }
 
     // -------------------------------------------------------------------------

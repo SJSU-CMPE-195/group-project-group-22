@@ -143,6 +143,7 @@ public class BidirectionalTest extends JFrame {
     }
 
     private void stopReadLoop() {
+        stopAllInjectionForCurrentDevice();
         if (!running.getAndSet(false)) {
             return;
         }
@@ -153,6 +154,21 @@ public class BidirectionalTest extends JFrame {
             readerThread.shutdownNow();
             readerThread = null;
         }
+    }
+
+    private void stopAllInjectionForCurrentDevice() {
+        if (connectionManager == null || !connectionManager.isConnected()) {
+            return;
+        }
+
+        cancelPendingTask(0);
+        cancelPendingTask(1);
+        remainingRepeats[0] = 0;
+        remainingRepeats[1] = 0;
+        connectionManager.stopAllInjection();
+        voltageGraph.setInjection(0, false, 0.0);
+        voltageGraph.setInjection(1, false, 0.0);
+        liveDataPanel.appendSystemLog("-> STOP_INJECT");
     }
 
     private void startReadLoop() {

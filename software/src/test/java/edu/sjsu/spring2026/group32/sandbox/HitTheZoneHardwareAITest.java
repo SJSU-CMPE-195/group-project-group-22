@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.sandbox;
 
 import edu.sjsu.spring2026.group32.hardware.BaseSignalSource;
+import edu.sjsu.spring2026.group32.hardware.VoltageInjector;
 import edu.sjsu.spring2026.group32.player.PlayerType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -104,6 +105,31 @@ class HitTheZoneHardwareAITest {
     void closeDoesNotThrow() {
         HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 1.0);
         assertDoesNotThrow(p::close);
+    }
+
+    @Test
+    @DisplayName("stopInjectionOnly() sends a stop command without needing to close the shared manager")
+    void stopInjectionOnlySendsStopCommand() {
+        class TrackingInjector implements VoltageInjector {
+            private int stopCalls;
+
+            @Override
+            public void injectVoltage(int channel, double volts) {}
+
+            @Override
+            public void stopInjection(int channel) {
+                stopCalls++;
+                assertEquals(0, channel, "stopInjectionOnly() should stop all channels");
+            }
+        }
+
+        TrackingInjector injector = new TrackingInjector();
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), injector);
+
+        p.stopInjectionOnly();
+
+        assertEquals(1, injector.stopCalls,
+                "Closing the Hit The Zone window must stop any active injection");
     }
 
     @Test
