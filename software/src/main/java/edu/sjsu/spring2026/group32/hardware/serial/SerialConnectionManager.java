@@ -1,38 +1,62 @@
 package edu.sjsu.spring2026.group32.hardware.serial;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.util.Scanner;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 public class SerialConnectionManager {
-    private SerialDevice comPort;
-    private Scanner scanner;
-    private PrintWriter lineWriter;
+    public record SampleFrame(String line,
+                              long millis,
+                              int primaryRaw,
+                              Integer secondaryRaw) {}
+
+    public interface SerialListener {
+        default void onSample(SampleFrame frame) {}
+        default void onSampleLine(String line) {}
+        default void onStatusPayload(String payload) {}
+        default void onInfoUpdated(String deviceName, int channelCount) {}
+        default void onDisconnected(String reason) {}
+    }
+
     private static final int BAUD_RATE = 115200;
+    private static final long RX_TIMEOUT_MS = 3_000;
+    private static final long INFO_WAIT_SLICE_MS = 25;
 
     private final Supplier<SerialDevice[]> portProvider;
     private final int readTimeoutMs;
+    private final List<SerialListener> listeners = new CopyOnWriteArrayList<>();
+    private final Object infoMonitor = new Object();
 
-    // ── Original constructor — keeps the default 100 ms used by the game loop ─
+    private SerialDevice comPort;
+    private PrintWriter lineWriter;
+    private ExecutorService readerThread;
+    private volatile boolean readerRunning = false;
+
+    private volatile long lastRxMs = 0;
+    private volatile String latestDataLine;
+    private volatile SampleFrame latestSampleFrame;
+    private volatile String deviceName = "";
+    private volatile int deviceChannelCount = 0;
+    private volatile long infoUpdateCount = 0;
+
     public SerialConnectionManager(Supplier<SerialDevice[]> portProvider) {
         this(portProvider, 100);
     }
 
-    // ── Extended constructor — callers choose their own read timeout ───────────
     public SerialConnectionManager(Supplier<SerialDevice[]> portProvider, int readTimeoutMs) {
-        this.portProvider   = portProvider;
-        this.readTimeoutMs  = readTimeoutMs;
+        this.portProvider = portProvider;
+        this.readTimeoutMs = readTimeoutMs;
     }
 
-    // =========================================================================
-    //  Auto-connect: scan all ports and pick the first compatible one.
-    //  Used by HardwareSignalSource. Unchanged from original behaviour.
-    // =========================================================================
     public boolean connect() {
         SerialDevice[] ports;
         try {
@@ -46,15 +70,7 @@ public class SerialConnectionManager {
         for (SerialDevice port : ports) {
             String name = port.getDescriptivePortName();
             if (name.contains("CP210") || name.contains("CH340") || name.contains("USB-to-Serial")) {
-                this.comPort = port;
-                this.comPort.setBaudRate(BAUD_RATE);
-                // 1 = TIMEOUT_READ_SEMI_BLOCKING. Hardcoded to avoid jSerialComm import bleeding.
-                this.comPort.setComPortTimeouts(1, readTimeoutMs, 0);
-
-                if (this.comPort.openPort()) {
-                    System.out.println(">>> Serial Connection Established: " + port.getSystemPortName());
-                    this.scanner = new Scanner(comPort.getInputStream());
-                    initWriter();
+                if (openConfiguredPort(port)) {
                     return true;
                 }
             }
@@ -63,41 +79,35 @@ public class SerialConnectionManager {
         return false;
     }
 
-    // =========================================================================
-    //  Manual connect: caller supplies the exact device to open.
-    //  Used by Test (GUI port selector). No auto-discovery, no Scanner —
-    //  the caller reads via getInputStream() with its own BufferedReader.
-    // =========================================================================
     public boolean connectTo(SerialDevice port) {
-        this.comPort = port;
-        this.comPort.setBaudRate(BAUD_RATE);
-        // 1 = TIMEOUT_READ_SEMI_BLOCKING. Hardcoded to avoid jSerialComm import bleeding.
-        this.comPort.setComPortTimeouts(1, readTimeoutMs, 0);
-
-        if (this.comPort.openPort()) {
-            System.out.println(">>> Serial Connection Established: " + port.getSystemPortName());
-            // Initialize Scanner so HardwareSignalSource.getNextLine() works when the
-            // Launcher passes this manager to a game's hardware stack.
-            // bidirectionaltest.BidirectionalTest ignores the Scanner and reads via getInputStream() directly.
-            this.scanner = new Scanner(comPort.getInputStream());
-            initWriter();
-            return true;
-        }
-
-        System.err.println(">>> Failed to open port: " + port.getSystemPortName());
-        this.comPort = null;
-        return false;
+        return openConfiguredPort(port);
     }
 
-    // =========================================================================
-    //  Internal helpers
-    // =========================================================================
+    private synchronized boolean openConfiguredPort(SerialDevice port) {
+        disconnectInternal(false, null, false);
 
-    /**
-     * Initialises the write-side PrintWriter from the open port's OutputStream.
-     * Guarded against null so that test mocks that stub only getInputStream()
-     * do not need to stub getOutputStream() to avoid a NullPointerException.
-     */
+        this.comPort = port;
+        this.comPort.setBaudRate(BAUD_RATE);
+        this.comPort.setComPortTimeouts(1, readTimeoutMs, 0);
+
+        if (!this.comPort.openPort()) {
+            System.err.println(">>> Failed to open port: " + port.getSystemPortName());
+            this.comPort = null;
+            return false;
+        }
+
+        System.out.println(">>> Serial Connection Established: " + port.getSystemPortName());
+        latestDataLine = null;
+        latestSampleFrame = null;
+        clearHeartbeat();
+        deviceName = "";
+        deviceChannelCount = 0;
+        infoUpdateCount = 0;
+        initWriter();
+        startReader();
+        return true;
+    }
+
     private void initWriter() {
         java.io.OutputStream out = comPort.getOutputStream();
         if (out != null) {
@@ -106,105 +116,138 @@ public class SerialConnectionManager {
         }
     }
 
-    // =========================================================================
-    //  Read helpers
-    // =========================================================================
+    private synchronized void startReader() {
+        stopReaderThread();
+        if (comPort == null) {
+            return;
+        }
+
+        readerRunning = true;
+        readerThread = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "SerialConnectionManager-Reader");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        SerialDevice activePort = comPort;
+        readerThread.execute(() -> runReaderLoop(activePort));
+    }
+
+    private void runReaderLoop(SerialDevice activePort) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(activePort.getInputStream()))) {
+            while (readerRunning && activePort == comPort && activePort.isOpen()) {
+                String line = reader.readLine();
+                if (line == null) {
+                    continue;
+                }
+
+                line = line.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+
+                refreshHeartbeat();
+                dispatchIncomingLine(line);
+            }
+        } catch (IOException e) {
+            if (readerRunning && activePort == comPort) {
+                System.err.println(">>> Serial read exception: " + e.getMessage());
+                disconnectInternal(false, e.getMessage(), true);
+            }
+        } catch (Exception e) {
+            if (readerRunning && activePort == comPort) {
+                System.err.println(">>> Serial reader failed: " + e.getMessage());
+                disconnectInternal(false, e.getMessage(), true);
+            }
+        }
+    }
+
+    private void dispatchIncomingLine(String line) {
+        if (line.startsWith("#INFO:")) {
+            parseInfo(line);
+            return;
+        }
+
+        if (line.startsWith("STATUS,")) {
+            String payload = line.substring(7);
+            for (SerialListener listener : listeners) {
+                listener.onStatusPayload(payload);
+            }
+            return;
+        }
+
+        SampleFrame sampleFrame = parseSampleFrame(line);
+        if (sampleFrame == null) {
+            return;
+        }
+
+        latestDataLine = line;
+        latestSampleFrame = sampleFrame;
+        for (SerialListener listener : listeners) {
+            listener.onSample(sampleFrame);
+            listener.onSampleLine(line);
+        }
+    }
+
+    private SampleFrame parseSampleFrame(String line) {
+        String[] parts = line.split(",");
+        if (parts.length < 4) {
+            return null;
+        }
+
+        try {
+            long millis = Long.parseLong(parts[0].trim());
+            int primaryRaw = Integer.parseInt(parts[3].trim());
+            Integer secondaryRaw = null;
+            if (parts.length >= 5) {
+                secondaryRaw = Integer.parseInt(parts[4].trim());
+            }
+            return new SampleFrame(line, millis, primaryRaw, secondaryRaw);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public void addListener(SerialListener listener) {
+        if (listener != null) {
+            listeners.add(listener);
+        }
+    }
+
+    public void removeListener(SerialListener listener) {
+        listeners.remove(listener);
+    }
 
     /**
-     * Blocking line read via the internal Scanner.
-     * Also checks {@link java.util.Scanner#ioException()} after a failed read —
-     * on Windows this is how USB-removal surfaces, since the underlying
-     * InputStream throws an IOException that Scanner stores rather than
-     * re-throwing. When detected, the port is disconnected immediately so
-     * callers (and the SerialConnectionPanel watchdog) see isConnected()==false.
+     * Legacy polling API kept for game-loop callers.
+     *
+     * <p>Under the single-reader architecture this no longer consumes the
+     * serial stream. It returns the latest sample line published by the
+     * manager, or {@code null} if no sample has arrived yet.</p>
      */
     public String getNextLine() {
-        if (scanner == null) return null;
-        try {
-            if (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                lastRxMs = System.currentTimeMillis(); // heartbeat — device is alive
-                return line;
-            }
-            // hasNextLine() returned false — check whether the Scanner hit an
-            // IOException internally (e.g. device physically removed on Windows).
-            if (scanner.ioException() != null) {
-                System.err.println(">>> Serial read error (device removed?): "
-                        + scanner.ioException().getMessage());
-                disconnect();
-            }
-            return null;
-        } catch (Exception e) {
-            System.err.println(">>> Serial read exception: " + e.getMessage());
-            disconnect();
-            return null;
-        }
+        return latestDataLine;
+    }
+
+    public SampleFrame getLatestSampleFrame() {
+        return latestSampleFrame;
     }
 
     /**
-     * Reads one line via the Scanner without updating the heartbeat timestamp.
+     * Legacy raw-stream accessor retained for source compatibility.
      *
-     * <p>Used internally by {@link #readInfoHandshake} so that the one-time
-     * capability exchange at connect time does not make the watchdog believe a
-     * real consumer is active.  If the handshake updated {@code lastRxMs}, the
-     * 3-second timeout would start ticking immediately after connect, causing a
-     * spurious "Device disconnected unexpectedly" when the Launcher is idle
-     * (no game or test window open yet).</p>
-     *
-     * <p>All error handling is identical to {@link #getNextLine()}.</p>
-     */
-    private String readNextLineRaw() {
-        if (scanner == null) return null;
-        try {
-            if (scanner.hasNextLine()) {
-                return scanner.nextLine(); // no lastRxMs update
-            }
-            if (scanner.ioException() != null) {
-                System.err.println(">>> Serial read error (device removed?): "
-                        + scanner.ioException().getMessage());
-                disconnect();
-            }
-            return null;
-        } catch (Exception e) {
-            System.err.println(">>> Serial read exception: " + e.getMessage());
-            disconnect();
-            return null;
-        }
-    }
-
-    /**
-     * Returns a readable InputStream view of the open port.
-     * Intended for callers (e.g. Test) that manage their own BufferedReader
-     * on a background thread. Returns null if not connected.
-     *
-     * <p>The returned stream is a non-owning view: closing it does not close
-     * the underlying serial port. The {@link SerialConnectionManager} remains
-     * the sole owner of the port lifecycle, so shared UI windows like
-     * {@code BidirectionalTest} cannot accidentally disconnect Launcher-owned
-     * hardware by closing their local reader wrappers.</p>
+     * <p>The manager now owns the only supported serial read loop, so callers
+     * should subscribe via {@link #addListener(SerialListener)} instead of
+     * reading this stream directly.</p>
      */
     public InputStream getInputStream() {
-        if (comPort == null) return null;
-
-        InputStream in = comPort.getInputStream();
-        if (in == null) return null;
-
-        return new FilterInputStream(in) {
-            @Override
-            public void close() throws IOException {
-                // The manager owns the port; external readers only borrow it.
-            }
-        };
+        if (comPort == null) {
+            return null;
+        }
+        return comPort.getInputStream();
     }
 
-    // =========================================================================
-    //  Write helper
-    // =========================================================================
-
-    /**
-     * Sends a newline-terminated command to the device.
-     * Safe to call from any thread; PrintWriter is thread-safe for single writes.
-     */
     public void sendLine(String command) {
         if (lineWriter != null) {
             lineWriter.println(command);
@@ -212,154 +255,132 @@ public class SerialConnectionManager {
         }
     }
 
-    /**
-     * Best-effort safety stop for any active NeuralSerial voltage injection.
-     *
-     * <p>Launcher-owned ports are shared across multiple windows. Sending
-     * {@code STOP_INJECT} before a disconnect prevents the ESP32 from being
-     * left driving its DAC when the app or a controlling window closes.</p>
-     */
     public void stopAllInjection() {
         sendLine("STOP_INJECT");
     }
 
-    // =========================================================================
-    //  Stream heartbeat
-    // =========================================================================
-
-    /**
-     * Timestamp (ms, wall clock) of the last line successfully returned by
-     * {@link #getNextLine()} or acknowledged via {@link #refreshHeartbeat()}.
-     * Left at 0 until a real consumer starts reading so the watchdog does not
-     * start its timeout window while the Launcher is idle after connect.
-     * {@code volatile} so the SerialConnectionPanel watchdog thread can read
-     * it without synchronisation overhead.
-     */
-    private volatile long lastRxMs = 0;
-
-    /**
-     * How long (ms) without a received line before the connection is considered
-     * lost.  The firmware sends a frame every 10 ms; 3 000 ms = 300 missed
-     * frames, which is far beyond any normal OS scheduling jitter.
-     */
-    private static final long RX_TIMEOUT_MS = 3_000;
-
-    /** @return wall-clock ms of the last received line, or 0 if never connected. */
     public long getLastRxMs() { return lastRxMs; }
 
-    /** @return true if no line has been received within {@link #RX_TIMEOUT_MS}. */
     public boolean isRxTimedOut() {
         return lastRxMs > 0
-            && (System.currentTimeMillis() - lastRxMs) > RX_TIMEOUT_MS;
+                && (System.currentTimeMillis() - lastRxMs) > RX_TIMEOUT_MS;
     }
 
-    /**
-     * Updates the receive heartbeat timestamp to "now".
-     *
-     * <p>Callers that read from the port via {@link #getInputStream()} directly
-     * (e.g. {@link edu.sjsu.spring2026.group32.bidirectionaltest.BidirectionalTest}) must call
-     * this whenever they successfully receive a line, so that the
-     * {@link edu.sjsu.spring2026.group32.launcher.SerialConnectionPanel} watchdog
-     * does not mistake a healthy connection for a dead one.</p>
-     *
-     * <p>{@link #getNextLine()} calls this automatically, so callers that go
-     * through the Scanner path do not need to call it explicitly.</p>
-     */
     public void refreshHeartbeat() {
         lastRxMs = System.currentTimeMillis();
     }
 
-    /**
-     * Clears the receive heartbeat when an active consumer stops reading.
-     *
-     * <p>This returns the manager to the same idle state used immediately
-     * after connect-time handshakes: the Launcher watchdog should not treat a
-     * shared port as dead simply because no window is currently consuming the
-     * stream. The next real read will call {@link #refreshHeartbeat()} or
-     * {@link #getNextLine()} and start the timeout clock again.</p>
-     */
     public void clearHeartbeat() {
         lastRxMs = 0;
     }
 
-    // =========================================================================
-    //  Device capability info (populated by readInfoHandshake)
-    // =========================================================================
+    public String getDeviceName() { return deviceName; }
 
-    /** Human-readable device name from the #INFO: handshake, e.g. "NeuralSignal". */
-    private String deviceName         = "";
+    public int getDeviceChannelCount() { return deviceChannelCount; }
 
-    /** Number of ADC channels reported by the firmware (0 = not yet queried). */
-    private int    deviceChannelCount = 0;
-
-    /** @return the device name from the last successful handshake, or "" if unknown. */
-    public String getDeviceName()         { return deviceName; }
-
-    /** @return ADC channel count from the last successful handshake, or 0 if unknown. */
-    public int    getDeviceChannelCount() { return deviceChannelCount; }
-
-    /**
-     * Sends "INFO?" to the firmware and reads up to {@code maxAttempts} lines
-     * looking for the "#INFO:" capability response.
-     *
-     * <p>The firmware responds within one loop tick (~10 ms) with a line like:
-     * <pre>  #INFO:NeuralSignal,CH=2</pre>
-     * Called by SerialConnectionPanel right after connectTo() succeeds.
-     *
-     * @param maxAttempts maximum lines to read while waiting for the response
-     * @return true if a valid #INFO: line was received and parsed
-     */
     public boolean readInfoHandshake(int maxAttempts) {
-        if (!isConnected()) return false;
+        if (!isConnected()) {
+            return false;
+        }
+
+        long startingInfoCount = infoUpdateCount;
         sendLine("INFO?");
+
         for (int i = 0; i < maxAttempts; i++) {
-            // Use readNextLineRaw() so the handshake does not seed lastRxMs.
-            // See readNextLineRaw() javadoc for the full rationale.
-            String line = readNextLineRaw();
-            if (line != null && line.startsWith("#INFO:")) {
-                parseInfo(line);
-                return true;
+            synchronized (infoMonitor) {
+                if (infoUpdateCount > startingInfoCount) {
+                    return true;
+                }
+                try {
+                    infoMonitor.wait(INFO_WAIT_SLICE_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return infoUpdateCount > startingInfoCount;
+                }
             }
         }
-        return false;
+        return infoUpdateCount > startingInfoCount;
     }
 
-    /**
-     * Parses "#INFO:NeuralSignal,CH=2" into deviceName and deviceChannelCount.
-     */
     private void parseInfo(String line) {
-        String body = line.substring(6); // strip "#INFO:"
+        String parsedDeviceName = "";
+        int parsedChannelCount = 0;
+
+        String body = line.substring(6);
         for (String part : body.split(",")) {
             part = part.trim();
             if (part.contains("=")) {
                 String[] kv = part.split("=", 2);
                 if ("CH".equals(kv[0].trim())) {
-                    try { deviceChannelCount = Integer.parseInt(kv[1].trim()); }
-                    catch (NumberFormatException ignored) {}
+                    try {
+                        parsedChannelCount = Integer.parseInt(kv[1].trim());
+                    } catch (NumberFormatException ignored) {
+                    }
                 }
             } else if (!part.isEmpty()) {
-                deviceName = part;
+                parsedDeviceName = part;
             }
         }
-    }
 
-    // =========================================================================
-    //  State / lifecycle
-    // =========================================================================
+        deviceName = parsedDeviceName;
+        deviceChannelCount = parsedChannelCount;
+        synchronized (infoMonitor) {
+            infoUpdateCount++;
+            infoMonitor.notifyAll();
+        }
+        for (SerialListener listener : listeners) {
+            listener.onInfoUpdated(deviceName, deviceChannelCount);
+        }
+    }
 
     public boolean isConnected() {
         return comPort != null && comPort.isOpen();
     }
 
     public void disconnect() {
-        if (isConnected()) {
+        disconnectInternal(true, null, true);
+    }
+
+    private synchronized void disconnectInternal(boolean gracefulStop,
+                                                 String disconnectReason,
+                                                 boolean notifyListeners) {
+        if (gracefulStop && isConnected()) {
             stopAllInjection();
         }
-        if (lineWriter != null) { lineWriter.close(); lineWriter = null; }
-        if (scanner   != null) { scanner.close();    scanner   = null; }
-        if (comPort   != null) { comPort.closePort(); comPort  = null; }
+
+        readerRunning = false;
+        stopReaderThread();
+
+        if (lineWriter != null) {
+            lineWriter.close();
+            lineWriter = null;
+        }
+        if (comPort != null) {
+            comPort.closePort();
+            comPort = null;
+        }
+
+        latestDataLine = null;
+        latestSampleFrame = null;
         clearHeartbeat();
-        deviceName         = "";
+        deviceName = "";
         deviceChannelCount = 0;
+        synchronized (infoMonitor) {
+            infoMonitor.notifyAll();
+        }
+
+        if (notifyListeners) {
+            String reason = disconnectReason != null ? disconnectReason : "Port closed";
+            for (SerialListener listener : listeners) {
+                listener.onDisconnected(reason);
+            }
+        }
+    }
+
+    private void stopReaderThread() {
+        if (readerThread != null) {
+            readerThread.shutdownNow();
+            readerThread = null;
+        }
     }
 }

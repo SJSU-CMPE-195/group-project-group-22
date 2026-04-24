@@ -9,14 +9,11 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -25,8 +22,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Always launched from {@code Launcher}, which owns both
  * {@link SerialConnectionManager} instances. This window never opens or closes
- * a serial port. It only reads from and writes to ports that are already
- * managed by the Launcher.</p>
+ * a serial port. It subscribes to Launcher-managed serial events instead of
+ * reading the COM port directly.</p>
  */
 public class BidirectionalTest extends JFrame {
     private static final double V_REF = 3.3;
@@ -34,12 +31,10 @@ public class BidirectionalTest extends JFrame {
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
 
     private final VoltageInjector voltageInjector;
-
     private final LiveDataPanel liveDataPanel;
     private final VoltageGraphPanel voltageGraph;
     private final InjectionChannelPanel[] injectionPanels = new InjectionChannelPanel[2];
     private final JPanel ch2InjectionPanel;
-
     private final ScheduledExecutorService injectionScheduler =
             Executors.newScheduledThreadPool(2, runnable -> {
                 Thread thread = new Thread(runnable, "BidirectionalTest-Injection");
@@ -51,8 +46,44 @@ public class BidirectionalTest extends JFrame {
     private final double[] currentInjectionVoltage = new double[2];
     private final AtomicBoolean running = new AtomicBoolean(false);
 
+    private final SerialConnectionManager.SerialListener deviceListener =
+            new SerialConnectionManager.SerialListener() {
+                @Override
+                public void onSample(SerialConnectionManager.SampleFrame frame) {
+                    if (running.get()) {
+                        handleSample(frame);
+                    }
+                }
+
+                @Override
+                public void onStatusPayload(String payload) {
+                    if (running.get()) {
+                        SwingUtilities.invokeLater(() -> {
+                            liveDataPanel.appendSystemLog("Status: " + payload);
+                            updateModeAndGraph(payload);
+                        });
+                    }
+                }
+
+                @Override
+                public void onInfoUpdated(String deviceName, int channelCount) {
+                    activeDeviceChannelCount = channelCount;
+                }
+
+                @Override
+                public void onDisconnected(String reason) {
+                    if (running.get()) {
+                        SwingUtilities.invokeLater(() -> {
+                            liveDataPanel.appendSystemLog("Connection lost: " + reason);
+                            stopReadLoop();
+                            setConnectedState(false);
+                        });
+                    }
+                }
+            };
+
     private SerialConnectionManager connectionManager;
-    private ExecutorService readerThread;
+    private int activeDeviceChannelCount = 0;
 
     public BidirectionalTest(SerialConnectionManager htzManager,
                              SerialConnectionManager pongManager) {
@@ -128,6 +159,7 @@ public class BidirectionalTest extends JFrame {
     private void switchToDevice(SerialConnectionManager manager, String label) {
         stopReadLoop();
         connectionManager = manager;
+        activeDeviceChannelCount = manager != null ? manager.getDeviceChannelCount() : 0;
 
         voltageGraph.reset();
         voltageGraph.setInjection(0, false, 0.0);
@@ -136,6 +168,9 @@ public class BidirectionalTest extends JFrame {
         hideSecondChannel();
 
         liveDataPanel.appendSystemLog("-- Switched to: " + label + " --");
+        if (activeDeviceChannelCount == 1) {
+            liveDataPanel.appendSystemLog("Single-channel device detected; Ch2 controls disabled.");
+        }
         voltageInjector.stopInjection();
         startReadLoop();
         setConnectedState(true);
@@ -150,9 +185,8 @@ public class BidirectionalTest extends JFrame {
 
         cancelPendingTask(0);
         cancelPendingTask(1);
-        if (readerThread != null) {
-            readerThread.shutdownNow();
-            readerThread = null;
+        if (connectionManager != null) {
+            connectionManager.removeListener(deviceListener);
         }
     }
 
@@ -177,111 +211,41 @@ public class BidirectionalTest extends JFrame {
             return;
         }
 
-        SerialConnectionManager activeManager = connectionManager;
         running.set(true);
-        readerThread = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "ESP32-Reader");
-            thread.setDaemon(true);
-            return thread;
-        });
-
-        readerThread.execute(() -> {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(activeManager.getInputStream()))) {
-
-                while (running.get()) {
-                    try {
-                        String line = reader.readLine();
-                        if (line != null && !line.isBlank()) {
-                            activeManager.refreshHeartbeat();
-                            handleIncomingLine(line.trim());
-                        }
-                    } catch (java.io.IOException readException) {
-                        if (!running.get()) {
-                            break;
-                        }
-                        if (activeManager.isConnected()) {
-                            continue;
-                        }
-                        String message = readException.getMessage();
-                        SwingUtilities.invokeLater(() -> {
-                            liveDataPanel.appendSystemLog("Connection lost: " + message);
-                            stopReadLoop();
-                            setConnectedState(false);
-                        });
-                        break;
-                    }
-                }
-            } catch (Exception openException) {
-                if (running.get()) {
-                    String message = openException.getMessage();
-                    SwingUtilities.invokeLater(() -> {
-                        liveDataPanel.appendSystemLog("Reader error: " + message);
-                        stopReadLoop();
-                        setConnectedState(false);
-                    });
-                }
-            } finally {
-                activeManager.clearHeartbeat();
-            }
-        });
+        connectionManager.addListener(deviceListener);
     }
 
-    private void handleIncomingLine(String line) {
-        if (line.startsWith("STATUS,")) {
-            String payload = line.substring(7);
-            SwingUtilities.invokeLater(() -> {
-                liveDataPanel.appendSystemLog("Status: " + payload);
-                updateModeAndGraph(payload);
-            });
-            return;
-        }
+    private void handleSample(SerialConnectionManager.SampleFrame frame) {
+        long millis = frame.millis();
+        int raw0 = frame.primaryRaw();
+        double volts0 = (raw0 / (double) ADC_MAX) * V_REF;
 
-        String[] parts = line.split(",");
-        if (parts.length >= 4) {
-            try {
-                long millis = Long.parseLong(parts[0].trim());
-                int raw0 = Integer.parseInt(parts[3].trim());
-                double volts0 = (raw0 / (double) ADC_MAX) * V_REF;
+        Integer raw1Value = frame.secondaryRaw();
+        int raw1 = raw1Value != null ? raw1Value : -1;
+        double volts1 = raw1Value != null ? (raw1 / (double) ADC_MAX) * V_REF : 0.0;
 
-                int raw1 = -1;
-                double volts1 = 0.0;
-                if (parts.length >= 5) {
-                    try {
-                        raw1 = Integer.parseInt(parts[4].trim());
-                        volts1 = (raw1 / (double) ADC_MAX) * V_REF;
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
+        String time = LocalTime.now().format(TIME_FMT);
+        int secondRaw = raw1;
+        double firstVolts = volts0;
+        double secondVolts = volts1;
+        String ch1LogLine = String.format("%s  Ch1: %5.3f V (raw %4d)  t=%dms",
+                time, volts0, raw0, millis);
+        String ch2LogLine = raw1 >= 0
+                ? String.format("%s  Ch2: %5.3f V (raw %4d)  t=%dms", time, volts1, raw1, millis)
+                : null;
 
-                String time = LocalTime.now().format(TIME_FMT);
-                int secondRaw = raw1;
-                double firstVolts = volts0;
-                double secondVolts = volts1;
-                String ch1LogLine = String.format("%s  Ch1: %5.3f V (raw %4d)  t=%dms",
-                        time, volts0, raw0, millis);
-                String ch2LogLine = raw1 >= 0
-                        ? String.format("%s  Ch2: %5.3f V (raw %4d)  t=%dms", time, volts1, raw1, millis)
-                        : null;
+        SwingUtilities.invokeLater(() -> {
+            liveDataPanel.appendChannelLog(ch1LogLine, 0);
+            liveDataPanel.setPrimaryReading(raw0, firstVolts);
+            voltageGraph.addSample(0, firstVolts, raw0, millis, time);
 
-                SwingUtilities.invokeLater(() -> {
-                    liveDataPanel.appendChannelLog(ch1LogLine, 0);
-                    liveDataPanel.setPrimaryReading(raw0, firstVolts);
-                    voltageGraph.addSample(0, firstVolts, raw0, millis, time);
-
-                    if (secondRaw >= 0) {
-                        revealSecondChannel();
-                        liveDataPanel.appendChannelLog(ch2LogLine, 1);
-                        liveDataPanel.setSecondaryReading(secondRaw, secondVolts);
-                        voltageGraph.addSample(1, secondVolts, secondRaw, millis, time);
-                    }
-                });
-                return;
-            } catch (NumberFormatException ignored) {
+            if (shouldDisplaySecondChannel(secondRaw)) {
+                revealSecondChannel();
+                liveDataPanel.appendChannelLog(ch2LogLine, 1);
+                liveDataPanel.setSecondaryReading(secondRaw, secondVolts);
+                voltageGraph.addSample(1, secondVolts, secondRaw, millis, time);
             }
-        }
-
-        SwingUtilities.invokeLater(() -> liveDataPanel.appendSystemLog("[RAW] " + line));
+        });
     }
 
     private void updateModeAndGraph(String statusPayload) {
@@ -433,6 +397,16 @@ public class BidirectionalTest extends JFrame {
 
     private boolean hasActiveConnection() {
         return connectionManager != null && connectionManager.isConnected() && running.get();
+    }
+
+    private boolean shouldDisplaySecondChannel(int secondRaw) {
+        if (secondRaw < 0) {
+            return false;
+        }
+        if (activeDeviceChannelCount == 1) {
+            return false;
+        }
+        return true;
     }
 
     private void revealSecondChannel() {
