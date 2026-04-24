@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for {@link HitTheZoneHardwareAI}.
  *
  * <p>{@link BaseSignalSource} is a SAM interface, so lambdas are used as
- * test stubs — no mocking framework required.
+ * test stubs - no mocking framework required.
  */
 class HitTheZoneHardwareAITest {
 
@@ -27,8 +27,6 @@ class HitTheZoneHardwareAITest {
     void setUp() {
         player = new HitTheZoneHardwareAI("bot", fixed(2.0), 1.0);
     }
-
-    // ── Existing tests (unchanged) ────────────────────────────────────────────
 
     @Test
     @DisplayName("Returns SCORE when in zone and voltage meets threshold")
@@ -84,19 +82,17 @@ class HitTheZoneHardwareAITest {
         assertEquals(PlayerType.HARDWARE, player.getType());
     }
 
-    // ── New tests ─────────────────────────────────────────────────────────────
-
     @Test
-    @DisplayName("Two-arg convenience constructor uses default 1.0 V threshold (scores at exactly 1.0 V)")
-    void defaultThresholdConstructorUsesOneVolt() {
+    @DisplayName("Two-arg convenience constructor uses default threshold")
+    void defaultThresholdConstructorUsesSharedDefault() {
         HitTheZoneHardwareAI defaultPlayer = new HitTheZoneHardwareAI("Bot", fixed(1.0));
         assertEquals(HitTheZoneAction.SCORE, defaultPlayer.getNextMove(new HitTheZoneState(true)));
     }
 
     @Test
-    @DisplayName("Two-arg convenience constructor: voltage just below 1.0 V does not score")
+    @DisplayName("Two-arg convenience constructor: voltage just below threshold does not score")
     void defaultThresholdJustBelow() {
-        HitTheZoneHardwareAI defaultPlayer = new HitTheZoneHardwareAI("Bot", fixed(0.99));
+        HitTheZoneHardwareAI defaultPlayer = new HitTheZoneHardwareAI("Bot", fixed(0.49));
         assertNull(defaultPlayer.getNextMove(new HitTheZoneState(true)));
     }
 
@@ -133,11 +129,11 @@ class HitTheZoneHardwareAITest {
     }
 
     @Test
-    @DisplayName("Scores on multiple consecutive in-zone ticks (stateless — no internal countdown)")
-    void scoresOnMultipleConsecutiveTicks() {
+    @DisplayName("Scores once per threshold crossing while voltage stays high")
+    void scoresOncePerThresholdCrossing() {
         assertEquals(HitTheZoneAction.SCORE, player.getNextMove(new HitTheZoneState(true)));
-        assertEquals(HitTheZoneAction.SCORE, player.getNextMove(new HitTheZoneState(true)));
-        assertEquals(HitTheZoneAction.SCORE, player.getNextMove(new HitTheZoneState(true)));
+        assertNull(player.getNextMove(new HitTheZoneState(true)));
+        assertNull(player.getNextMove(new HitTheZoneState(true)));
     }
 
     @Test

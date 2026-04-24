@@ -11,6 +11,11 @@ public final class NeuralHardwareConfig {
      */
     public static final double DEFAULT_FIRING_THRESHOLD_VOLTS = 0.5;
 
+    /**
+     * Constant voltage injected into the HTZ hardware while the ball is in the zone.
+     */
+    public static final double CONSTANT_INJECT_VOLTAGE = 3.0;
+
     private NeuralHardwareConfig() {
         // Utility class.
     }

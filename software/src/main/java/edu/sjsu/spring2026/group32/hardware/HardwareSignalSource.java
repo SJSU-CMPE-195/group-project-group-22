@@ -3,6 +3,7 @@ package edu.sjsu.spring2026.group32.hardware;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 
 public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
+    private static final double LOGGED_VOLTAGE_MIN = 0.75;
     private final SerialConnectionManager connectionManager;
     private final NeuralSignalParser parser;
 
@@ -45,7 +46,11 @@ public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
                 if (rawLine == null) return 0.0;
             } while (rawLine.startsWith("STATUS") || rawLine.startsWith("#"));
 
-            return parser.parseVoltage(rawLine);
+            double voltage = parser.parseVoltage(rawLine);
+            if (voltage >= LOGGED_VOLTAGE_MIN) {
+                System.out.printf("[HTZ-HW] parsed voltage=%.3fV line=%s%n", voltage, rawLine);
+            }
+            return voltage;
 
         } catch (Exception e) {
             // The USB cable was violently pulled out mid-read

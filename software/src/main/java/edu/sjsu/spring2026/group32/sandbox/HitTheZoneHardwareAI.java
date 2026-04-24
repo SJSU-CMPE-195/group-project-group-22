@@ -10,26 +10,17 @@ import edu.sjsu.spring2026.group32.player.HardwareAIPlayer;
  *
  * <h3>Voltage injection (ball in zone)</h3>
  * <p>On every zone <em>entry</em> this player sends a constant
- * {@link #INJECT_VOLTAGE} stimulus to the neural hardware via its
+ * {@link NeuralHardwareConfig#CONSTANT_INJECT_VOLTAGE} stimulus to the neural hardware via its
  * {@link VoltageInjector}. On every zone <em>exit</em> it sends a stop
  * command so the hardware reverts to normal ADC sampling. This keeps
  * all serial-protocol knowledge inside the hardware player and away from
  * the game loop.
  *
- * <h3>Spike reading (one spike = one action)</h3>
- * <p>Returns {@link HitTheZoneAction#SCORE} on the <em>rising edge</em> of a
- * spike: the first tick where voltage crosses from below to at-or-above
- * {@code voltageThreshold} while the ball is in the zone. Subsequent ticks
- * where voltage remains high return {@code null} because the spike has already
- * been registered. When voltage falls back below the threshold the internal
- * {@code wasFiring} flag resets, so the next genuine spike is detected as a
- * new rising edge.
- *
- * <h3>Edge detection</h3>
- * <p>Rising-edge detection is performed internally via the {@code wasFiring}
- * flag, ensuring exactly one {@code SCORE} action per spike regardless of how
- * long the voltage stays above threshold. The flag is also reset on every
- * zone entry and exit for a clean start on each zone pass.
+ * <h3>Spike reading</h3>
+ * <p>Returns {@link HitTheZoneAction#SCORE} on the rising edge of a spike:
+ * the first in-zone tick where voltage crosses from below to at-or-above
+ * {@code voltageThreshold}. Subsequent high-voltage ticks from the same spike
+ * return {@code null} until the signal falls back below the threshold.
  *
  * <h3>Threshold choice</h3>
  * <p>The default threshold is shared through
@@ -39,21 +30,16 @@ import edu.sjsu.spring2026.group32.player.HardwareAIPlayer;
  */
 public class HitTheZoneHardwareAI
         extends HardwareAIPlayer<HitTheZoneState, HitTheZoneAction> {
-
-    /** Constant voltage injected into the hardware while the ball is in the zone. */
-    static final double INJECT_VOLTAGE = 2.0;
+    private static final String ANSI_GREEN = "\u001B[32m";
+    private static final String ANSI_RESET = "\u001B[0m";
+    private static final double LOGGED_VOLTAGE_MIN = 0.85;
 
     private final VoltageInjector injector;
     private final double voltageThreshold;
 
     /** Tracks the zone state from the previous tick to detect entry/exit edges. */
     private boolean wasInZone = false;
-
-    /**
-     * Rising-edge flag: true while voltage is at-or-above threshold within the
-     * current spike. Resets to false when voltage drops below threshold or on
-     * zone entry/exit so that each new spike produces exactly one SCORE.
-     */
+    /** Tracks whether the voltage was already above threshold on the prior tick. */
     private boolean wasFiring = false;
 
     /**
@@ -72,6 +58,49 @@ public class HitTheZoneHardwareAI
         super(name, signalSource);
         this.injector = injector;
         this.voltageThreshold = voltageThreshold;
+    }
+
+    private void debug(String message) {
+        System.out.printf("[HTZ-AI %s] %s%n", getName(), message);
+    }
+
+    private void debugGreen(String message) {
+        System.out.printf(ANSI_GREEN + "[HTZ-AI %s] %s" + ANSI_RESET + "%n", getName(), message);
+    }
+
+    private void updateInjectionForZoneTransition(HitTheZoneState state) {
+        if (!wasInZone && state.inZone()) {
+            debug(String.format("zone enter -> inject %.3fV", NeuralHardwareConfig.CONSTANT_INJECT_VOLTAGE));
+            injector.injectVoltage(NeuralHardwareConfig.CONSTANT_INJECT_VOLTAGE);
+            wasFiring = false;
+        } else if (wasInZone && !state.inZone()) {
+            debug("zone exit -> stop injection");
+            injector.stopInjection();
+            wasFiring = false;
+        }
+        wasInZone = state.inZone();
+    }
+
+    private HitTheZoneAction actionFromVoltage(HitTheZoneState state, double voltage) {
+        if (!state.inZone()) {
+            if (voltage >= voltageThreshold) {
+                debug(String.format("score %.3fV because ball is outside zone", voltage));
+                return HitTheZoneAction.SCORE;
+            }
+            return null;
+        }
+        if (voltage >= LOGGED_VOLTAGE_MIN) {
+            debug(String.format("in-zone voltage %.3fV (threshold %.3fV)", voltage, voltageThreshold));
+        }
+        if (voltage >= voltageThreshold) {
+            if (!wasFiring) {
+                wasFiring = true;
+                debugGreen(String.format("emit SCORE at %.3fV", voltage));
+                return HitTheZoneAction.SCORE;
+            }
+        }
+        wasFiring = false;
+        return null;
     }
 
     /**
@@ -112,33 +141,13 @@ public class HitTheZoneHardwareAI
 
     /**
      * Fires inject/stop commands on zone transitions, then returns
-     * {@link HitTheZoneAction#SCORE} on the rising edge of a spike, or
-     * {@code null} otherwise.
+     * {@link HitTheZoneAction#SCORE} only when the hardware voltage crosses the
+     * threshold from below while the ball is in the zone.
      */
     @Override
     protected HitTheZoneAction voltageToAction(HitTheZoneState state, double voltage) {
-        if (!wasInZone && state.inZone()) {
-            injector.injectVoltage(INJECT_VOLTAGE);
-            wasFiring = false;
-        } else if (wasInZone && !state.inZone()) {
-            injector.stopInjection();
-            wasFiring = false;
-        }
-        wasInZone = state.inZone();
-
-        if (!state.inZone()) {
-            return null;
-        }
-        if (voltage >= voltageThreshold) {
-            if (!wasFiring) {
-                wasFiring = true;
-                return HitTheZoneAction.SCORE;
-            }
-            return null;
-        }
-
-        wasFiring = false;
-        return null;
+        updateInjectionForZoneTransition(state);
+        return actionFromVoltage(state, voltage);
     }
 
     /**
@@ -150,6 +159,7 @@ public class HitTheZoneHardwareAI
      * it must not disconnect the shared port out from under the Launcher.</p>
      */
     public void stopInjectionOnly() {
+        debug("stopInjectionOnly()");
         injector.stopInjection();
         wasInZone = false;
         wasFiring = false;

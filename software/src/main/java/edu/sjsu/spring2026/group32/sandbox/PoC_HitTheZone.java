@@ -26,8 +26,10 @@ public class PoC_HitTheZone extends JFrame {
     static final int START_X    = 40;
     static final int TRACK_Y    = 130;
     static final int SPEED      = 5;
-    static final int ZONE_WIDTH = 80;
+    static final int ZONE_WIDTH = 160;
     static final int ZONE_START = (WIDTH - ZONE_WIDTH) / 2;
+    static final int DEFAULT_BALL_SPEED = SPEED;
+    static final int DEFAULT_ZONE_WIDTH = ZONE_WIDTH;
 
     static final Color[] PLAYER_COLORS = {
             new Color(30,  120, 220),
@@ -58,6 +60,8 @@ public class PoC_HitTheZone extends JFrame {
     protected boolean isPaused    = false;
     /** Total game time in milliseconds — frozen while paused. */
     protected long    elapsedMs   = 0;
+    protected int     ballSpeed   = DEFAULT_BALL_SPEED;
+    protected int     zoneWidth   = DEFAULT_ZONE_WIDTH;
     private boolean   shutdownStarted = false;
 
     // ---- Swing -----------------------------------------------------------
@@ -298,9 +302,15 @@ public class PoC_HitTheZone extends JFrame {
 
         for (int i = 0; i < players.size(); i++) {
             HitTheZoneAction action = players.get(i).getNextMove(state);
+            BasePlayer<HitTheZoneState, HitTheZoneAction> player = players.get(i);
+
+            if (player instanceof HitTheZoneHardwareAI && action != null) {
+                System.out.printf("[HTZ-GAME %s] onTick action=%s inZone=%s canScore=%s lastAction=%s ballX=%d%n",
+                        player.getName(), action, inZone, canScore[i], lastActions[i], ballX);
+            }
 
             if (action == HitTheZoneAction.SCORE) {
-                boolean isHumanScorePress = players.get(i).getType() == PlayerType.HUMAN;
+                boolean isHumanScorePress = player.getType() == PlayerType.HUMAN;
                 if (!isHumanScorePress || action != lastActions[i]) {
                     processScore(i);
                 }
@@ -325,12 +335,13 @@ public class PoC_HitTheZone extends JFrame {
 
         int panelWidth = gamePanel.getWidth() > 0 ? gamePanel.getWidth() : WIDTH;
         int rightBound = panelWidth - BALL_DIAM;
+        int zoneStart  = zoneStart();
 
-        if      (ballX <= 0)          { ballX = 0;          direction = SPEED; }
-        else if (ballX >= rightBound) { ballX = rightBound; direction = -SPEED; }
+        if      (ballX <= 0)          { ballX = 0;          direction = ballSpeed; }
+        else if (ballX >= rightBound) { ballX = rightBound; direction = -ballSpeed; }
 
         int     centerX   = ballX + BALL_DIAM / 2;
-        boolean nowInZone = centerX >= ZONE_START && centerX <= (ZONE_START + ZONE_WIDTH);
+        boolean nowInZone = centerX >= zoneStart && centerX <= (zoneStart + zoneWidth);
 
         if (!inZone && nowInZone) {
             // Zone entry: arm scoring and clear debounced control actions.
@@ -361,10 +372,21 @@ public class PoC_HitTheZone extends JFrame {
         attempts[playerIndex]++;
 
         int     centerX = ballX + BALL_DIAM / 2;
-        boolean inside  = centerX >= ZONE_START && centerX <= (ZONE_START + ZONE_WIDTH);
+        int     zoneStart = zoneStart();
+        boolean inside  = centerX >= zoneStart && centerX <= (zoneStart + zoneWidth);
+        BasePlayer<HitTheZoneState, HitTheZoneAction> player = players.get(playerIndex);
+        boolean shouldCredit = canScore[playerIndex]
+                && (inside || player instanceof HitTheZoneHardwareAI);
 
-        if (inside && canScore[playerIndex]) {
+        if (shouldCredit) {
             hits[playerIndex]++;
+            if (player instanceof HitTheZoneHardwareAI) {
+                System.out.printf("[HTZ-GAME %s] SCORE credited hits=%d attempts=%d centerX=%d inside=%s totalPasses=%d%n",
+                        player.getName(), hits[playerIndex], attempts[playerIndex], centerX, inside, totalPasses);
+            }
+        } else if (player instanceof HitTheZoneHardwareAI) {
+            System.out.printf("[HTZ-GAME %s] SCORE rejected inside=%s canScore=%s hits=%d attempts=%d centerX=%d totalPasses=%d%n",
+                    player.getName(), inside, canScore[playerIndex], hits[playerIndex], attempts[playerIndex], centerX, totalPasses);
         }
     }
 
@@ -382,7 +404,7 @@ public class PoC_HitTheZone extends JFrame {
 
     protected void resetGame() {
         ballX       = START_X;
-        direction   = SPEED;
+        direction   = ballSpeed;
         totalPasses = 0;
         inZone      = false;
         elapsedMs   = 0;
@@ -452,11 +474,13 @@ public class PoC_HitTheZone extends JFrame {
             g2.setColor(new Color(210, 210, 210));
             g2.fillRect(0, trackTop, getWidth(), trackH);
 
+            int zoneStart = zoneStart();
+
             g2.setColor(new Color(255, 228, 80));
-            g2.fillRect(ZONE_START, trackTop, ZONE_WIDTH, trackH);
+            g2.fillRect(zoneStart, trackTop, zoneWidth, trackH);
             g2.setColor(new Color(160, 120, 0));
             g2.setStroke(new BasicStroke(2f));
-            g2.drawRect(ZONE_START, trackTop, ZONE_WIDTH, trackH);
+            g2.drawRect(zoneStart, trackTop, zoneWidth, trackH);
 
             // Per-player hit-rate bars.
             // Scale is dynamic: the player with the highest hits/pass fills the
@@ -476,23 +500,23 @@ public class PoC_HitTheZone extends JFrame {
             for (int i = 0; i < players.size(); i++) {
                 double rate   = (totalPasses == 0 || maxRate == 0) ? 0.0
                         : (hits[i] / (double) totalPasses) / maxRate;
-                int    filled = (int) (rate * ZONE_WIDTH);
+                int    filled = (int) (rate * zoneWidth);
                 Color  c      = playerColor(i);
 
                 g2.setColor(c.darker());
-                g2.fillRect(ZONE_START, barTopY, ZONE_WIDTH, barH);
+                g2.fillRect(zoneStart, barTopY, zoneWidth, barH);
                 g2.setColor(c);
-                g2.fillRect(ZONE_START, barTopY, filled, barH);
+                g2.fillRect(zoneStart, barTopY, filled, barH);
                 g2.setColor(Color.DARK_GRAY);
                 g2.setStroke(new BasicStroke(1f));
-                g2.drawRect(ZONE_START, barTopY, ZONE_WIDTH, barH);
+                g2.drawRect(zoneStart, barTopY, zoneWidth, barH);
                 g2.setColor(c);
                 g2.setFont(g2.getFont().deriveFont(Font.BOLD, 10f));
                 String barLabel = totalPasses == 0
                         ? players.get(i).getName()
                         : String.format("%s (%.2f hits/pass)", players.get(i).getName(),
                         hits[i] / (double) totalPasses);
-                g2.drawString(barLabel, ZONE_START + ZONE_WIDTH + 6, barTopY + barH - 1);
+                g2.drawString(barLabel, zoneStart + zoneWidth + 6, barTopY + barH - 1);
 
                 barTopY += barH + barGap;
             }
@@ -510,7 +534,7 @@ public class PoC_HitTheZone extends JFrame {
             FontMetrics fm  = g2.getFontMetrics();
             String      lbl = "ZONE";
             g2.drawString(lbl,
-                    ZONE_START + (ZONE_WIDTH - fm.stringWidth(lbl)) / 2,
+                    zoneStart + (zoneWidth - fm.stringWidth(lbl)) / 2,
                     trackTop - 4);
         }
     }
@@ -521,6 +545,30 @@ public class PoC_HitTheZone extends JFrame {
 
     private static Color playerColor(int index) {
         return index < PLAYER_COLORS.length ? PLAYER_COLORS[index] : Color.DARK_GRAY;
+    }
+
+    protected int zoneStart() {
+        return (WIDTH - zoneWidth) / 2;
+    }
+
+    public void setBallSpeed(int ballSpeed) {
+        if (ballSpeed <= 0) {
+            throw new IllegalArgumentException("ballSpeed must be > 0");
+        }
+        boolean movingRight = direction >= 0;
+        this.ballSpeed = ballSpeed;
+        this.direction = movingRight ? ballSpeed : -ballSpeed;
+    }
+
+    public void setZoneWidth(int zoneWidth) {
+        if (zoneWidth <= 0 || zoneWidth >= WIDTH) {
+            throw new IllegalArgumentException("zoneWidth must be > 0 and < field width");
+        }
+        this.zoneWidth = zoneWidth;
+        int centerX = ballX + BALL_DIAM / 2;
+        int zoneStart = zoneStart();
+        inZone = centerX >= zoneStart && centerX <= (zoneStart + zoneWidth);
+        gamePanel.repaint();
     }
 
     // ======================================================================
