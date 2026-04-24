@@ -180,7 +180,7 @@ class PongGameTest {
     @DisplayName("setPlayerVariant() replaces the active player for the given side")
     void setPlayerVariantReplacesPlayer() throws Exception{
         // simulates switching top user from AI_HARD to (default val) to AI_EASY
-        SwingUtilities.invokeAndWait(() -> 
+        SwingUtilities.invokeAndWait(() ->
             game.onVariantSelected(PongToolbar.Side.TOP, PlayerVariant.AI_EASY)
         );
 
@@ -188,5 +188,70 @@ class PongGameTest {
 
         assertEquals("AI Easy", game.topPlayer.getName(), "Top player should be replaced with AI Easy instance");
 
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Paddle collision
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("[TODO] Ball hitting the top paddle reverses vertical direction downward")
+    void ballHitsTopPaddleAndBouncesDown() {
+        // TODO: implement
+        // Hint: set ballY near TOP_PADDLE_Y + PADDLE_HEIGHT with ballVelY < 0,
+        // set paddle X to overlap ball X, then call tickPlaying() and assert ballVelY > 0
+    }
+
+    @Test
+    @DisplayName("[TODO] Ball hitting the bottom paddle reverses vertical direction upward")
+    void ballHitsBottomPaddleAndBouncesUp() {
+        // TODO: implement
+        // Hint: set ballY near BOTTOM_PADDLE_Y with ballVelY > 0,
+        // set paddle X to overlap ball X, then call tickPlaying() and assert ballVelY < 0
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Reset
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("[TODO] resetGame() resets both scores to zero and returns to PAUSED state")
+    void resetGameResetsScoresAndReturnsToPaused() {
+        // TODO: implement
+        // Hint: score some points, call game.resetGame() (package-private via reflection or
+        // trigger via the 'R' key action), then assert topScore==0, bottomScore==0, gameState==PAUSED
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // createHardwarePlayer() static factory
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("[TODO] createHardwarePlayer() returns null when manager is null")
+    void createHardwarePlayerReturnsNullWhenManagerIsNull() {
+        // TODO: implement
+        // assertNull(PongGame.createHardwarePlayer(null))
+    }
+
+    @Test
+    @DisplayName("[TODO] createHardwarePlayer() returns null when manager is not connected")
+    void createHardwarePlayerReturnsNullWhenManagerNotConnected() {
+        // TODO: implement
+        // Hint: mock a SerialConnectionManager with isConnected() == false
+    }
+
+    @Test
+    @DisplayName("[TODO] createHardwarePlayer() returns null when channel count is less than 2")
+    void createHardwarePlayerReturnsNullWhenChannelCountLessThanTwo() {
+        // TODO: implement
+        // Hint: mock a connected manager with getDeviceChannelCount() == 1
+    }
+
+    @Test
+    @DisplayName("[TODO] createHardwarePlayer() returns a PongHardwareAI when manager is connected with 2 channels")
+    void createHardwarePlayerReturnsPlayerWhenFullyConnected() {
+        // TODO: implement
+        // Hint: mock a connected manager with getDeviceChannelCount() == 2,
+        // then assertNotNull and assertInstanceOf(PongHardwareAI.class, result)
     }
 }
