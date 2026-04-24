@@ -1,6 +1,8 @@
 package edu.sjsu.spring2026.group32.hardware.serial;
 
 import java.io.BufferedWriter;
+import java.io.FilterInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -171,12 +173,28 @@ public class SerialConnectionManager {
     }
 
     /**
-     * Returns the raw InputStream of the open port.
+     * Returns a readable InputStream view of the open port.
      * Intended for callers (e.g. Test) that manage their own BufferedReader
      * on a background thread. Returns null if not connected.
+     *
+     * <p>The returned stream is a non-owning view: closing it does not close
+     * the underlying serial port. The {@link SerialConnectionManager} remains
+     * the sole owner of the port lifecycle, so shared UI windows like
+     * {@code BidirectionalTest} cannot accidentally disconnect Launcher-owned
+     * hardware by closing their local reader wrappers.</p>
      */
     public InputStream getInputStream() {
-        return comPort != null ? comPort.getInputStream() : null;
+        if (comPort == null) return null;
+
+        InputStream in = comPort.getInputStream();
+        if (in == null) return null;
+
+        return new FilterInputStream(in) {
+            @Override
+            public void close() throws IOException {
+                // The manager owns the port; external readers only borrow it.
+            }
+        };
     }
 
     // =========================================================================
@@ -200,8 +218,9 @@ public class SerialConnectionManager {
 
     /**
      * Timestamp (ms, wall clock) of the last line successfully returned by
-     * {@link #getNextLine()}.  Seeded to "now" when a port is opened so that
-     * the watchdog does not fire before the first data frame arrives.
+     * {@link #getNextLine()} or acknowledged via {@link #refreshHeartbeat()}.
+     * Left at 0 until a real consumer starts reading so the watchdog does not
+     * start its timeout window while the Launcher is idle after connect.
      * {@code volatile} so the SerialConnectionPanel watchdog thread can read
      * it without synchronisation overhead.
      */
@@ -237,6 +256,19 @@ public class SerialConnectionManager {
      */
     public void refreshHeartbeat() {
         lastRxMs = System.currentTimeMillis();
+    }
+
+    /**
+     * Clears the receive heartbeat when an active consumer stops reading.
+     *
+     * <p>This returns the manager to the same idle state used immediately
+     * after connect-time handshakes: the Launcher watchdog should not treat a
+     * shared port as dead simply because no window is currently consuming the
+     * stream. The next real read will call {@link #refreshHeartbeat()} or
+     * {@link #getNextLine()} and start the timeout clock again.</p>
+     */
+    public void clearHeartbeat() {
+        lastRxMs = 0;
     }
 
     // =========================================================================

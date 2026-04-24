@@ -2,6 +2,7 @@ package edu.sjsu.spring2026.group32.hardware.serial;
 
 import org.junit.jupiter.api.*;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -179,6 +180,42 @@ class SerialConnectionManagerTest {
         connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{});
         assertNull(connectionManager.getInputStream(),
             "getInputStream() should return null when not connected");
+    }
+
+    @Test
+    @DisplayName("Closing getInputStream() wrapper does not close the launcher-owned port")
+    void testGetInputStreamCloseDoesNotDisconnectSharedPort() throws Exception {
+        class CloseTrackingInputStream extends ByteArrayInputStream {
+            private boolean closeCalled;
+
+            CloseTrackingInputStream(byte[] data) {
+                super(data);
+            }
+
+            @Override
+            public void close() throws java.io.IOException {
+                closeCalled = true;
+                super.close();
+            }
+        }
+
+        CloseTrackingInputStream trackingStream =
+                new CloseTrackingInputStream("first_line\n".getBytes());
+        when(mockDevice.getInputStream()).thenReturn(trackingStream);
+
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+
+        InputStream borrowedStream = connectionManager.getInputStream();
+        assertNotNull(borrowedStream, "Connected manager should expose a readable stream view");
+
+        borrowedStream.close();
+
+        assertFalse(trackingStream.closeCalled,
+                "Closing the borrowed stream must not close the underlying serial stream");
+        assertTrue(connectionManager.isConnected(),
+                "Closing the borrowed stream must not disconnect the shared connection");
+        verify(mockDevice, never()).closePort();
     }
 
     // -------------------------------------------------------------------------
@@ -407,6 +444,21 @@ class SerialConnectionManagerTest {
         long ts = connectionManager.getLastRxMs();
         assertTrue(ts >= before && ts <= after,
             "refreshHeartbeat() should set lastRxMs to the current wall-clock time");
+    }
+
+    @Test
+    @DisplayName("clearHeartbeat() resets lastRxMs to 0 so an idle shared manager does not time out")
+    void testClearHeartbeatResetsLastRxMs() {
+        connectionManager = new SerialConnectionManager(() -> new SerialDevice[]{}, 100);
+        connectionManager.connectTo(mockDevice);
+        connectionManager.refreshHeartbeat();
+
+        connectionManager.clearHeartbeat();
+
+        assertEquals(0, connectionManager.getLastRxMs(),
+            "clearHeartbeat() should return the manager to its idle no-consumer state");
+        assertFalse(connectionManager.isRxTimedOut(),
+            "An idle shared manager must not time out after its consumer stops");
     }
 
     @Test

@@ -161,6 +161,7 @@ public class BidirectionalTest extends JFrame {
             return;
         }
 
+        SerialConnectionManager activeManager = connectionManager;
         running.set(true);
         readerThread = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "ESP32-Reader");
@@ -170,20 +171,20 @@ public class BidirectionalTest extends JFrame {
 
         readerThread.execute(() -> {
             try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(connectionManager.getInputStream()))) {
+                    new InputStreamReader(activeManager.getInputStream()))) {
 
                 while (running.get()) {
                     try {
                         String line = reader.readLine();
                         if (line != null && !line.isBlank()) {
-                            connectionManager.refreshHeartbeat();
+                            activeManager.refreshHeartbeat();
                             handleIncomingLine(line.trim());
                         }
                     } catch (java.io.IOException readException) {
                         if (!running.get()) {
                             break;
                         }
-                        if (connectionManager != null && connectionManager.isConnected()) {
+                        if (activeManager.isConnected()) {
                             continue;
                         }
                         String message = readException.getMessage();
@@ -204,6 +205,8 @@ public class BidirectionalTest extends JFrame {
                         setConnectedState(false);
                     });
                 }
+            } finally {
+                activeManager.clearHeartbeat();
             }
         });
     }
