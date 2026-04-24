@@ -59,14 +59,27 @@ class NeuralSignalParserTest {
     // New tests
 
     @Test
-    @DisplayName("EMA filter smooths successive readings (alpha=0.4)")
+    @DisplayName("Default parser (alpha=1.0) passes raw voltage through without smoothing")
+    void testDefaultParserNoSmoothing() {
+        double v1 = parser.parseVoltage("0,0,0,4095"); // raw = 3.3V
+        assertEquals(3.3, v1, 0.001, "First reading should return raw voltage");
+
+        // raw = 0V should pass through immediately (no EMA lag)
+        double v2 = parser.parseVoltage("0,0,0,0");
+        assertEquals(0.0, v2, 0.001, "With alpha=1.0, voltage should track raw value instantly");
+    }
+
+    @Test
+    @DisplayName("EMA filter smooths successive readings when alpha < 1.0")
     void testEmaSmoothing() {
-        // seeds the EMA directly (no smoothing)
-        double v1 = parser.parseVoltage("0,0,0,4095"); // raw = 3.3V through EMA = 3.3
+        // Explicit alpha=0.4 parser to verify EMA logic still works
+        NeuralSignalParser emaParser = new NeuralSignalParser(4095.0, 3.3, 0.4, 0);
+
+        double v1 = emaParser.parseVoltage("0,0,0,4095"); // raw = 3.3V, seeds EMA = 3.3
         assertEquals(3.3, v1, 0.001, "First reading should seed EMA directly");
 
         // raw = 0V goes through EMA = 0*0.4 + 3.3*0.6 = 1.98
-        double v2 = parser.parseVoltage("0,0,0,0");
+        double v2 = emaParser.parseVoltage("0,0,0,0");
         assertEquals(1.98, v2, 0.01, "EMA should smooth toward 0V");
         assertTrue(v2 > 0.0 && v2 < 3.3, "Smoothed value should be between min and max");
     }

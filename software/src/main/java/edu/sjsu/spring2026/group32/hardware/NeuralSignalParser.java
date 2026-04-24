@@ -18,10 +18,16 @@ public class NeuralSignalParser {
     private final int channelIndex;
 
     /**
-     * Default constructor: channel 0, ESP32 12-bit ADC, 3.3 V, light smoothing.
+     * Default constructor: channel 0, ESP32 12-bit ADC, 3.3 V, no smoothing.
+     *
+     * <p>Smoothing is set to 1.0 (raw passthrough) because the games'
+     * rising-edge detectors already debounce spikes via their own state
+     * machines.  An EMA with alpha &lt; 1.0 attenuates short-lived voltage
+     * spikes below the detection threshold, preventing valid neural
+     * firings from being scored.
      */
     public NeuralSignalParser() {
-        this(4095.0, 3.3, 0.4, 0);
+        this(4095.0, 3.3, 1.0, 0);
     }
 
     /**
@@ -30,7 +36,7 @@ public class NeuralSignalParser {
      *                     1 for GPIO35 (dual-channel config 2 only)
      */
     public NeuralSignalParser(int channelIndex) {
-        this(4095.0, 3.3, 0.4, channelIndex);
+        this(4095.0, 3.3, 1.0, channelIndex);
     }
 
     /**
