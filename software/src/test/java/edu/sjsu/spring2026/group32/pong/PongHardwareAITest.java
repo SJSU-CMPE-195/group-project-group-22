@@ -17,7 +17,7 @@ import static org.mockito.Mockito.when;
  * <p>{@link BaseSignalSource} is a SAM interface, so lambdas are used as
  * lightweight stubs — no mocking framework required.
  *
- * <p>Default threshold = 2.0 V (see {@code PongHardwareAI.DEFAULT_THRESHOLD}).
+ * <p>Default threshold = 0.5 V (see {@code PongHardwareAI.DEFAULT_THRESHOLD}).
  */
 @DisplayName("PongHardwareAI Suite")
 class PongHardwareAITest {
@@ -30,7 +30,7 @@ class PongHardwareAITest {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Action mapping — default threshold (2.0 V)
+    // Action mapping — default threshold (0.5 V)
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
@@ -48,13 +48,14 @@ class PongHardwareAITest {
     }
 
     @Test
-    @DisplayName("[TODO] Returns IDLE when neither source reaches default threshold")
+    @DisplayName("Returns IDLE when neither source reaches default threshold")
     void returnsIdleWhenNeitherFires() {
-        // TODO: implement
         // NOTE: The default threshold is now NeuralHardwareConfig.DEFAULT_FIRING_THRESHOLD_VOLTS
         // = 0.5V, not 2.0V as the original test assumed.  fixed(0.5) >= 0.5 is true, so
-        // LEFT fires and the result is LEFT not IDLE.  Update the stub voltage to a value
-        // strictly below the new 0.5V default (e.g. fixed(0.49)) to restore the intent.
+        // LEFT fires and the result is LEFT not IDLE. 
+        PongHardwareAI ai = new PongHardwareAI("HW", fixed(0.49), fixed(0.49));
+        assertEquals(PongAction.IDLE, ai.getNextMove(ANY_STATE));
+
     }
 
     @Test
@@ -65,25 +66,23 @@ class PongHardwareAITest {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Default threshold boundary (2.0 V)
+    // Default threshold boundary (0.5 V)
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Returns LEFT at exactly the default threshold (inclusive)")
     void leftAtExactDefaultThreshold() {
-        PongHardwareAI ai = new PongHardwareAI("HW", fixed(2.0), fixed(0.0));
+        PongHardwareAI ai = new PongHardwareAI("HW", fixed(0.5), fixed(0.0));
         assertEquals(PongAction.LEFT, ai.getNextMove(ANY_STATE));
     }
 
     @Test
-    @DisplayName("[TODO] Returns IDLE just below the default threshold")
+    @DisplayName("Returns IDLE just below the default threshold")
     void idleJustBelowDefaultThreshold() {
-        // TODO: implement
         // NOTE: The default threshold changed from 2.0V to NeuralHardwareConfig
-        // .DEFAULT_FIRING_THRESHOLD_VOLTS = 0.5V.  fixed(1.99) >= 0.5, so LEFT fires
-        // and the result is LEFT, not IDLE.  Update the stub voltage to 0.49 (one step
-        // below the new default) and verify the test comment and @DisplayName still
-        // accurately describe the boundary being tested.
+        // .DEFAULT_FIRING_THRESHOLD_VOLTS = 0.5V.
+        PongHardwareAI ai = new PongHardwareAI("HW", fixed(0.49), fixed(0.0));
+        assertEquals(PongAction.IDLE, ai.getNextMove(ANY_STATE));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -102,7 +101,7 @@ class PongHardwareAITest {
     }
 
     @Test
-    @DisplayName("Four-arg constructor with custom threshold overrides default 2.0 V")
+    @DisplayName("Four-arg constructor with custom threshold overrides default 0.5 V")
     void fourArgConstructorUsesCustomThreshold() {
         // With threshold=0.1, even 0.5V should trigger LEFT
         PongHardwareAI ai = new PongHardwareAI("HW", fixed(0.5), fixed(0.0), 0.1);
