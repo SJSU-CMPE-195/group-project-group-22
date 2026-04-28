@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.player.BasePlayer;
 import edu.sjsu.spring2026.group32.player.HumanPlayer;
 
@@ -34,8 +35,10 @@ class PoCTest {
 
     }
 
+    // ── Wall bounce ──────────────────────────────────────────────────────────
+
     @Test
-    @DisplayName("Test 1: Ball should reverse direction when hitting right wall")
+    @DisplayName("Ball should reverse direction when hitting right wall")
     void testRightWallBounce() {
         // simulates the ball reaching the right wall moving in the positive direction
         game.ballX = PoC_HitTheZone.WIDTH - PoC_HitTheZone.BALL_DIAM; 
@@ -47,7 +50,141 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("Test 2: Scoring can happen multiple times during one zone pass")
+    @DisplayName("Ball should reverse direction when hitting right wall")
+    void testLeftWallBounce() {
+        // simulates the ball reaching the right wall moving in the positive direction
+        game.ballX = 0;
+        game.direction = -PoC_HitTheZone.SPEED; 
+
+        game.onTick();
+
+        assertTrue(game.direction > 0, "Direction should be positive after hitting the left wall");
+    }
+
+
+    // ── Ball movement ─────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Ball moves each tick when not paused")
+    void testBallMovesWhenNotPaused() {
+        game.isPaused  = false;
+
+        game.ballX = PoC_HitTheZone.START_X;
+        game.direction = PoC_HitTheZone.SPEED;
+
+        int beforeX = game.ballX;
+        game.onTick();
+
+        assertNotEquals(beforeX, game.ballX, "Ball should move when game is not paused");
+    }
+
+    @Test
+    @DisplayName("Pause should freeze movement")
+    void testPauseLogic() {
+        // simulate pausing the game, records current ballX position onTick() should return immediately without moving the ball
+        game.isPaused = true; 
+        int originalX = game.ballX; 
+
+        game.onTick();
+        game.onTick();
+        game.onTick();
+
+        assertEquals(originalX, game.ballX, "Ball should not move while paused");
+
+    }
+
+    @Test
+    @DisplayName("elapsedMs increments by 16 each tick when not paused")
+    void testElapsedMsIncrementsEachTick() {
+        game.isPaused = false;
+        long before = game.elapsedMs;
+
+        game.onTick();
+
+        assertEquals(before + 16, game.elapsedMs, "elapsedMs should increase by 16ms each tick");
+    }
+
+    // ── Zone entry / exit ────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Zone entry arms canScore and increments totalPasses")
+    void testZoneEntryArmsCanScore() {
+        // simulates ball entering zone from the left
+        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2 - PoC_HitTheZone.SPEED;
+        game.direction = PoC_HitTheZone.SPEED;
+        game.inZone = false;
+
+        game.onTick();
+
+        assertTrue(game.canScore[0], "canScore should be armed on zone entry");
+        assertEquals(1, game.totalPasses, "totalPasses should increment on zone entry");
+    }
+
+    @Test
+    @DisplayName("Zone exit clears canScore")
+    void testZoneExitClearsCanScore() {
+        // simulates ball exiting the zone to the right
+        game.ballX = PoC_HitTheZone.ZONE_START + PoC_HitTheZone.ZONE_WIDTH;
+        game.inZone = true;
+        game.canScore[0] = true;
+
+        game.onTick();
+
+        assertFalse(game.canScore[0], "canScore should be cleared on zone exit");
+    }
+
+    // ── processScore ──────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("processScore increments both hits and attempts when ball is in zone and canScore=true")
+    void testProcessScoreIncrementsHitsAndAttempts() {
+        // ZONE_START = (WIDTH - ZONE_WIDTH) / 2 = (820 - 80) / 2 = 370
+        // ballX set so center = ZONE_START (inside zone)
+        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
+        game.canScore[0] = true;
+        int hitsBefore = game.hits[0];
+        int attemptBefore = game.attempts[0];
+
+        game.processScore(0);
+
+        assertEquals(hitsBefore + 1, game.hits[0], "hits should increment on successful score");
+        assertEquals(attemptBefore + 1, game.attempts[0], "attempts should always increment");
+    }
+
+    @Test
+    @DisplayName("processScore increments only attempts when canScore=false")
+    void testProcessScoreIncrementsOnlyAttemptsWhenCannotScore() {
+        // Ball is inside the zone but canScore=false (zone exit already occurred)
+        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
+        game.canScore[0] = false;
+        int hitsBefore = game.hits[0];
+        int attemptBefore = game.attempts[0];
+
+        game.processScore(0);
+
+        assertEquals(hitsBefore, game.hits[0], "hits should NOT change when canScore=false");
+        assertEquals(attemptBefore + 1, game.attempts[0], "attempts should still increment");
+    }
+
+    @Test
+    @DisplayName("processScore does nothing when ball center is outside the zone")
+    void testProcessScoreIgnoresOutOfZoneAttempt() {
+        // ballX=0 -> center=10, well outside ZONE_START (~370)
+        game.ballX = 0;
+        game.canScore[0] = true;
+
+        int hitsBefore = game.hits[0];
+        int attemptsBefore = game.attempts[0];
+
+        game.processScore(0);
+
+        assertEquals(hitsBefore, game.hits[0], "hits should not change when ball is outside zone");
+        assertEquals(attemptsBefore + 1, game.attempts[0], "attempts should still increment");
+    }
+
+
+    @Test
+    @DisplayName("Scoring can happen multiple times during one zone pass")
     void testMultipleScoresPerZonePass() {
         // simulates ball center on the zone boundary with scoring armed
         game.ballX = PoC_HitTheZone.ZONE_START - (PoC_HitTheZone.BALL_DIAM / 2); // center lands on ZONE_START
@@ -63,7 +200,22 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("Test 3: Reset should clear all counters")
+    @DisplayName("processScore does nothing while game is paused")
+    void testProcessScoreDoesNothingWhenPaused() {
+        game.isPaused = true;
+        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
+        game.canScore[0] = true;
+        int hitsBefore = game.hits[0];
+        int attemptsBefore = game.attempts[0];
+        game.processScore(0);
+        assertEquals(hitsBefore, game.hits[0], "hits should not change when paused");
+        assertEquals(attemptsBefore, game.attempts[0], "attempts should not change when paused");
+    }
+
+    // ── resetGame ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("resetGame clears all counters and returns ball to START_X")
     void testResetFunctionality() {
         // simulates game play (hits = 5, attempts = 10) before resetting
         game.hits[0] = 5; 
@@ -81,64 +233,7 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("Test 4: Pause should freeze movement")
-    void testPauseLogic() {
-        // simulate pausing the game, records current ballX position onTick() should return immediately without moving the ball
-        game.isPaused = true; 
-        int originalX = game.ballX; 
-
-        game.onTick();
-        game.onTick();
-        game.onTick();
-
-        assertEquals(originalX, game.ballX, "Ball should not move while paused");
-
-    }
-
-    // ── New tests ─────────────────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("Test 5: Ball should reverse direction when hitting left wall")
-    void testLeftWallBounce() {
-        game.ballX = 0;
-        game.direction = -PoC_HitTheZone.SPEED;
-
-        game.onTick();
-
-        assertTrue(game.direction > 0, "Direction should be positive after hitting the left wall");
-    }
-
-    @Test
-    @DisplayName("Test 6: Ball moves each tick when not paused")
-    void testBallMovesWhenNotPaused() {
-        game.isPaused  = false;
-        game.ballX = PoC_HitTheZone.START_X;
-        game.direction = PoC_HitTheZone.SPEED;
-
-        int beforeX = game.ballX;
-        game.onTick();
-
-        assertNotEquals(beforeX, game.ballX, "Ball should move when game is not paused");
-    }
-
-    @Test
-    @DisplayName("Test 7: processScore does nothing when ball center is outside the zone")
-    void testProcessScoreIgnoresOutOfZoneAttempt() {
-        // ballX=0 -> center=10, well outside ZONE_START (~370)
-        game.ballX = 0;
-        game.canScore[0] = true;
-
-        int hitsBefore = game.hits[0];
-        int attemptsBefore = game.attempts[0];
-
-        game.processScore(0);
-
-        assertEquals(hitsBefore, game.hits[0], "hits should not change when ball is outside zone");
-        assertEquals(attemptsBefore + 1, game.attempts[0], "attempts should still increment");
-    }
-
-    @Test
-    @DisplayName("Test 8: totalPasses is cleared by resetGame()")
+    @DisplayName("totalPasses is cleared by resetGame()")
     void testTotalPassesClearedOnReset() {
         game.totalPasses = 7;
         game.resetGame();
@@ -147,76 +242,19 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("Test 9: processScore increments both hits and attempts when ball is in zone and canScore=true")
-    void testProcessScoreIncrementsHitsAndAttempts() {
-        // ZONE_START = (WIDTH - ZONE_WIDTH) / 2 = (820 - 80) / 2 = 370
-        // ballX set so center = ZONE_START (inside zone)
-        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
-        game.canScore[0] = true;
-        int hitsBefore = game.hits[0];
-        int attemptBefore = game.attempts[0];
-
-        game.processScore(0);
-
-        assertEquals(hitsBefore + 1, game.hits[0], "hits should increment on successful score");
-        assertEquals(attemptBefore + 1, game.attempts[0], "attempts should always increment");
+    @DisplayName("elapsedMs is cleared by resetGame()")
+    void testElapsedMsClearedOnReset() {
+        game.elapsedMs = 5000;
+        game.resetGame();
+        assertEquals(0, game.elapsedMs, "elapsedMs should be 0 after reset");
     }
 
-    @Test
-    @DisplayName("Test 10: processScore increments only attempts when canScore=false")
-    void testProcessScoreIncrementsOnlyAttemptsWhenCannotScore() {
-        // Ball is inside the zone but canScore=false (zone exit already occurred)
-        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
-        game.canScore[0] = false;
-        int hitsBefore = game.hits[0];
-        int attemptBefore = game.attempts[0];
 
-        game.processScore(0);
+    // ── onTick dispatch ──────────────────────────────────────────────────────
 
-        assertEquals(hitsBefore, game.hits[0], "hits should NOT change when canScore=false");
-        assertEquals(attemptBefore + 1, game.attempts[0], "attempts should still increment");
-    }
 
     @Test
-    @DisplayName("Test 11: Zone entry arms canScore and increments totalPasses")
-    void testZoneEntryArmsCanScore() {
-        // simulates ball entering zone from the left
-        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2 - PoC_HitTheZone.SPEED;
-        game.direction = PoC_HitTheZone.SPEED;
-        game.inZone = false;
-
-        game.onTick();
-
-        assertTrue(game.canScore[0], "canScore should be armed on zone entry");
-        assertEquals(1, game.totalPasses, "totalPasses should increment on zone entry");
-    }
-
-    @Test
-    @DisplayName("Test 12: Zone exit clears canScore")
-    void testZoneExitClearsCanScore() {
-        // simulates ball exiting the zone to the right
-        game.ballX = PoC_HitTheZone.ZONE_START + PoC_HitTheZone.ZONE_WIDTH;
-        game.inZone = true;
-        game.canScore[0] = true;
-
-        game.onTick();
-
-        assertFalse(game.canScore[0], "canScore should be cleared on zone exit");
-    }
-
-    @Test
-    @DisplayName("Test 13: elapsedMs increments by 16 each tick when not paused")
-    void testElapsedMsIncrementsEachTick() {
-        game.isPaused = false;
-        long before = game.elapsedMs;
-
-        game.onTick();
-
-        assertEquals(before + 16, game.elapsedMs, "elapsedMs should increase by 16ms each tick");
-    }
-
-    @Test
-    @DisplayName("Test 14: onTick() dispatches RESET action to resetGame()")
+    @DisplayName("onTick() dispatches RESET action to resetGame()")
     void testOnTickDispatchesReset() {
         // simulates a player that returns RESET on first call then null to prevent repeated resets
         BasePlayer<HitTheZoneState, HitTheZoneAction> mockPlayer = mock(BasePlayer.class);
@@ -238,92 +276,111 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("Test 15: onTick() allows duplicate consecutive SCORE actions")
+    @DisplayName("onTick() allows duplicate consecutive SCORE actions while pass is active")
     void testOnTickAllowsMultipleScoresPerPass() {
-        // simulates a player that always returns SCORE — edge detection should only process it on the first tick, blocking the second identical action
         BasePlayer<HitTheZoneState, HitTheZoneAction> mockPlayer = mock(BasePlayer.class);
         when(mockPlayer.getNextMove(any())).thenReturn(HitTheZoneAction.SCORE);
-
+ 
         game = new PoC_HitTheZone(true, List.of(mockPlayer)) {
             @Override protected void updateHud() {}
         };
-
-        // place ball in zone with scoring armed
+ 
         game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
         game.canScore[0] = true;
         game.inZone = true;
-
-        game.onTick(); 
-        game.canScore[0] = true;
+ 
         game.onTick();
-
+        game.canScore[0] = true; // re-arm for second tick
+        game.onTick();
+ 
         assertEquals(2, game.hits[0], "Consecutive SCORE actions should each count while the pass is still active");
+
     }
 
     // ── setBallSpeed() ────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] setBallSpeed() updates ball speed and preserves direction sign")
+    @DisplayName("setBallSpeed() updates ball speed and preserves direction sign")
     void setBallSpeedUpdatesSpeedAndPreservesDirection() {
-        // TODO: implement
-        // Hint: set game.direction positive, call setBallSpeed(10), assert direction==10
-        //       then set direction negative, call setBallSpeed(10), assert direction==-10
+        game.direction = PoC_HitTheZone.SPEED; // positive
+        game.setBallSpeed(10);
+        assertEquals(10, game.direction, "direction should be +10 when previously positive");
+ 
+        game.direction = -PoC_HitTheZone.SPEED; // negative
+        game.setBallSpeed(10);
+        assertEquals(-10, game.direction, "direction should be -10 when previously negative");
+
     }
 
     @Test
-    @DisplayName("[TODO] setBallSpeed() throws IllegalArgumentException for zero or negative value")
+    @DisplayName("setBallSpeed() throws IllegalArgumentException for zero or negative value")
     void setBallSpeedThrowsIllegalArgumentOnInvalidValue() {
-        // TODO: implement
-        // assertThrows(IllegalArgumentException.class, () -> game.setBallSpeed(0));
-        // assertThrows(IllegalArgumentException.class, () -> game.setBallSpeed(-1));
+        assertThrows(IllegalArgumentException.class, () -> game.setBallSpeed(0));
+        assertThrows(IllegalArgumentException.class, () -> game.setBallSpeed(-1));
+
     }
 
     // ── setZoneWidth() ────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] setZoneWidth() updates the zone width used by the game")
+    @DisplayName("setZoneWidth() updates the zone width used by the game")
     void setZoneWidthUpdatesZoneWidth() {
-        // TODO: implement
-        // game.setZoneWidth(200); assertEquals(200, game.zoneWidth);
+        game.setZoneWidth(200);
+        assertEquals(200, game.zoneWidth, "zoneWidth should be updated to 200");
     }
 
     @Test
-    @DisplayName("[TODO] setZoneWidth() throws IllegalArgumentException for zero, negative, or field-width-or-greater value")
+    @DisplayName("setZoneWidth() throws IllegalArgumentException for zero, negative, or field-width-or-greater value")
     void setZoneWidthThrowsIllegalArgumentOnInvalidValue() {
-        // TODO: implement
-        // assertThrows for 0, -1, and PoC_HitTheZone.WIDTH
+        assertThrows(IllegalArgumentException.class, () -> game.setZoneWidth(0));
+        assertThrows(IllegalArgumentException.class, () -> game.setZoneWidth(-1));
+        assertThrows(IllegalArgumentException.class, () -> game.setZoneWidth(PoC_HitTheZone.WIDTH));
     }
 
     // ── createDefaultPlayers() ────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] createDefaultPlayers() returns four players when no hardware is connected")
+    @DisplayName("createDefaultPlayers() returns four players when no hardware is connected")
     void createDefaultPlayersReturnsFourPlayersWithoutHardware() {
-        // TODO: implement
-        // PoC_HitTheZone.createDefaultPlayers(null) should return 4 players
-        // (Bot Alpha, Bot Beta, Human, and no hardware AI since manager is null)
+        var players = PoC_HitTheZone.createDefaultPlayers(null);
+        // Bot Alpha, Bot Beta, Human (no hardware AI when manager is null)
+        assertEquals(3, players.size(), "Should return 3 players (2 bots + 1 human) when manager is null");
     }
 
     @Test
-    @DisplayName("[TODO] createDefaultPlayers() includes a HardwareAI player when manager is connected")
+    @DisplayName("createDefaultPlayers() includes a HardwareAI player when manager is connected")
     void createDefaultPlayersIncludesHardwareAIWithConnectedManager() {
-        // TODO: implement
-        // mock a connected SerialConnectionManager and assert the returned list
-        // contains a HitTheZoneHardwareAI instance
+        SerialConnectionManager mockManager = mock(SerialConnectionManager.class);
+        when(mockManager.isConnected()).thenReturn(true);
+        // Stub getNextLine() to avoid blocking — parser needs at least a parseable line.
+        when(mockManager.getNextLine()).thenReturn("0,0.00");
+ 
+        var players = PoC_HitTheZone.createDefaultPlayers(mockManager);
+        boolean hasHardware = players.stream().anyMatch(p -> p instanceof HitTheZoneHardwareAI);
+        assertTrue(hasHardware, "Should include a HitTheZoneHardwareAI player when manager is connected");
+
     }
 
     // ── zoneStart() ────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] zoneStart() returns the expected center-aligned zone start X position")
+    @DisplayName("zoneStart() returns the expected center-aligned zone start X position")
     void zoneStartReturnsExpectedCenter() {
-        // TODO: implement
-        // Expected: (PoC_HitTheZone.WIDTH - game.zoneWidth) / 2
-        // Verify zoneStart() matches that formula for both default and custom zoneWidth
+        int expected = (PoC_HitTheZone.WIDTH - game.zoneWidth) / 2;
+        assertEquals(expected, game.zoneStart(), "zoneStart() should match center-alignment formula");
+
     }
 
     @Test
-    @DisplayName("[TODO] Test 16: Human player must tap SCORE instead of holding it")
+    @DisplayName("zoneStart() recalculates correctly after setZoneWidth()")
+    void zoneStartUpdatesAfterWidthChange() {
+        game.setZoneWidth(200);
+        int expected = (PoC_HitTheZone.WIDTH - 200) / 2;
+        assertEquals(expected, game.zoneStart(), "zoneStart() should reflect new zone width");
+    }
+
+    @Test
+    @DisplayName("[TODO] Human player must tap SCORE instead of holding it")
     void testHumanScoreRequiresTap() {
         // TODO: implement
         // NOTE: lastActions[0] is set to SCORE at the end of tick 2 and is never reset
@@ -336,7 +393,32 @@ class PoCTest {
         //       press (with action=null) to let lastActions reset to null, or
         //   (c) revisit the edge-detection logic in onTick() to handle tap-release-tap
         //       without requiring an intermediate tick.
-    }
+
+        BasePlayer<HitTheZoneState, HitTheZoneAction> mockPlayer = mock(BasePlayer.class);
+        when(mockPlayer.getNextMove(any()))
+            .thenReturn(
+                HitTheZoneAction.SCORE, // tick 1 (press)
+                null,                   // tick 2 (release)
+                HitTheZoneAction.SCORE  // tick 3 (press again)
+            );
+
+        game = new PoC_HitTheZone(true, List.of(mockPlayer)) {
+            @Override protected void updateHud() {}
+        };
+
+        game.ballX = PoC_HitTheZone.ZONE_START - PoC_HitTheZone.BALL_DIAM / 2;
+        game.canScore[0] = true;
+        game.inZone = true;
+
+        game.onTick();
+        game.canScore[0] = true;
+
+        game.onTick();
+        game.canScore[0] = true;
+
+        game.onTick();
+        assertEquals(2, game.hits[0], "Two separate taps (with a release in between) should count as two hits");
+        }
 
 
 }
