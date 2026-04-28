@@ -380,25 +380,13 @@ class PoCTest {
     }
 
     @Test
-    @DisplayName("[TODO] Human player must tap SCORE instead of holding it")
+    @DisplayName("Human player must tap SCORE instead of holding it")
     void testHumanScoreRequiresTap() {
-        // TODO: implement
-        // NOTE: lastActions[0] is set to SCORE at the end of tick 2 and is never reset
-        // between tick 2 and tick 3 (the ball stays inside the zone the whole time so
-        // moveBall() does not fire a zone-entry reset).  On tick 3, action==lastActions[0]
-        // (both SCORE) so processScore() is skipped → hits=1, not 2.  To fix, either:
-        //   (a) arrange a zone exit+re-entry between the two taps so moveBall() resets
-        //       lastActions, or
-        //   (b) update the test so it calls onTick() between the release and the second
-        //       press (with action=null) to let lastActions reset to null, or
-        //   (c) revisit the edge-detection logic in onTick() to handle tap-release-tap
-        //       without requiring an intermediate tick.
-
         BasePlayer<HitTheZoneState, HitTheZoneAction> mockPlayer = mock(BasePlayer.class);
         when(mockPlayer.getNextMove(any()))
             .thenReturn(
                 HitTheZoneAction.SCORE, // tick 1 (press)
-                null,                   // tick 2 (release)
+                null, // tick 2 (release)
                 HitTheZoneAction.SCORE  // tick 3 (press again)
             );
 
@@ -418,7 +406,8 @@ class PoCTest {
 
         game.onTick();
         assertEquals(2, game.hits[0], "Two separate taps (with a release in between) should count as two hits");
-        }
+    
+    }
 
 
 }
