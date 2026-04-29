@@ -1,12 +1,20 @@
 package edu.sjsu.spring2026.group32.pong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.lang.reflect.InvocationTargetException;
 
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.*;
 
+import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.pong.ui.PongToolbar;
 
 /**
@@ -195,31 +203,83 @@ class PongGameTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] Ball hitting the top paddle reverses vertical direction downward")
-    void ballHitsTopPaddleAndBouncesDown() {
-        // TODO: implement
-        // Hint: set ballY near TOP_PADDLE_Y + PADDLE_HEIGHT with ballVelY < 0,
-        // set paddle X to overlap ball X, then call tickPlaying() and assert ballVelY > 0
+    @DisplayName("Ball hitting the top paddle reverses vertical direction downward")
+    void ballHitsTopPaddleAndBouncesDown() throws Exception {
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        // simulates positioning the ball below the top paddle's bottom edge, moving upward.
+        // TOP_PADDLE_Y + PADDLE_HEIGHT is the bottom face of the top paddle.
+
+        game.ballY    = PongGame.TOP_PADDLE_Y + PongGame.PADDLE_HEIGHT - 1;
+        game.ballVelY = -5; // moving up toward top paddle
+
+        // simulates centering the paddle directly over the ball so the X overlap condition is met
+
+        game.ballX = PongGame.FIELD_WIDTH / 2;
+
+        game.tickPlaying();
+
+        assertTrue(game.ballVelY > 0, "Ball should bounce downward (positive velY) after hitting the top paddle");
     }
 
     @Test
-    @DisplayName("[TODO] Ball hitting the bottom paddle reverses vertical direction upward")
-    void ballHitsBottomPaddleAndBouncesUp() {
-        // TODO: implement
-        // Hint: set ballY near BOTTOM_PADDLE_Y with ballVelY > 0,
-        // set paddle X to overlap ball X, then call tickPlaying() and assert ballVelY < 0
+    @DisplayName("Ball hitting the bottom paddle reverses vertical direction upward")
+    void ballHitsBottomPaddleAndBouncesUp() throws Exception{
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        // BOTTOM_PADDLE_Y is the top face of the bottom paddle.
+        // ballY + BALL_SIZE >= BOTTOM_PADDLE_Y triggers the collision.
+        game.ballY = PongGame.BOTTOM_PADDLE_Y - PongGame.BALL_SIZE + 1;
+        game.ballVelY = 5; // moving down toward bottom paddle
+        game.ballX = PongGame.FIELD_WIDTH / 2; // center — paddle starts centered
+
+        game.tickPlaying();
+
+        assertTrue(game.ballVelY < 0, "Ball should bounce upward (negative velY) after hitting the bottom paddle");
     }
+    
 
     // ──────────────────────────────────────────────────────────────────────────
     // Reset
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] resetGame() resets both scores to zero and returns to PAUSED state")
-    void resetGameResetsScoresAndReturnsToPaused() {
-        // TODO: implement
-        // Hint: score some points, call game.resetGame() (package-private via reflection or
-        // trigger via the 'R' key action), then assert topScore==0, bottomScore==0, gameState==PAUSED
+    @DisplayName("resetGame() resets both scores to zero and returns to PAUSED state")
+    void resetGameResetsScoresAndReturnsToPaused() throws Exception{
+        SwingUtilities.invokeAndWait(() -> game.startCountdown());
+        game.gameState = PongGame.GameState.PLAYING;
+
+        game.topScore = 3;
+        game.bottomScore = 5;
+
+        SwingUtilities.invokeAndWait(() -> game.startCountdown()); 
+        game.topScore = 3;
+        game.bottomScore = 5;
+
+        SwingUtilities.invokeAndWait(() -> {
+            game.topScore = 3;
+            game.bottomScore = 5;
+            game.gameState = PongGame.GameState.PLAYING;
+
+            game.togglePause();
+
+        });
+
+        game.topScore = 3;
+        game.bottomScore = 5;
+        game.gameState = PongGame.GameState.PLAYING;
+
+        SwingUtilities.invokeAndWait(() -> {
+            game.getActionMap().get("game-reset").actionPerformed(new java.awt.event.ActionEvent(game, 0, ""));
+
+        });
+
+        assertEquals(0, game.topScore, "topScore should be 0 after reset");
+        assertEquals(0, game.bottomScore, "bottomScore should be 0 after reset");
+        assertEquals(PongGame.GameState.PAUSED, game.gameState, "gameState should be PAUSED after reset");
+
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -227,31 +287,48 @@ class PongGameTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] createHardwarePlayer() returns null when manager is null")
+    @DisplayName("createHardwarePlayer() returns null when manager is null")
     void createHardwarePlayerReturnsNullWhenManagerIsNull() {
-        // TODO: implement
-        // assertNull(PongGame.createHardwarePlayer(null))
+        assertNull(PongGame.createHardwarePlayer(null));
+
     }
 
     @Test
-    @DisplayName("[TODO] createHardwarePlayer() returns null when manager is not connected")
+    @DisplayName("createHardwarePlayer() returns null when manager is not connected")
     void createHardwarePlayerReturnsNullWhenManagerNotConnected() {
-        // TODO: implement
-        // Hint: mock a SerialConnectionManager with isConnected() == false
+        SerialConnectionManager mockManager = mock(SerialConnectionManager.class);
+
+        when(mockManager.isConnected()).thenReturn(false);
+
+        assertNull(PongGame.createHardwarePlayer(mockManager));
+
     }
 
     @Test
-    @DisplayName("[TODO] createHardwarePlayer() returns null when channel count is less than 2")
+    @DisplayName("createHardwarePlayer() returns null when channel count is less than 2")
     void createHardwarePlayerReturnsNullWhenChannelCountLessThanTwo() {
-        // TODO: implement
-        // Hint: mock a connected manager with getDeviceChannelCount() == 1
+        SerialConnectionManager mockManager = mock(SerialConnectionManager.class);
+
+        when(mockManager.isConnected()).thenReturn(true);
+        when(mockManager.getDeviceChannelCount()).thenReturn(1);
+
+        assertNull(PongGame.createHardwarePlayer(mockManager));
+
     }
 
     @Test
-    @DisplayName("[TODO] createHardwarePlayer() returns a PongHardwareAI when manager is connected with 2 channels")
+    @DisplayName("createHardwarePlayer() returns a PongHardwareAI when manager is connected with 2 channels")
     void createHardwarePlayerReturnsPlayerWhenFullyConnected() {
-        // TODO: implement
-        // Hint: mock a connected manager with getDeviceChannelCount() == 2,
-        // then assertNotNull and assertInstanceOf(PongHardwareAI.class, result)
+        SerialConnectionManager mockManager = mock(SerialConnectionManager.class);
+
+        when(mockManager.isConnected()).thenReturn(true);
+        when(mockManager.getDeviceChannelCount()).thenReturn(2);
+
+        when(mockManager.getNextLine()).thenReturn("1000,0,0,0");
+
+        PongHardwareAI result = PongGame.createHardwarePlayer(mockManager);
+
+        assertNotNull(result);
+        assertInstanceOf(PongHardwareAI.class, result);
     }
 }
