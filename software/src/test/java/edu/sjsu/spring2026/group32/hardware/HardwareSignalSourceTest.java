@@ -2,21 +2,38 @@ package edu.sjsu.spring2026.group32.hardware;
 
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@DisplayName("Hardware Connection Suite")
+/**
+ * Unit tests for {@link HardwareSignalSource}.
+ *
+ * <p>All tests use a mocked {@link SerialConnectionManager} so no real serial
+ * port or hardware is required.  The {@link NeuralSignalParser} is used as a
+ * real instance (it has no external dependencies) to keep voltage conversion
+ * logic honest.
+ *
+ * <h3>Architecture note</h3>
+ * {@code HardwareSignalSource} receives voltage updates via a
+ * {@link SerialConnectionManager.SerialListener} that it registers in its
+ * constructor.  Tests capture that listener via an {@link ArgumentCaptor} and
+ * fire callbacks manually to simulate incoming serial data without needing a
+ * background reader thread.
+ */
+@DisplayName("HardwareSignalSource Suite")
 class HardwareSignalSourceTest {
 
     private HardwareSignalSource signalSource;
-    private SerialConnectionManager mockConnectionManager;
+    private SerialConnectionManager mockManager;
     private NeuralSignalParser realParser;
 
     @BeforeEach
     void setUp() {
-        mockConnectionManager = mock(SerialConnectionManager.class);
-        realParser = new NeuralSignalParser();
+        mockManager = mock(SerialConnectionManager.class);
+        realParser  = new NeuralSignalParser();   // channel 0, 4095 max, 3.3 V, alpha=1.0
     }
 
     @AfterEach
@@ -26,103 +43,208 @@ class HardwareSignalSourceTest {
         }
     }
 
-    @Test
-    @DisplayName("Should handle missing hardware gracefully without crashing")
-    void testMissingHardwareHandling() {
-
-        // Simulates connect() being called and failing to return false (used for simulating hardware not found)
-        when(mockConnectionManager.connect()).thenReturn(false);
-
-        // Simulates isConnected() being called (controls gate for getNextVoltage())
-        when(mockConnectionManager.isConnected()).thenReturn(false);
-
-        // Simulates no data coming from the hardware 
-        when(mockConnectionManager.getNextLine()).thenReturn(null);
-
-        // Instantiating triggers connect() 
-        signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
-        double voltage = signalSource.getNextVoltage();
-
-        // Uses verify() to ensure connect() was called exactly twice
-        assertEquals(0.0, voltage, 0.0001);
-        verify(mockConnectionManager, times(2)).connect();
-
-    }
+    // ──────────────────────────────────────────────────────────────────────────
+    // Constructor behaviour
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("[TODO] Should successfully connect, configure port, and read voltage")
-    void testConnectionSuccessAndVoltageRead() {
-        // TODO: implement
-        // NOTE: HardwareSignalSource no longer calls getNextLine() directly.
-        // Voltage is now delivered via the SerialListener.onSample() callback registered
-        // in the constructor. Rewrite this test to fire the listener callback manually
-        // (capture the registered SerialListener via verify + ArgumentCaptor, then call
-        // onSample() with a fake SampleFrame) and assert the returned voltage.
-    }
-
-    // New tests 
-
-    @Test
-    @DisplayName("Should skip auto-connect when port is already open")
+    @DisplayName("Constructor skips auto-connect when port is already open")
     void testSkipsAutoConnectWhenAlreadyConnected() {
-        // isConnected() returns true constructor guard skips connect()
-        when(mockConnectionManager.isConnected()).thenReturn(true);
+        when(mockManager.isConnected()).thenReturn(true);
 
-        signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
+        signalSource = new HardwareSignalSource(mockManager, realParser);
 
-        verify(mockConnectionManager, never()).connect();
+        verify(mockManager, never()).connect();
+    }
+
+    @Test
+    @DisplayName("Constructor calls connect() when port is not open")
+    void testCallsConnectWhenNotConnected() {
+        when(mockManager.isConnected()).thenReturn(false);
+        when(mockManager.connect()).thenReturn(false);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
+        verify(mockManager, times(1)).connect();
+    }
+
+    @Test
+    @DisplayName("Constructor registers a SerialListener with the manager")
+    void testListenerRegisteredOnConstruction() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
+        verify(mockManager, times(1))
+                .addListener(any(SerialConnectionManager.SerialListener.class));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Voltage reading
+    // Voltage reading via listener callback 
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("getNextVoltage() returns 0.0 when getNextLine() returns null")
-    void testNullLineReturnsZero() {
-        when(mockConnectionManager.isConnected()).thenReturn(false).thenReturn(true);
-        when(mockConnectionManager.connect()).thenReturn(true);
-        when(mockConnectionManager.getNextLine()).thenReturn(null);
+    @DisplayName("getNextVoltage() returns voltage delivered via onSample() callback")
+    void testConnectionSuccessAndVoltageRead() {
+        when(mockManager.isConnected()).thenReturn(true);
 
-        signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
+        ArgumentCaptor<SerialConnectionManager.SerialListener> listenerCaptor = ArgumentCaptor.forClass(SerialConnectionManager.SerialListener.class);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+        verify(mockManager).addListener(listenerCaptor.capture());
+
+        String csvLine = "1000,0,0,4095";
+        SerialConnectionManager.SampleFrame frame = new SerialConnectionManager.SampleFrame(csvLine, 1000L, 4095, null);
+
+        listenerCaptor.getValue().onSample(frame);
+
+        assertEquals(3.3, signalSource.getNextVoltage(), 0.001, "Voltage should reflect value delivered by onSample() callback");
+    }
+
+    @Test
+    @DisplayName("getNextVoltage() returns 0.0 when no sample has arrived yet")
+    void testGetNextVoltageDefaultsToZero() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
+        assertEquals(0.0, signalSource.getNextVoltage(), 0.0001, "latestVoltage should be 0.0 before any sample arrives");
+    }
+
+    @Test
+    @DisplayName("getNextVoltage() returns 0.0 when manager is disconnected")
+    void testNullLineReturnsZero() {
+        when(mockManager.isConnected()).thenReturn(false);
+        when(mockManager.connect()).thenReturn(false);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
+        assertEquals(0.0, signalSource.getNextVoltage(), 0.0001, "Should return 0.0 when not connected");
+    }
+
+    @Test
+    @DisplayName("onDisconnected callback resets latestVoltage to 0.0")
+    void testExceptionDuringReadTriggersDisconnect() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        ArgumentCaptor<SerialConnectionManager.SerialListener> listenerCaptor = ArgumentCaptor.forClass(SerialConnectionManager.SerialListener.class);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+        verify(mockManager).addListener(listenerCaptor.capture());
+
+        String csvLine = "1000,0,0,4095";
+
+        SerialConnectionManager.SampleFrame frame = new SerialConnectionManager.SampleFrame(csvLine, 1000L, 4095, null);
+        
+        listenerCaptor.getValue().onSample(frame);
+
+        assertEquals(3.3, signalSource.getNextVoltage(), 0.001, "pre-condition: voltage is 3.3 V");
+
+        // simulates a serial disconnect, onDisconnected() should reset voltage.
+        listenerCaptor.getValue().onDisconnected("USB removed");
+
+        when(mockManager.isConnected()).thenReturn(false);
+        when(mockManager.connect()).thenReturn(false);
+
+        assertEquals(0.0, signalSource.getNextVoltage(), 0.0001, "latestVoltage should reset to 0.0 after onDisconnected()");
+    }
+
+    @Test
+    @DisplayName("getNextVoltage() seeds latestVoltage from getLatestSampleFrame() when already connected")
+    void testSeedsVoltageFromLatestSampleOnConnect() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        String csvLine = "500,0,0,2048";   // raw = 2048 --> ~ 1.65 V
+        SerialConnectionManager.SampleFrame frame = new SerialConnectionManager.SampleFrame(csvLine, 500L, 2048, null);
+        
+        when(mockManager.getLatestSampleFrame()).thenReturn(frame);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
+        assertEquals(1.65, signalSource.getNextVoltage(), 0.01, "Should seed latestVoltage from getLatestSampleFrame() when already connected");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Missing hardware 
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Missing hardware is handled gracefully: getNextVoltage() returns 0.0")
+    void testMissingHardwareHandling() {
+        when(mockManager.isConnected()).thenReturn(false);
+        when(mockManager.connect()).thenReturn(false);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
         double voltage = signalSource.getNextVoltage();
 
-        assertEquals(0.0, voltage, 0.0001, "Null line from serial should produce 0.0V safe default");
-    }
-
-    @Test
-    @DisplayName("[TODO] getNextVoltage() returns 0.0 and triggers disconnect after a read exception")
-    void testExceptionDuringReadTriggersDisconnect() {
-        // TODO: implement
-        // NOTE: getNextVoltage() no longer calls getNextLine() and therefore can no longer
-        // catch a RuntimeException from it. Read errors are now handled inside the
-        // background reader thread (SerialConnectionManager), which calls disconnect()
-        // on IOException via disconnectInternal(). Rewrite this test to simulate a serial
-        // read error at the SerialConnectionManager level (e.g. via the onDisconnected
-        // listener callback) and assert that latestVoltage is reset to 0.0.
+        assertEquals(0.0, voltage, 0.0001, "Should return 0.0 when hardware is absent");
+        verify(mockManager, times(2)).connect();
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Reconnection
+    // Reconnection throttle
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Reconnect attempt is throttled by 2-second cooldown")
+    @DisplayName("Reconnect attempts are throttled by RECONNECT_COOLDOWN_MS")
     void testReconnectCooldownThrottlesAttempts() {
-        // isConnected() calls return false so handleDisconnection() is triggered
-        when(mockConnectionManager.isConnected()).thenReturn(false);
-        when(mockConnectionManager.connect()).thenReturn(false);
+        when(mockManager.isConnected()).thenReturn(false);
+        when(mockManager.connect()).thenReturn(false);
 
-        signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
+        signalSource = new HardwareSignalSource(mockManager, realParser);
 
-        // triggers reconnect attempt
         signalSource.getNextVoltage();
-        // call again within cooldown window, so there shouldn't be a second reconnect
         signalSource.getNextVoltage();
 
-        // connect() called in constructor + in first handleDisconnection() = 2
-        // second call is suppressed by 2 second cooldown
-        verify(mockConnectionManager, times(2)).connect();
+        verify(mockManager, times(2)).connect();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // VoltageInjector contract
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("injectVoltage(channel, volts) sends correctly formatted INJECT_V_CHx command")
+    void testInjectVoltageSendsCorrectCommand() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+        signalSource.injectVoltage(1, 2.5);
+
+        verify(mockManager, times(1)).sendLine("INJECT_V_CH1:2.500");
+    }
+
+    @Test
+    @DisplayName("injectVoltage() throws IllegalArgumentException for channel < 1")
+    void testInjectVoltageThrowsOnInvalidChannel() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
+        assertThrows(IllegalArgumentException.class, () -> signalSource.injectVoltage(0, 1.0), "Channel 0 should be rejected by validateChannel()");
+    }
+
+    @Test
+    @DisplayName("stopInjection(0) sends STOP_INJECT (all channels)")
+    void testStopInjectionChannel0SendsStopInject() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+        signalSource.stopInjection(0);
+
+        verify(mockManager, times(1)).sendLine("STOP_INJECT");
+    }
+
+    @Test
+    @DisplayName("stopInjection(1) sends STOP_INJECT_CH1")
+    void testStopInjectionChannel1SendsStopInjectCh1() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+        signalSource.stopInjection(1);
+
+        verify(mockManager, times(1)).sendLine("STOP_INJECT_CH1");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -130,14 +252,14 @@ class HardwareSignalSourceTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("close() calls disconnect() on the underlying connection manager")
+    @DisplayName("close() removes the listener and calls disconnect() on the manager")
     void testCloseCallsDisconnect() {
-        when(mockConnectionManager.isConnected()).thenReturn(true);
+        when(mockManager.isConnected()).thenReturn(true);
 
-        signalSource = new HardwareSignalSource(mockConnectionManager, realParser);
+        signalSource = new HardwareSignalSource(mockManager, realParser);
         signalSource.close();
 
-        verify(mockConnectionManager, times(1)).disconnect();
+        verify(mockManager, times(1)).removeListener(any(SerialConnectionManager.SerialListener.class));
+        verify(mockManager, times(1)).disconnect();
     }
-
 }
