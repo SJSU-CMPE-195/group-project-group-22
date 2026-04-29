@@ -4,6 +4,7 @@ import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -32,71 +33,100 @@ class ActiveDeviceVoltageInjectorTest {
     // ──────────────────────────────────────────────────────────────────────────
     // injectVoltage()
     // ──────────────────────────────────────────────────────────────────────────
-
+ 
     @Test
-    @DisplayName("[TODO] injectVoltage() sends correctly formatted INJECT_V_CHx command when connected")
+    @DisplayName("injectVoltage(0, 2.5) sends INJECT_V_CH0:2.500 when connected")
     void injectVoltageSendsFormattedCommandWhenConnected() {
-        // TODO: implement
-        // call injector.injectVoltage(0, 2.5) and verify mockManager.sendLine("INJECT_V_CH0:2.500")
+        injector.injectVoltage(0, 2.5);
+        verify(mockManager, times(1)).sendLine("INJECT_V_CH0:2.500");
     }
-
+ 
     @Test
-    @DisplayName("[TODO] injectVoltage() is a no-op when the manager supplier returns null")
-    void injectVoltageIsNoOpWhenManagerIsNull() {
-        // TODO: implement
-        // create injector with () -> null, call injectVoltage(), verify no exception and no sendLine call
-    }
-
-    @Test
-    @DisplayName("[TODO] injectVoltage() is a no-op when the manager is not connected")
-    void injectVoltageIsNoOpWhenManagerNotConnected() {
-        // TODO: implement
-        // set mockManager.isConnected() to return false, call injectVoltage(), verify no sendLine
-    }
-
-    @Test
-    @DisplayName("[TODO] injectVoltage() sends INJECT_V_CH0 for channel 0 with three decimal places")
-    void injectVoltageChannel0FormatsCorrectly() {
-        // TODO: implement
-        // verify format string: "INJECT_V_CH0:%.3f" applied to the given voltage
-    }
-
-    @Test
-    @DisplayName("[TODO] injectVoltage() sends INJECT_V_CH1 for channel 1")
+    @DisplayName("injectVoltage(1, 3.3) sends INJECT_V_CH1:3.300 when connected")
     void injectVoltageChannel1FormatsCorrectly() {
-        // TODO: implement
-        // call injector.injectVoltage(1, 3.3) and verify sendLine("INJECT_V_CH1:3.300")
+        injector.injectVoltage(1, 3.3);
+        verify(mockManager, times(1)).sendLine("INJECT_V_CH1:3.300");
     }
+ 
+    @Test
+    @DisplayName("injectVoltage() formats voltage to exactly three decimal places")
+    void injectVoltageChannel0FormatsCorrectly() {
+        injector.injectVoltage(0, 1.0);
+        verify(mockManager, times(1)).sendLine("INJECT_V_CH0:1.000");
+    }
+ 
+    @Test
+    @DisplayName("injectVoltage() is a no-op when manager supplier returns null")
+    void injectVoltageIsNoOpWhenManagerIsNull() {
+        ActiveDeviceVoltageInjector nullInjector = new ActiveDeviceVoltageInjector(() -> null);
+        assertDoesNotThrow(() -> nullInjector.injectVoltage(0, 2.5));
 
+    }
+ 
+    @Test
+    @DisplayName("injectVoltage() is a no-op when manager is not connected")
+    void injectVoltageIsNoOpWhenManagerNotConnected() {
+        when(mockManager.isConnected()).thenReturn(false);
+        injector.injectVoltage(0, 2.5);
+        verify(mockManager, never()).sendLine(anyString());
+    }
+ 
     // ──────────────────────────────────────────────────────────────────────────
     // stopInjection()
     // ──────────────────────────────────────────────────────────────────────────
-
+ 
     @Test
-    @DisplayName("[TODO] stopInjection(0) sends STOP_INJECT to the manager")
+    @DisplayName("stopInjection(0) sends STOP_INJECT (stops all channels)")
     void stopInjectionChannel0SendsStopInject() {
-        // TODO: implement
-        // call injector.stopInjection(0) and verify sendLine("STOP_INJECT")
+        injector.stopInjection(0);
+        verify(mockManager, times(1)).sendLine("STOP_INJECT");
     }
-
+ 
     @Test
-    @DisplayName("[TODO] stopInjection(1) sends STOP_INJECT_CH1 to the manager")
+    @DisplayName("stopInjection(1) sends STOP_INJECT_CH1")
     void stopInjectionChannel1SendsStopInjectCh1() {
-        // TODO: implement
-        // call injector.stopInjection(1) and verify sendLine("STOP_INJECT_CH1")
+        injector.stopInjection(1);
+        verify(mockManager, times(1)).sendLine("STOP_INJECT_CH1");
     }
-
+ 
     @Test
-    @DisplayName("[TODO] stopInjection() is a no-op when the manager supplier returns null")
+    @DisplayName("stopInjection(2) sends STOP_INJECT_CH2")
+    void stopInjectionChannel2SendsStopInjectCh2() {
+        injector.stopInjection(2);
+        verify(mockManager, times(1)).sendLine("STOP_INJECT_CH2");
+    }
+ 
+    @Test
+    @DisplayName("stopInjection() is a no-op when manager supplier returns null")
     void stopInjectionIsNoOpWhenManagerIsNull() {
-        // TODO: implement
-        // create injector with () -> null, call stopInjection(0), verify no exception
+        ActiveDeviceVoltageInjector nullInjector = new ActiveDeviceVoltageInjector(() -> null);
+        assertDoesNotThrow(() -> nullInjector.stopInjection(0));
+    }
+ 
+    @Test
+    @DisplayName("stopInjection() is a no-op when manager is not connected")
+    void stopInjectionIsNoOpWhenManagerNotConnected() {
+        when(mockManager.isConnected()).thenReturn(false);
+        injector.stopInjection(0);
+        verify(mockManager, never()).sendLine(anyString());
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Default interface methods
+    // ──────────────────────────────────────────────────────────────────────────
+ 
     @Test
-    @DisplayName("[TODO] stopInjection() is a no-op when the manager is not connected")
-    void stopInjectionIsNoOpWhenManagerNotConnected() {
-        // TODO: implement
-        // set mockManager.isConnected() to return false, verify no sendLine call
+    @DisplayName("injectVoltage(double) default routes to injectVoltage(1, volts)")
+    void defaultInjectVoltageRoutesToChannel1() {
+        injector.injectVoltage(1.5);
+        verify(mockManager, times(1)).sendLine("INJECT_V_CH1:1.500");
     }
+ 
+    @Test
+    @DisplayName("stopInjection() default routes to stopInjection(0) --> sends STOP_INJECT")
+    void defaultStopInjectionRoutesToChannel0() {
+        injector.stopInjection();
+        verify(mockManager, times(1)).sendLine("STOP_INJECT");
+    }
+
 }

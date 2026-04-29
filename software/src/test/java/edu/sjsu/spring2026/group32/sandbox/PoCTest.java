@@ -35,7 +35,9 @@ class PoCTest {
 
     }
 
-    // ── Wall bounce ──────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // Wall bounce
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Ball should reverse direction when hitting right wall")
@@ -62,7 +64,9 @@ class PoCTest {
     }
 
 
-    // ── Ball movement ─────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // Ball movement
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Ball moves each tick when not paused")
@@ -104,7 +108,9 @@ class PoCTest {
         assertEquals(before + 16, game.elapsedMs, "elapsedMs should increase by 16ms each tick");
     }
 
-    // ── Zone entry / exit ────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // Zone entry / exit
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Zone entry arms canScore and increments totalPasses")
@@ -133,7 +139,9 @@ class PoCTest {
         assertFalse(game.canScore[0], "canScore should be cleared on zone exit");
     }
 
-    // ── processScore ──────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // processScore
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("processScore increments both hits and attempts when ball is in zone and canScore=true")
@@ -212,7 +220,9 @@ class PoCTest {
         assertEquals(attemptsBefore, game.attempts[0], "attempts should not change when paused");
     }
 
-    // ── resetGame ────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // resetGame
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("resetGame clears all counters and returns ball to START_X")
@@ -250,8 +260,9 @@ class PoCTest {
     }
 
 
-    // ── onTick dispatch ──────────────────────────────────────────────────────
-
+    // ─────────────────────────────────────────────────────────────────────────
+    // onTick() dispatch
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("onTick() dispatches RESET action to resetGame()")
@@ -297,7 +308,9 @@ class PoCTest {
 
     }
 
-    // ── setBallSpeed() ────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // setBallSpeed()
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("setBallSpeed() updates ball speed and preserves direction sign")
@@ -320,7 +333,9 @@ class PoCTest {
 
     }
 
-    // ── setZoneWidth() ────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // setZoneWidth()
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("setZoneWidth() updates the zone width used by the game")
@@ -336,8 +351,9 @@ class PoCTest {
         assertThrows(IllegalArgumentException.class, () -> game.setZoneWidth(-1));
         assertThrows(IllegalArgumentException.class, () -> game.setZoneWidth(PoC_HitTheZone.WIDTH));
     }
-
-    // ── createDefaultPlayers() ────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // createDefaultPlayers()
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("createDefaultPlayers() returns four players when no hardware is connected")
@@ -361,7 +377,9 @@ class PoCTest {
 
     }
 
-    // ── zoneStart() ────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // zoneStart()
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("zoneStart() returns the expected center-aligned zone start X position")
@@ -408,6 +426,5 @@ class PoCTest {
         assertEquals(2, game.hits[0], "Two separate taps (with a release in between) should count as two hits");
     
     }
-
 
 }
