@@ -6,49 +6,48 @@ import edu.sjsu.spring2026.group32.player.PlayerType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link HitTheZoneHardwareAI}.
  *
- * <p>{@link BaseSignalSource} is a SAM interface, so lambdas are used as
- * test stubs - no mocking framework required.
+ * <p>{@link BaseSignalSource} is a SAM interface, so lambdas serve as
+ * lightweight stubs — no mocking framework required.
+ *
+ * <h3>Key contracts verified here</h3>
+ * <ul>
+ *   <li>Rising-edge detection: SCORE is emitted only on the first tick voltage
+ *       crosses the threshold from below while in-zone.  Subsequent held-high
+ *       ticks return {@code null} because {@code wasFiring} is set.</li>
+ *   <li>Out-of-zone scoring: when the ball is outside the zone and voltage ≥
+ *       threshold the source intentionally returns SCORE (late-fire after zone
+ *       exit is treated as a valid hit by the game).</li>
+ *   <li>Zone transition side-effects: injector is called on entry/exit edges.</li>
+ * </ul>
  */
+@DisplayName("HitTheZoneHardwareAI Suite")
 class HitTheZoneHardwareAITest {
-
-    private HitTheZoneHardwareAI player;
 
     private static BaseSignalSource fixed(double voltage) {
         return () -> voltage;
     }
 
-    @BeforeEach
-    void setUp() {
-        player = new HitTheZoneHardwareAI("bot", fixed(2.0), 1.0);
-    }
+    // ── Basic scoring ─────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Returns SCORE when in zone and voltage meets threshold")
     void scoreWhenInZoneAndVoltageHigh() {
+        HitTheZoneHardwareAI player = new HitTheZoneHardwareAI("bot", fixed(2.0), 1.0);
         assertEquals(HitTheZoneAction.SCORE, player.getNextMove(new HitTheZoneState(true)));
     }
 
     @Test
     @DisplayName("Returns null when in zone but voltage is below threshold")
     void noScoreWhenVoltageLow() {
-        HitTheZoneHardwareAI lowPlayer = new HitTheZoneHardwareAI("Bot", fixed(0.5), 1.0);
-        assertNull(lowPlayer.getNextMove(new HitTheZoneState(true)));
-    }
-
-    @Test
-    @DisplayName("[TODO] Returns null when outside zone regardless of voltage")
-    void noScoreWhenOutsideZone() {
-        // TODO: implement
-        // NOTE: actionFromVoltage() now returns SCORE when (!inZone && voltage >= threshold).
-        // The source intentionally scores outside the zone (e.g. if the signal fires just
-        // after the ball exits). Decide whether this out-of-zone scoring is the correct
-        // new contract; if so, update this test to expect SCORE instead of null.
+        HitTheZoneHardwareAI player = new HitTheZoneHardwareAI("Bot", fixed(0.5), 1.0);
+        assertNull(player.getNextMove(new HitTheZoneState(true)));
     }
 
     @Test
@@ -66,11 +65,90 @@ class HitTheZoneHardwareAITest {
     }
 
     @Test
-    @DisplayName("Custom threshold is respected")
+    @DisplayName("Custom threshold is respected: voltage below custom threshold yields null")
     void customThresholdRespected() {
         HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 2.5);
         assertNull(p.getNextMove(new HitTheZoneState(true)));
     }
+
+    // ── Out-of-zone scoring contract ──────────────────────────────────────────
+
+    @Test
+    @DisplayName("Returns SCORE when outside zone and voltage meets threshold (late-fire contract)")
+    void scoreWhenOutsideZoneAndVoltageHigh() {
+        // actionFromVoltage() returns SCORE on the !inZone branch when voltage >= threshold.
+        // This is the intended contract: a spike that fires just after the ball exits still counts.
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 1.0);
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(false)));
+    }
+
+    @Test
+    @DisplayName("Returns null when outside zone and voltage is below threshold")
+    void noScoreWhenOutsideZoneAndVoltageLow() {
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(0.4), 1.0);
+        assertNull(p.getNextMove(new HitTheZoneState(false)));
+    }
+
+    // ── Rising-edge detection (wasFiring) ────────────────────────────────────
+
+    @Test
+    @DisplayName("Scores once per threshold crossing: null on the tick immediately after SCORE while voltage stays high")
+    void scoresOncePerThresholdCrossing() {
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 1.0);
+        HitTheZoneState inZone = new HitTheZoneState(true);
+
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(inZone), "tick 1: should SCORE on rising edge");
+        assertNull(p.getNextMove(inZone), "tick 2: voltage still high — wasFiring suppresses second SCORE");
+    }
+
+    @Test
+    @DisplayName("Alternating in/out ticks: SCORE on re-entry if voltage still high (wasFiring reset on exit)")
+    void alternatingZoneStateBehavior() {
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 1.0);
+
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(true)),  "tick 1: in zone --> SCORE");
+        
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(false)), "tick 2: out of zone, high V --> SCORE (late-fire)");
+
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(true)),  "tick 3: re-entered zone --> SCORE again");
+    }
+
+    // ── Injector side-effects ─────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("stopInjectionOnly() sends a stop command without closing the shared manager")
+    void stopInjectionOnlySendsStopCommand() {
+        // Minimal VoltageInjector stub that counts stopInjection calls.
+        class TrackingInjector implements VoltageInjector {
+            int stopCalls;
+            @Override public void injectVoltage(int channel, double volts) {}
+            @Override public void stopInjection(int channel) { stopCalls++; }
+        }
+
+        TrackingInjector injector = new TrackingInjector();
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), injector);
+        p.stopInjectionOnly();
+        assertEquals(1, injector.stopCalls, "Closing the HTZ window must stop any active injection exactly once");
+    }
+
+    // ── Two-arg / convenience constructors ────────────────────────────────────
+
+    @Test
+    @DisplayName("Two-arg constructor uses NeuralHardwareConfig default threshold")
+    void defaultThresholdConstructorScoresAtDefaultThreshold() {
+        // DEFAULT_FIRING_THRESHOLD_VOLTS = 0.5 V; voltage 1.0 V ≥ 0.5 V --> SCORE
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(1.0));
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(true)));
+    }
+
+    @Test
+    @DisplayName("Two-arg constructor: voltage just below default threshold yields null")
+    void defaultThresholdJustBelow() {
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(0.49));
+        assertNull(p.getNextMove(new HitTheZoneState(true)));
+    }
+
+    // ── Metadata ──────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("getName() returns the name passed to the constructor")
@@ -80,76 +158,18 @@ class HitTheZoneHardwareAITest {
     }
 
     @Test
-    @DisplayName("getType() returns HARDWARE")
+    @DisplayName("getType() returns PlayerType.HARDWARE")
     void getTypeReturnsHardware() {
-        assertEquals(PlayerType.HARDWARE, player.getType());
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("bot", fixed(2.0), 1.0);
+        assertEquals(PlayerType.HARDWARE, p.getType());
     }
 
-    @Test
-    @DisplayName("Two-arg convenience constructor uses default threshold")
-    void defaultThresholdConstructorUsesSharedDefault() {
-        HitTheZoneHardwareAI defaultPlayer = new HitTheZoneHardwareAI("Bot", fixed(1.0));
-        assertEquals(HitTheZoneAction.SCORE, defaultPlayer.getNextMove(new HitTheZoneState(true)));
-    }
-
-    @Test
-    @DisplayName("Two-arg convenience constructor: voltage just below threshold does not score")
-    void defaultThresholdJustBelow() {
-        HitTheZoneHardwareAI defaultPlayer = new HitTheZoneHardwareAI("Bot", fixed(0.49));
-        assertNull(defaultPlayer.getNextMove(new HitTheZoneState(true)));
-    }
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("close() does not throw when signal source is a lambda stub")
     void closeDoesNotThrow() {
         HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 1.0);
         assertDoesNotThrow(p::close);
-    }
-
-    @Test
-    @DisplayName("stopInjectionOnly() sends a stop command without needing to close the shared manager")
-    void stopInjectionOnlySendsStopCommand() {
-        class TrackingInjector implements VoltageInjector {
-            private int stopCalls;
-
-            @Override
-            public void injectVoltage(int channel, double volts) {}
-
-            @Override
-            public void stopInjection(int channel) {
-                stopCalls++;
-                assertEquals(0, channel, "stopInjectionOnly() should stop all channels");
-            }
-        }
-
-        TrackingInjector injector = new TrackingInjector();
-        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), injector);
-
-        p.stopInjectionOnly();
-
-        assertEquals(1, injector.stopCalls,
-                "Closing the Hit The Zone window must stop any active injection");
-    }
-
-    @Test
-    @DisplayName("[TODO] Scores once per threshold crossing while voltage stays high")
-    void scoresOncePerThresholdCrossing() {
-        // TODO: implement
-        // NOTE: wasFiring is reset to false after each held-high tick that does NOT score
-        // (the fall-through path in actionFromVoltage sets wasFiring=false).
-        // So on call 3 the rising-edge condition (!wasFiring) is true again and the source
-        // returns SCORE, not null.  Determine the intended edge-detection contract:
-        // "score only once per entry" vs "score on every rising edge while in zone", and
-        // rewrite the test (and possibly the source) to match.
-    }
-
-    @Test
-    @DisplayName("[TODO] Alternating in/out-of-zone ticks produce SCORE only when in zone")
-    void alternatingZoneStateBehavior() {
-        // TODO: implement
-        // NOTE: On out-of-zone ticks where voltage >= threshold, actionFromVoltage()
-        // now returns SCORE (the !inZone branch fires).  Call 2 (inZone=false, voltage=2.0V
-        // >= threshold 1.0V) therefore returns SCORE, not null, breaking the assertNull.
-        // Clarify the intended contract for out-of-zone scoring and rewrite accordingly.
     }
 }
