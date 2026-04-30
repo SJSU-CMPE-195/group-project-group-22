@@ -23,9 +23,9 @@ import edu.sjsu.spring2026.group32.player.PlayerType;
 public enum PlayerVariant {
 
     HUMAN    ("Human",    PlayerType.HUMAN),
-    HARDWARE ("Hardware", PlayerType.HARDWARE),
-    AI_EASY  ("AI Easy",  PlayerType.SOFTWARE),
-    AI_HARD  ("AI Hard",  PlayerType.SOFTWARE);
+    HARDWARE ("Hardware AI", PlayerType.HARDWARE),
+    AI_EASY  ("Software AI Easy", PlayerType.SOFTWARE),
+    AI_HARD  ("Software AI Hard", PlayerType.SOFTWARE);
 
     // ─────────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.pong;
 
 import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.NeuralHardwareConfig;
 import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.launcher.ConnectionStatusPanel;
@@ -66,6 +67,22 @@ public class PongGame extends JPanel {
     private static final int[] SPEED_VEL_X = { 3, 4, 5, 6, 7 };
     private static final int[] SPEED_VEL_Y = { 3, 5, 7, 9, 11 };
 
+    /**
+     * Variants available for the TOP paddle.
+     * HUMAN is excluded: the top is intended for AI/hardware opponents only.
+     */
+    static final PlayerVariant[] TOP_VARIANTS = {
+        PlayerVariant.HARDWARE, PlayerVariant.AI_EASY, PlayerVariant.AI_HARD
+    };
+
+    /**
+     * Variants available for the BOTTOM paddle.
+     * HARDWARE is excluded: the bottom is intended for human or software AI play.
+     */
+    static final PlayerVariant[] BOTTOM_VARIANTS = {
+        PlayerVariant.HUMAN, PlayerVariant.AI_EASY, PlayerVariant.AI_HARD
+    };
+
     // -------------------------------------------------------------------------
     // State machine
     // -------------------------------------------------------------------------
@@ -100,12 +117,11 @@ public class PongGame extends JPanel {
     // Players
     // -------------------------------------------------------------------------
 
-    PlayerVariant topVariant    = PlayerVariant.AI_HARD;
-    private PlayerVariant bottomVariant = PlayerVariant.HUMAN;
+    PlayerVariant topVariant;
+    private PlayerVariant bottomVariant;
 
     BasePlayer<PongState, PongAction> topPlayer;
     private BasePlayer<PongState, PongAction> bottomPlayer;
-    private HumanPlayer<PongState, PongAction> activeHumanPlayer;
 
     /** Provided by Launcher; null = no hardware connected. */
     private final PongHardwareAI hardwarePlayer;
@@ -124,7 +140,6 @@ public class PongGame extends JPanel {
     // -------------------------------------------------------------------------
 
     private volatile boolean running = false;
-    private Thread gameThread;
 
     // =========================================================================
     // Constructor
@@ -139,14 +154,19 @@ public class PongGame extends JPanel {
         this.hardwarePlayer = hardwarePlayer;
         boolean hwAvail = (hardwarePlayer != null);
 
+        // Defaults: top gets hardware if available, otherwise Software AI Easy;
+        //           bottom always starts as Software AI Hard.
+        topVariant    = hwAvail ? PlayerVariant.HARDWARE : PlayerVariant.AI_EASY;
+        bottomVariant = PlayerVariant.AI_HARD;
+
         scoreboard = new Scoreboard();
 
         setLayout(new BorderLayout());
         setBackground(Color.BLACK);
 
-        // Toolbars
-        topToolbar    = new PongToolbar(PongToolbar.Side.TOP,    topVariant,    hwAvail, scoreboard);
-        bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, bottomVariant, hwAvail, scoreboard);
+        // Toolbars — each side only shows the variants valid for that side
+        topToolbar    = new PongToolbar(PongToolbar.Side.TOP,    TOP_VARIANTS,    topVariant,    hwAvail, scoreboard);
+        bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, BOTTOM_VARIANTS, bottomVariant, hwAvail, scoreboard);
 
         topToolbar.setLockedOutVariant(bottomVariant);
         bottomToolbar.setLockedOutVariant(topVariant);
@@ -171,6 +191,7 @@ public class PongGame extends JPanel {
         // Initial players
         topPlayer    = createPlayer(topVariant);
         bottomPlayer = createPlayer(bottomVariant);
+        syncHardwareInjection(); // enable injection if hardware is the default top player
         wireHumanPlayer();
 
         resetBall();
@@ -229,7 +250,8 @@ public class PongGame extends JPanel {
         HardwareSignalSource rightSource = new HardwareSignalSource(pongManager, rightParser);
         // leftSource implements both BaseSignalSource and VoltageInjector; both sources
         // share the same serial connection so either can send injection commands.
-        return new PongHardwareAI("Hardware", leftSource, rightSource, leftSource);
+        return new PongHardwareAI("Hardware", leftSource, rightSource, leftSource,
+                NeuralHardwareConfig.PONG_FIRING_THRESHOLD_VOLTS);
     }
 
     // =========================================================================
@@ -282,7 +304,6 @@ public class PongGame extends JPanel {
      */
     private void wireHumanPlayer() {
         unbindHumanKeys();
-        activeHumanPlayer = null;
 
         HumanPlayer<PongState, PongAction> hp = null;
         if (topPlayer instanceof HumanPlayer<?, ?> h) {
@@ -296,7 +317,6 @@ public class PongGame extends JPanel {
         }
         if (hp == null) return;
 
-        activeHumanPlayer = hp;
         InputMap  im  = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am  = getActionMap();
         final HumanPlayer<PongState, PongAction> finalHp = hp;
@@ -342,16 +362,16 @@ public class PongGame extends JPanel {
      *
      * <p>AI presets (parameters here for easy tuning):
      * <ul>
-     *   <li>AI Easy - deadZone=22 px, reactionProb=0.72 (~28% tick skip)</li>
-     *   <li>AI Hard - deadZone=8 px,  reactionProb=1.00 (perfect reaction)</li>
+     *   <li>Software AI Easy - deadZone=22 px, reactionProb=0.72 (~28% tick skip)</li>
+     *   <li>Software AI Hard - deadZone=8 px,  reactionProb=1.00 (perfect reaction)</li>
      * </ul>
      */
     private BasePlayer<PongState, PongAction> createPlayer(PlayerVariant variant) {
         return switch (variant) {
             case HUMAN    -> buildHumanPlayer();
             case HARDWARE -> hardwarePlayer;
-            case AI_HARD  -> new PongSoftwareAI("AI Hard",  8, 1.00);
-            case AI_EASY  -> new PongSoftwareAI("AI Easy", 22, 0.72);
+            case AI_HARD  -> new PongSoftwareAI("Software AI Hard",  8, 1.00);
+            case AI_EASY  -> new PongSoftwareAI("Software AI Easy", 22, 0.72);
         };
     }
 
@@ -393,7 +413,7 @@ public class PongGame extends JPanel {
     /** Starts the daemon game-loop thread and requests keyboard focus. */
     public void start() {
         running    = true;
-        gameThread = new Thread(this::gameLoop, "pong-loop");
+        Thread gameThread = new Thread(this::gameLoop, "pong-loop");
         gameThread.setDaemon(true);
         gameThread.start();
         requestFocusInWindow();
@@ -436,9 +456,9 @@ public class PongGame extends JPanel {
         PongAction topAct    = topPlayer.getNextMove(topState);
         PongAction bottomAct = bottomPlayer.getNextMove(bottomState);
 
-        // Move paddles
-        topPaddleX    = clampPaddle(topPaddleX    + dx(topAct));
-        bottomPaddleX = clampPaddle(bottomPaddleX + dx(bottomAct));
+        // Move paddles — hardware player uses its own configured speed
+        topPaddleX    = clampPaddle(topPaddleX    + dx(topAct,    topPlayer    instanceof PongHardwareAI));
+        bottomPaddleX = clampPaddle(bottomPaddleX + dx(bottomAct, bottomPlayer instanceof PongHardwareAI));
 
         // Move ball
         ballX += ballVelX;
@@ -546,8 +566,15 @@ public class PongGame extends JPanel {
         hardwarePlayer.setInjectionEnabled(selected);
     }
 
-    private static int dx(PongAction a) {
-        return switch (a) { case LEFT -> -PADDLE_SPEED; case RIGHT -> PADDLE_SPEED; case IDLE -> 0; };
+    /**
+     * Returns the signed pixel delta for one paddle tick.
+     * When {@code isHardware} is {@code true}, uses
+     * {@link NeuralHardwareConfig#PONG_HARDWARE_PADDLE_SPEED} so the hardware
+     * response can be tuned independently of the software {@code PADDLE_SPEED}.
+     */
+    private static int dx(PongAction a, boolean isHardware) {
+        int speed = isHardware ? NeuralHardwareConfig.PONG_HARDWARE_PADDLE_SPEED : PADDLE_SPEED;
+        return switch (a) { case LEFT -> -speed; case RIGHT -> speed; case IDLE -> 0; };
     }
 
     private static int clampPaddle(int x) {
@@ -579,14 +606,14 @@ public class PongGame extends JPanel {
         ballVelX = (int) Math.round(ballVelX * scale);
         ballVelY = (int) Math.round(ballVelY * scale);
         // Ensure Y always keeps non-zero direction so the ball never gets stuck
-        if (ballVelY == 0) ballVelY = (ballVelY >= 0 ? 1 : -1);
+        if (ballVelY == 0) ballVelY = 1;
     }
 
     private void resetBall() {
         ballX    = FIELD_WIDTH  / 2 - BALL_SIZE / 2;
         ballY    = FIELD_HEIGHT / 2 - BALL_SIZE / 2;
         ballVelX = (Math.random() > 0.5 ? 1 : -1) * SPEED_VEL_X[ballSpeedLevel];
-        ballVelY = (Math.random() > 0.5 ? 1 : -1) * SPEED_VEL_Y[ballSpeedLevel];
+        ballVelY = SPEED_VEL_Y[ballSpeedLevel]; // always toward bottom (positive Y)
         topPaddleX    = FIELD_WIDTH / 2 - PADDLE_WIDTH / 2;
         bottomPaddleX = FIELD_WIDTH / 2 - PADDLE_WIDTH / 2;
     }
@@ -605,7 +632,7 @@ public class PongGame extends JPanel {
     private class GameCanvas extends JPanel {
 
         // Hit-test rectangles populated during paintPaused; used by the mouse listener.
-        private final Rectangle[] speedRects  = new Rectangle[5];
+        private final Rectangle[] speedReacts = new Rectangle[5];
         private Rectangle checkboxRect  = null;
         private Rectangle resumeRect    = null;
         private Rectangle resetRect     = null;
@@ -622,8 +649,8 @@ public class PongGame extends JPanel {
                     int mx = e.getX(), my = e.getY();
 
                     // Speed buttons 1-5
-                    for (int i = 0; i < speedRects.length; i++) {
-                        if (speedRects[i] != null && speedRects[i].contains(mx, my)) {
+                    for (int i = 0; i < speedReacts.length; i++) {
+                        if (speedReacts[i] != null && speedReacts[i].contains(mx, my)) {
                             ballSpeedLevel = i;
                             repaint();
                             return;
@@ -753,8 +780,8 @@ public class PongGame extends JPanel {
             for (int i = 0; i < 5; i++) {
                 boolean active = (i == ballSpeedLevel);
                 int rx = bx + i * (cellW + gap);
-                speedRects[i] = new Rectangle(rx, sy, cellW, cellW);
-                boolean hovered = speedRects[i].contains(mouseX, mouseY);
+                speedReacts[i] = new Rectangle(rx, sy, cellW, cellW);
+                boolean hovered = speedReacts[i].contains(mouseX, mouseY);
 
                 if (active) {
                     g.setColor(new Color(255, 200, 0));
@@ -825,13 +852,13 @@ public class PongGame extends JPanel {
             g.setFont(new Font("SansSerif", Font.PLAIN, 11));
             g.setColor(new Color(90, 90, 90));
             fm = g.getFontMetrics();
-            String hint = "1-5 speed  \u2022  C constant speed  \u2022  ESC resume  \u2022  R reset";
+            String hint = "1-5 speed  •  C constant speed  •  ESC resume  •  R reset";
             g.drawString(hint,
                     FIELD_WIDTH / 2 - fm.stringWidth(hint) / 2,
                     FIELD_HEIGHT / 2 + 106);
         }
 
-        /** Draws a labelled button rectangle with hover tinting. */
+        /** Draws a labeled button rectangle with hover tinting. */
         private void paintButton(Graphics2D g2, Rectangle r,
                                  String label, boolean hovered,
                                  Color baseColor, Color hoverColor) {

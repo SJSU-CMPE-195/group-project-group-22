@@ -47,11 +47,15 @@ public class PongToolbar extends JPanel {
 
     /**
      * @param side              which edge (TOP or BOTTOM)
+     * @param allowedVariants   the variants shown in this toolbar's dropdown;
+     *                          pass only the variants valid for this side
+     *                          (e.g. TOP omits HUMAN, BOTTOM omits HARDWARE)
      * @param initial           variant pre-selected when the toolbar is first shown
      * @param hardwareAvailable {@code false} grays out the HARDWARE option
      * @param scoreboard        shared scoreboard instance for popup access
      */
     public PongToolbar(Side side,
+                       PlayerVariant[] allowedVariants,
                        PlayerVariant initial,
                        boolean hardwareAvailable,
                        Scoreboard scoreboard) {
@@ -73,7 +77,7 @@ public class PongToolbar extends JPanel {
         add(sideLabel);
 
         // ── Player variant dropdown ───────────────────────────────────────────
-        dropdown = new JComboBox<>(PlayerVariant.values());
+        dropdown = new JComboBox<>(allowedVariants);
         dropdown.setSelectedItem(initial);
         dropdown.setRenderer(new VariantCellRenderer());
         dropdown.setPreferredSize(new Dimension(148, 26));
