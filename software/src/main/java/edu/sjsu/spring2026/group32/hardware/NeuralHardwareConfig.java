@@ -16,6 +16,13 @@ public final class NeuralHardwareConfig {
      */
     public static final double CONSTANT_INJECT_VOLTAGE = 3.0;
 
+    /**
+     * Constant voltage injected into the Pong hardware to drive the left or right
+     * 3-neuron channel toward the ball.  Adjust during hardware testing to tune
+     * how reliably the neurons fire each game tick.
+     */
+    public static final double PONG_CONSTANT_INJECT_VOLTAGE = 3.0;
+
     private NeuralHardwareConfig() {
         // Utility class.
     }

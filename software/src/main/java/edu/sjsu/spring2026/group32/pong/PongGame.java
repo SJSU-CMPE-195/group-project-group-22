@@ -182,7 +182,11 @@ public class PongGame extends JPanel {
      * the Pong module instead of in {@code Launcher}.
      */
     public static JFrame launchFromLauncher(SerialConnectionManager pongManager) {
-        PongGame game = new PongGame(createHardwarePlayer(pongManager));
+        // Capture the hardware player before handing it to the game so the
+        // window listener and shutdown hook can reference it directly —
+        // matching the same two-layer teardown used by PoC_HitTheZone.
+        PongHardwareAI hwPlayer = createHardwarePlayer(pongManager);
+        PongGame game = new PongGame(hwPlayer);
 
         JFrame frame = new JFrame("Pong");
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -191,8 +195,17 @@ public class PongGame extends JPanel {
             @Override
             public void windowClosed(WindowEvent e) {
                 game.stop();
+                // Layer 1: stop injection when the window closes (port stays open,
+                // mirroring HTZ's dispose() → shutdownForWindowClose() pattern).
+                if (hwPlayer != null) hwPlayer.stopInjectionOnly();
             }
         });
+
+        // Layer 2: release the serial port when the JVM exits (window close,
+        // Ctrl-C, or any other exit path), mirroring HTZ's shutdown-hook pattern.
+        if (hwPlayer != null) {
+            Runtime.getRuntime().addShutdownHook(new Thread(hwPlayer::close));
+        }
 
         ConnectionStatusPanel pongStatus = new ConnectionStatusPanel();
         pongStatus.addDevice("Pong", pongManager);
@@ -212,9 +225,11 @@ public class PongGame extends JPanel {
 
         NeuralSignalParser leftParser = new NeuralSignalParser(0);
         NeuralSignalParser rightParser = new NeuralSignalParser(1);
-        HardwareSignalSource leftSource = new HardwareSignalSource(pongManager, leftParser);
+        HardwareSignalSource leftSource  = new HardwareSignalSource(pongManager, leftParser);
         HardwareSignalSource rightSource = new HardwareSignalSource(pongManager, rightParser);
-        return new PongHardwareAI("Hardware", leftSource, rightSource);
+        // leftSource implements both BaseSignalSource and VoltageInjector; both sources
+        // share the same serial connection so either can send injection commands.
+        return new PongHardwareAI("Hardware", leftSource, rightSource, leftSource);
     }
 
     // =========================================================================
@@ -365,6 +380,7 @@ public class PongGame extends JPanel {
 
         topPlayer    = createPlayer(topVariant);
         bottomPlayer = createPlayer(bottomVariant);
+        syncHardwareInjection();
         wireHumanPlayer();
         resetBall();
         // Stay in PAUSED so the user can review before pressing ESC
@@ -405,6 +421,13 @@ public class PongGame extends JPanel {
     }
 
     void tickPlaying() {
+        // Safety guard: if the ball has somehow lost all velocity, stop injection
+        // so the neurons aren't stimulated while the game is effectively frozen.
+        if (ballVelX == 0 && ballVelY == 0) {
+            stopHardwareInjection();
+            return;
+        }
+
         // State snapshots
         PongState topState    = new PongState(topPaddleX,    ballX, ballY, FIELD_WIDTH);
         PongState bottomState = new PongState(bottomPaddleX, ballX, ballY, FIELD_WIDTH);
@@ -475,11 +498,16 @@ public class PongGame extends JPanel {
         switch (gameState) {
             case PAUSED    -> startCountdown();
             case PLAYING,
-                 COUNTDOWN -> { gameState = GameState.PAUSED; lockToolbars(false); }
+                 COUNTDOWN -> {
+                     stopHardwareInjection();
+                     gameState = GameState.PAUSED;
+                     lockToolbars(false);
+                 }
         }
     }
 
     private void resetGame() {
+        stopHardwareInjection();
         topScore = 0; bottomScore = 0;
         gameState = GameState.PAUSED;
         lockToolbars(false);
@@ -487,6 +515,7 @@ public class PongGame extends JPanel {
     }
 
     void startCountdown() {
+        stopHardwareInjection();
         gameState        = GameState.COUNTDOWN;
         countdownStartMs = System.currentTimeMillis();
         lockToolbars(true);
@@ -496,6 +525,26 @@ public class PongGame extends JPanel {
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    /**
+     * Stops voltage injection on the hardware player if one is active.
+     * Safe to call from any game state and when {@code hardwarePlayer} is null.
+     */
+    private void stopHardwareInjection() {
+        if (hardwarePlayer != null) hardwarePlayer.stopInjectionOnly();
+    }
+
+    /**
+     * Enables injection when the HARDWARE variant is selected for either paddle;
+     * disables (and immediately stops) injection when neither paddle is HARDWARE.
+     * Called whenever {@link #topVariant} or {@link #bottomVariant} changes.
+     */
+    private void syncHardwareInjection() {
+        if (hardwarePlayer == null) return;
+        boolean selected = (topVariant    == PlayerVariant.HARDWARE)
+                        || (bottomVariant == PlayerVariant.HARDWARE);
+        hardwarePlayer.setInjectionEnabled(selected);
+    }
 
     private static int dx(PongAction a) {
         return switch (a) { case LEFT -> -PADDLE_SPEED; case RIGHT -> PADDLE_SPEED; case IDLE -> 0; };
