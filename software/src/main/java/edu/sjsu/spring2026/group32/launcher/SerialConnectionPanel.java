@@ -53,6 +53,9 @@ public class SerialConnectionPanel extends JPanel {
     private SerialConnectionManager connectionManager;
     private ConnectionListener       listener;
 
+    // ── Expected channel count (0 = no validation) ────────────────────────────
+    private int expectedChannelCount = 0;
+
     // ── Disconnect watchdog ───────────────────────────────────────────────────
     /** Polls the firmware stream heartbeat once per second to detect USB removal. */
     private ScheduledExecutorService watchdog;
@@ -121,6 +124,17 @@ public class SerialConnectionPanel extends JPanel {
     /** Register the listener that receives connection/disconnection callbacks. */
     public void setConnectionListener(ConnectionListener listener) {
         this.listener = listener;
+    }
+
+    /**
+     * Set the channel count this slot expects.  After a successful {@code INFO?}
+     * handshake, {@link #connect()} will warn the user (and optionally abort) if
+     * the connected device reports a different channel count.
+     *
+     * <p>Pass {@code 0} (the default) to disable validation.</p>
+     */
+    public void setExpectedChannelCount(int n) {
+        this.expectedChannelCount = n;
     }
 
     /** Register an optional sink for log/status messages. */
@@ -225,22 +239,76 @@ public class SerialConnectionPanel extends JPanel {
             return;
         }
 
-        connectionManager = mgr;
-
         // Send INFO? and parse the #INFO: capability response from the firmware.
         boolean gotInfo = mgr.readInfoHandshake(20);
-        String label = item.toString();
+
+        // Short COM name used in the status label (e.g. "COM4").
+        // Full descriptive label goes to the log only — keeps the status row from wrapping.
+        String portShort = item.device.getSystemPortName();
+
+        // Full label for log messages.
+        String logLabel = item.toString();
         if (gotInfo) {
-            label += "  [" + mgr.getDeviceName() + ", CH=" + mgr.getDeviceChannelCount() + "]";
+            logLabel += "  [" + mgr.getDeviceName() + ", CH=" + mgr.getDeviceChannelCount() + "]";
             log("Device: " + mgr.getDeviceName() + ", channels: " + mgr.getDeviceChannelCount());
         } else {
             log("Warning: no #INFO response from device — channel count unknown");
         }
 
-        setConnectedState(true, label);
-        log("── Connected: " + label + " ──");
+        // ── Mismatch check ────────────────────────────────────────────────────
+        if (gotInfo && expectedChannelCount > 0
+                && mgr.getDeviceChannelCount() != expectedChannelCount) {
 
-        if (listener != null) listener.onConnected(connectionManager, label);
+            int actual = mgr.getDeviceChannelCount();
+            String neededDesc = expectedChannelCount == 1
+                    ? "1-channel  (Hit The Zone / 3-neuron)"
+                    : "2-channel  (Pong / 6-neuron)";
+            String foundDesc = actual == 1
+                    ? "1-channel  (Hit The Zone / 3-neuron)"
+                    : actual + "-channel  (Pong / 6-neuron)";
+
+            int choice = JOptionPane.showOptionDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "<html><b>Wrong ESP32 connected to this slot.</b><br><br>"
+                    + "This slot expects a <b>" + neededDesc + "</b> device,<br>"
+                    + "but the connected ESP32 reports <b>" + foundDesc + "</b>.<br><br>"
+                    + "Disconnect and connect the correct device, or continue anyway?</html>",
+                    "Wrong Device",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE,
+                    null,
+                    new String[]{"Disconnect", "Continue Anyway"},
+                    "Disconnect");
+
+            if (choice != 1) {
+                // User chose to disconnect — abort and let them fix it.
+                mgr.disconnect();
+                log("⚠ Disconnected: wrong device for this slot "
+                        + "(CH=" + actual + ", expected CH=" + expectedChannelCount + ")");
+                return;
+            }
+
+            // User chose to continue with the mismatched device — show orange status.
+            log("⚠ Proceeding with wrong device "
+                    + "(CH=" + actual + ", expected CH=" + expectedChannelCount + ")");
+            log("── Connected (mismatch): " + logLabel + " ──");
+            connectionManager = mgr;
+            setConnectedState(true,
+                    portShort + " — ⚠ CH=" + actual + " (need " + expectedChannelCount + ")",
+                    new Color(220, 140, 0));
+            if (listener != null) listener.onConnected(connectionManager, logLabel);
+            startWatchdog();
+            return;
+        }
+
+        // ── Normal connect path ───────────────────────────────────────────────
+        // Compact status text keeps the FlowLayout row from wrapping.
+        String shortStatus = portShort + (gotInfo ? " — CH=" + mgr.getDeviceChannelCount() : "");
+        connectionManager = mgr;
+        setConnectedState(true, shortStatus, new Color(40, 190, 40));
+        log("── Connected: " + logLabel + " ──");
+
+        if (listener != null) listener.onConnected(connectionManager, logLabel);
         startWatchdog();
     }
 
@@ -301,9 +369,23 @@ public class SerialConnectionPanel extends JPanel {
     }
 
     // =========================================================================
-    //  UI state helper
+    //  UI state helpers
     // =========================================================================
+
+    /** Disconnect overload — always uses red dot. */
     private void setConnectedState(boolean connected, String portLabel) {
+        setConnectedState(connected, portLabel, new Color(40, 190, 40));
+    }
+
+    /**
+     * Update all UI controls to reflect the connected/disconnected state.
+     *
+     * @param connected  {@code true} to show the connected state
+     * @param statusText Short text shown next to the dot (e.g. {@code "COM4 — CH=1"}).
+     *                   Ignored when {@code connected} is {@code false}.
+     * @param dotColor   Dot color when connected (green for OK, orange for mismatch).
+     */
+    private void setConnectedState(boolean connected, String statusText, Color dotColor) {
         SwingUtilities.invokeLater(() -> {
             connectBtn.setEnabled(!connected);
             disconnectBtn.setEnabled(connected);
@@ -312,8 +394,8 @@ public class SerialConnectionPanel extends JPanel {
             autoFilterCheck.setEnabled(!connected);
 
             if (connected) {
-                statusDot.setForeground(new Color(40, 190, 40));
-                statusLabel.setText("Connected: " + portLabel);
+                statusDot.setForeground(dotColor);
+                statusLabel.setText(statusText);
             } else {
                 statusDot.setForeground(Color.RED);
                 statusLabel.setText("Disconnected");

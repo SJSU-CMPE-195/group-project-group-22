@@ -63,6 +63,7 @@ public class Launcher extends JFrame {
         });
 
         htzPanel = new SerialConnectionPanel();
+        htzPanel.setExpectedChannelCount(1);   // 3-neuron single-channel firmware
         htzPanel.setBorder(new TitledBorder("Hit The Zone  -  3-neuron (single channel)"));
         htzPanel.setLogSink(msg -> log("[HTZ] " + msg));
         htzPanel.setConnectionListener(new SerialConnectionPanel.ConnectionListener() {
@@ -80,6 +81,7 @@ public class Launcher extends JFrame {
         });
 
         pongPanel = new SerialConnectionPanel();
+        pongPanel.setExpectedChannelCount(2);  // 6-neuron dual-channel firmware
         pongPanel.setBorder(new TitledBorder("Pong  -  6-neuron (dual channel)"));
         pongPanel.setLogSink(msg -> log("[Pong] " + msg));
         pongPanel.setConnectionListener(new SerialConnectionPanel.ConnectionListener() {
