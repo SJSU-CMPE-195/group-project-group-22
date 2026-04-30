@@ -9,9 +9,6 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.util.Collections;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -37,12 +34,6 @@ public class SerialConnectionPanel extends JPanel {
         void onDisconnected();
     }
 
-    // ── ESP32 bridge keywords ──────────────────────────────────────────────────
-    private static final String[] ESP32_BRIDGE_KEYWORDS = {
-        "CP210", "CH340", "CH341", "FT232", "FTDI", "ESP32", "ESP8266",
-        "Silicon Laboratories", "Silicon Labs"
-    };
-
     // ── UI components ──────────────────────────────────────────────────────────
     private final JComboBox<PortItem> portSelector;
     private final JButton             refreshBtn;
@@ -67,9 +58,20 @@ public class SerialConnectionPanel extends JPanel {
      *  claimed by another panel).  Never {@code null}; defaults to empty set. */
     private Supplier<Set<String>> excludedPortsSupplier = Collections::emptySet;
 
-    // ── Disconnect watchdog ───────────────────────────────────────────────────
-    /** Polls the firmware stream heartbeat once per second to detect USB removal. */
-    private ScheduledExecutorService watchdog;
+    // ── Disconnect watcher ────────────────────────────────────────────────────
+    /**
+     * Registered with the {@link SerialConnectionManager} on every successful
+     * connect.  The manager's internal watchdog calls {@code onDisconnected}
+     * when the RX heartbeat times out, which forwards the event to
+     * {@link #handleUnexpectedDisconnect()} on the EDT.
+     */
+    private final SerialConnectionManager.SerialListener disconnectWatcher =
+        new SerialConnectionManager.SerialListener() {
+            @Override
+            public void onDisconnected(String reason) {
+                SwingUtilities.invokeLater(SerialConnectionPanel.this::handleUnexpectedDisconnect);
+            }
+        };
 
     // ── Log sink (optional) ───────────────────────────────────────────────────
     /** Optional callback for status/log messages. May be null. */
@@ -204,7 +206,7 @@ public class SerialConnectionPanel extends JPanel {
      */
     public void disconnect() {
         if (connectionManager == null) return;
-        stopWatchdog();
+        connectionManager.removeListener(disconnectWatcher);  // prevent spurious callback
         connectionManager.disconnect();
         connectionManager = null;
         connectedPortName = null;
@@ -231,7 +233,7 @@ public class SerialConnectionPanel extends JPanel {
         int shown = 0;
         int reselect = -1;
         for (SerialDevice d : all) {
-            if (filter && !looksLikeEsp32Bridge(d)) continue;
+            if (filter && !SerialConnectionManager.isKnownEsp32Bridge(d)) continue;
             if (excluded.contains(d.getSystemPortName())) continue;   // already used by another panel
             portSelector.addItem(new PortItem(d));
             shown++;
@@ -260,14 +262,6 @@ public class SerialConnectionPanel extends JPanel {
         }
     }
 
-    private static boolean looksLikeEsp32Bridge(SerialDevice d) {
-        String name = d.getDescriptivePortName().toUpperCase();
-        for (String kw : ESP32_BRIDGE_KEYWORDS) {
-            if (name.contains(kw.toUpperCase())) return true;
-        }
-        return false;
-    }
-
     // =========================================================================
     //  Connect
     // =========================================================================
@@ -283,7 +277,7 @@ public class SerialConnectionPanel extends JPanel {
         // ── Unsupported device guard ──────────────────────────────────────────
         // Warn if the selected port doesn't match any known ESP32 USB-UART bridge.
         // This can happen when the ESP32 filter is unchecked or a stale port is selected.
-        if (!looksLikeEsp32Bridge(item.device)) {
+        if (!SerialConnectionManager.isKnownEsp32Bridge(item.device)) {
             String desc = item.device.getDescriptivePortName();
             String portName = item.device.getSystemPortName();
             String displayName = desc.isBlank() ? portName : portName + "  " + desc;
@@ -320,6 +314,9 @@ public class SerialConnectionPanel extends JPanel {
                     "Connection Failed", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        // Register for unexpected-disconnect events driven by the manager's internal watchdog.
+        mgr.addListener(disconnectWatcher);
 
         // Send INFO? and parse the #INFO: capability response from the firmware.
         boolean gotInfo = mgr.readInfoHandshake(20);
@@ -380,7 +377,6 @@ public class SerialConnectionPanel extends JPanel {
                     portShort + " — ⚠ CH=" + actual + " (need " + expectedChannelCount + ")",
                     new Color(220, 140, 0));
             if (listener != null) listener.onConnected(connectionManager, logLabel);
-            startWatchdog();
             return;
         }
 
@@ -393,58 +389,21 @@ public class SerialConnectionPanel extends JPanel {
         log("── Connected: " + logLabel + " ──");
 
         if (listener != null) listener.onConnected(connectionManager, logLabel);
-        startWatchdog();
     }
 
     // =========================================================================
-    //  Disconnect watchdog
+    //  Unexpected-disconnect handler
     // =========================================================================
 
     /**
-     * Starts a 1-second polling loop that detects surprise USB removal by
-     * watching the firmware's data stream rather than OS-level port state.
-     *
-     * <p>The ESP32 firmware sends a CSV line every 10 ms. Each successful
-     * {@link SerialConnectionManager#getNextLine()} call updates a heartbeat
-     * timestamp. If 3 000 ms pass without a line — 300 missed frames — the
-     * device is treated as gone and the disconnect flow is triggered.</p>
-     *
-     * <p>A secondary {@code isConnected()} check catches cases where a read
-     * exception already caused the manager to self-disconnect (e.g. a Scanner
-     * IOException surfaced before the heartbeat timeout).</p>
-     */
-    private void startWatchdog() {
-        stopWatchdog();
-        watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "serial-watchdog");
-            t.setDaemon(true);
-            return t;
-        });
-        watchdog.scheduleAtFixedRate(() -> {
-            if (connectionManager == null) return;
-            boolean streamSilent  = connectionManager.isRxTimedOut();
-            boolean managerClosed = !connectionManager.isConnected();
-            if (streamSilent || managerClosed) {
-                SwingUtilities.invokeLater(this::handleUnexpectedDisconnect);
-            }
-        }, 1, 1, TimeUnit.SECONDS);
-    }
-
-    private void stopWatchdog() {
-        if (watchdog != null) {
-            watchdog.shutdownNow();
-            watchdog = null;
-        }
-    }
-
-    /**
-     * Called on the EDT when the watchdog detects the port has dropped.
-     * Resets all UI controls and notifies the registered listener.
+     * Called on the EDT when the manager's internal watchdog fires
+     * {@code onDisconnected} (RX heartbeat timeout or read exception).
+     * The manager has already torn down the port by this point, so only
+     * UI state needs to be reset here.
      */
     private void handleUnexpectedDisconnect() {
         if (connectionManager == null) return; // already handled
         log("⚠ Device disconnected unexpectedly.");
-        try { connectionManager.disconnect(); } catch (Exception ignored) {}
         connectionManager = null;
         connectedPortName = null;
         portSelector.setSelectedIndex(0);       // reset to "-- Select a port --"

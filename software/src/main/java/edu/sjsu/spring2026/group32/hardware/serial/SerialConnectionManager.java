@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 public class SerialConnectionManager {
@@ -31,6 +33,12 @@ public class SerialConnectionManager {
     private static final long RX_TIMEOUT_MS = 3_000;
     private static final long INFO_WAIT_SLICE_MS = 25;
 
+    /** Canonical set of USB-UART bridge keywords that identify ESP32 hardware. */
+    private static final String[] KNOWN_ESP32_BRIDGE_KEYWORDS = {
+        "CP210", "CH340", "CH341", "FT232", "FTDI", "ESP32", "ESP8266",
+        "Silicon Laboratories", "Silicon Labs"
+    };
+
     private final Supplier<SerialDevice[]> portProvider;
     private final int readTimeoutMs;
     private final List<SerialListener> listeners = new CopyOnWriteArrayList<>();
@@ -39,6 +47,7 @@ public class SerialConnectionManager {
     private SerialDevice comPort;
     private PrintWriter lineWriter;
     private ExecutorService readerThread;
+    private ScheduledExecutorService watchdogThread;
     private volatile boolean readerRunning = false;
 
     private volatile long lastRxMs = 0;
@@ -57,6 +66,22 @@ public class SerialConnectionManager {
         this.readTimeoutMs = readTimeoutMs;
     }
 
+    /**
+     * Returns {@code true} if the given device's descriptive name matches a
+     * known ESP32 USB-UART bridge adapter (CP210x, CH340/341, FT232/FTDI,
+     * native ESP32/ESP8266 USB, or Silicon Labs).
+     *
+     * <p>This is the single authoritative keyword list used by both the
+     * auto-connect path and the UI filter in {@code SerialConnectionPanel}.</p>
+     */
+    public static boolean isKnownEsp32Bridge(SerialDevice device) {
+        String name = device.getDescriptivePortName().toUpperCase();
+        for (String keyword : KNOWN_ESP32_BRIDGE_KEYWORDS) {
+            if (name.contains(keyword.toUpperCase())) return true;
+        }
+        return false;
+    }
+
     public boolean connect() {
         SerialDevice[] ports;
         try {
@@ -68,8 +93,7 @@ public class SerialConnectionManager {
         }
 
         for (SerialDevice port : ports) {
-            String name = port.getDescriptivePortName();
-            if (name.contains("CP210") || name.contains("CH340") || name.contains("USB-to-Serial")) {
+            if (isKnownEsp32Bridge(port)) {
                 if (openConfiguredPort(port)) {
                     return true;
                 }
@@ -131,6 +155,7 @@ public class SerialConnectionManager {
 
         SerialDevice activePort = comPort;
         readerThread.execute(() -> runReaderLoop(activePort));
+        startWatchdog();
     }
 
     private void runReaderLoop(SerialDevice activePort) {
@@ -344,12 +369,19 @@ public class SerialConnectionManager {
     private synchronized void disconnectInternal(boolean gracefulStop,
                                                  String disconnectReason,
                                                  boolean notifyListeners) {
+        if (comPort == null) {
+            // Already disconnected; wake any thread blocked in readInfoHandshake and return.
+            synchronized (infoMonitor) { infoMonitor.notifyAll(); }
+            return;
+        }
+
         if (gracefulStop && isConnected()) {
             stopAllInjection();
         }
 
         readerRunning = false;
         stopReaderThread();
+        stopWatchdog();
 
         if (lineWriter != null) {
             lineWriter.close();
@@ -381,6 +413,37 @@ public class SerialConnectionManager {
         if (readerThread != null) {
             readerThread.shutdownNow();
             readerThread = null;
+        }
+    }
+
+    /**
+     * Starts a 1-second polling loop that fires {@code onDisconnected} if no
+     * data has been received for {@link #RX_TIMEOUT_MS} milliseconds.
+     *
+     * <p>Using {@code shutdown()} rather than {@code shutdownNow()} avoids
+     * self-interruption when the watchdog task itself calls
+     * {@link #disconnectInternal}.</p>
+     */
+    private void startWatchdog() {
+        stopWatchdog();
+        ScheduledExecutorService wdt = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "SerialConnectionManager-Watchdog");
+            t.setDaemon(true);
+            return t;
+        });
+        watchdogThread = wdt;
+        wdt.scheduleAtFixedRate(() -> {
+            if (isRxTimedOut()) {
+                disconnectInternal(false, "RX timeout — no data for 3 s", true);
+            }
+        }, 1, 1, TimeUnit.SECONDS);
+    }
+
+    private void stopWatchdog() {
+        ScheduledExecutorService wdt = watchdogThread;
+        watchdogThread = null;
+        if (wdt != null) {
+            wdt.shutdown();   // don't interrupt — may be called from the watchdog thread itself
         }
     }
 }
