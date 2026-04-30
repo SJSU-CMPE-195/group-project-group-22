@@ -199,6 +199,8 @@ public class BidirectionalTest extends JFrame {
         connectionManager.stopAllInjection();
         voltageGraph.setInjection(0, false, 0.0);
         voltageGraph.setInjection(1, false, 0.0);
+        injectionPanels[0].setInjecting(false);
+        injectionPanels[1].setInjecting(false);
         liveDataPanel.appendSystemLog("-> STOP_INJECT");
     }
 
@@ -256,6 +258,7 @@ public class BidirectionalTest extends JFrame {
             }
 
             liveDataPanel.setModeInjecting(channel);
+            injectionPanels[channel].setInjecting(true);
             if (parts.length > voltageIndex) {
                 try {
                     double volts = Double.parseDouble(parts[voltageIndex].replace("V", "").trim());
@@ -272,11 +275,21 @@ public class BidirectionalTest extends JFrame {
             if (parts.length >= 2 && parts[1].startsWith("CH")) {
                 int channel = "CH2".equals(parts[1]) ? 1 : 0;
                 voltageGraph.setInjection(channel, false, 0.0);
+                // Only release the panel if the interval cycle is fully done.
+                // During interval mode the Java side stops/restarts pulses itself;
+                // remainingRepeats > 0 means another pulse is still queued.
+                if (remainingRepeats[channel] == 0) {
+                    injectionPanels[channel].setInjecting(false);
+                }
             } else {
                 voltageGraph.setInjection(0, false, 0.0);
                 voltageGraph.setInjection(1, false, 0.0);
+                if (remainingRepeats[0] == 0) injectionPanels[0].setInjecting(false);
+                if (remainingRepeats[1] == 0) injectionPanels[1].setInjecting(false);
             }
-            liveDataPanel.setModeNormal();
+            if (remainingRepeats[0] == 0 && remainingRepeats[1] == 0) {
+                liveDataPanel.setModeNormal();
+            }
             return;
         }
 
@@ -284,6 +297,8 @@ public class BidirectionalTest extends JFrame {
             liveDataPanel.setModeNormal();
             voltageGraph.setInjection(0, false, 0.0);
             voltageGraph.setInjection(1, false, 0.0);
+            injectionPanels[0].setInjecting(false);
+            injectionPanels[1].setInjecting(false);
         }
     }
 
@@ -343,6 +358,7 @@ public class BidirectionalTest extends JFrame {
         liveDataPanel.appendSystemLog(String.format("-> INJECT_V_CH%d:%.3f",
                 channelIndex + 1, currentInjectionVoltage[channelIndex]));
         voltageGraph.setInjection(channelIndex, true, currentInjectionVoltage[channelIndex]);
+        injectionPanels[channelIndex].setInjecting(true);
 
         if (injectionPanels[channelIndex].isContinuousMode()) {
             return;
@@ -361,6 +377,7 @@ public class BidirectionalTest extends JFrame {
 
         if (remainingRepeats[channelIndex] <= 1) {
             remainingRepeats[channelIndex] = 0;
+            injectionPanels[channelIndex].setInjecting(false);
             return;
         }
         if (remainingRepeats[channelIndex] != Integer.MAX_VALUE) {
@@ -385,6 +402,7 @@ public class BidirectionalTest extends JFrame {
         voltageInjector.stopInjection(channelIndex + 1);
         liveDataPanel.appendSystemLog("-> STOP_INJECT_CH" + (channelIndex + 1));
         voltageGraph.setInjection(channelIndex, false, 0.0);
+        injectionPanels[channelIndex].setInjecting(false);
     }
 
     private void cancelPendingTask(int channelIndex) {

@@ -20,6 +20,9 @@ final class InjectionChannelPanel extends JPanel {
     private final JCheckBox infiniteCheck;
     private final JPanel intervalOptionsPanel;
 
+    private boolean controlsEnabled = false;
+    private boolean injecting = false;
+
     InjectionChannelPanel(int channelNumber, Runnable onInject, Runnable onStop) {
         super(new BorderLayout(6, 4));
         this.channelNumber = channelNumber;
@@ -101,7 +104,11 @@ final class InjectionChannelPanel extends JPanel {
         intervalRadio.addItemListener(e -> {
             boolean intervalMode = intervalRadio.isSelected();
             intervalOptionsPanel.setVisible(intervalMode);
-            repeatSpinner.setEnabled(intervalMode && !infiniteCheck.isSelected());
+            boolean inputsEnabled = controlsEnabled && !injecting;
+            onSpinner.setEnabled(intervalMode && inputsEnabled);
+            offSpinner.setEnabled(intervalMode && inputsEnabled);
+            infiniteCheck.setEnabled(intervalMode && inputsEnabled);
+            repeatSpinner.setEnabled(intervalMode && inputsEnabled && !infiniteCheck.isSelected());
         });
 
         modeRow.add(new JLabel("Mode:"));
@@ -179,8 +186,11 @@ final class InjectionChannelPanel extends JPanel {
     }
 
     void setControlsEnabled(boolean enabled) {
-        injectButton.setEnabled(enabled);
-        stopButton.setEnabled(enabled);
+        controlsEnabled = enabled;
+        if (!enabled) {
+            injecting = false;
+        }
+        refreshButtonStates();
         voltageField.setEnabled(enabled);
         voltageSlider.setEnabled(enabled);
         continuousRadio.setEnabled(enabled);
@@ -189,6 +199,25 @@ final class InjectionChannelPanel extends JPanel {
         offSpinner.setEnabled(enabled && isIntervalMode());
         infiniteCheck.setEnabled(enabled && isIntervalMode());
         repeatSpinner.setEnabled(enabled && isIntervalMode() && !isInfinite());
+    }
+
+    void setInjecting(boolean active) {
+        injecting = active;
+        refreshButtonStates();
+        boolean inputsEnabled = controlsEnabled && !injecting;
+        voltageField.setEnabled(inputsEnabled);
+        voltageSlider.setEnabled(inputsEnabled);
+        continuousRadio.setEnabled(inputsEnabled);
+        intervalRadio.setEnabled(inputsEnabled);
+        onSpinner.setEnabled(inputsEnabled && isIntervalMode());
+        offSpinner.setEnabled(inputsEnabled && isIntervalMode());
+        infiniteCheck.setEnabled(inputsEnabled && isIntervalMode());
+        repeatSpinner.setEnabled(inputsEnabled && isIntervalMode() && !isInfinite());
+    }
+
+    private void refreshButtonStates() {
+        injectButton.setEnabled(controlsEnabled && !injecting);
+        stopButton.setEnabled(controlsEnabled && injecting);
     }
 
     int getChannelNumber() {
