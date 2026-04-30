@@ -228,6 +228,36 @@ public class SerialConnectionPanel extends JPanel {
             return;
         }
 
+        // ── Unsupported device guard ──────────────────────────────────────────
+        // Warn if the selected port doesn't match any known ESP32 USB-UART bridge.
+        // This can happen when the ESP32 filter is unchecked or a stale port is selected.
+        if (!looksLikeEsp32Bridge(item.device)) {
+            String desc = item.device.getDescriptivePortName();
+            String portName = item.device.getSystemPortName();
+            String displayName = desc.isBlank() ? portName : portName + "  " + desc;
+
+            int choice = JOptionPane.showOptionDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "<html><b>This port does not look like a supported ESP32 device.</b><br><br>"
+                    + "<b>Port:</b> " + displayName + "<br><br>"
+                    + "Supported devices use a known USB-UART bridge<br>"
+                    + "(CP210x, CH340, CH341, FT232, FTDI, or ESP32 native USB).<br><br>"
+                    + "Connecting to an unsupported device may produce garbage data<br>"
+                    + "or conflict with another application using this port.",
+                    "Unsupported Device",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE,
+                    null,
+                    new String[]{"Cancel", "Connect Anyway"},
+                    "Cancel");
+
+            if (choice != 1) {
+                log("Cancelled — " + displayName + " is not a recognised ESP32 bridge.");
+                return;
+            }
+            log("⚠ Connecting to unrecognised device: " + displayName);
+        }
+
         SerialConnectionManager mgr =
                 new SerialConnectionManager(RealSerialDevice::getRealPorts, 2000);
 
