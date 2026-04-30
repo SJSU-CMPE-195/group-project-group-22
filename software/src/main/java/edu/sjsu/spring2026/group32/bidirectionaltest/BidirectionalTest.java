@@ -5,7 +5,6 @@ import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -45,6 +44,7 @@ public class BidirectionalTest extends JFrame {
     private final int[] remainingRepeats = new int[2];
     private final double[] currentInjectionVoltage = new double[2];
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private boolean dualChannelActive = false;
 
     private final SerialConnectionManager.SerialListener deviceListener =
             new SerialConnectionManager.SerialListener() {
@@ -102,7 +102,6 @@ public class BidirectionalTest extends JFrame {
 
         voltageGraph = new VoltageGraphPanel();
         liveDataPanel = new LiveDataPanel();
-        liveDataPanel.setChannelVisibilityListener(voltageGraph::setChannelVisible);
 
         DeviceSelectorPanel selectorPanel = new DeviceSelectorPanel(
                 htzManager,
@@ -113,7 +112,6 @@ public class BidirectionalTest extends JFrame {
         injectionPanels[0] = new InjectionChannelPanel(1, () -> injectVoltage(0), () -> stopInjection(0));
         injectionPanels[1] = new InjectionChannelPanel(2, () -> injectVoltage(1), () -> stopInjection(1));
         ch2InjectionPanel = injectionPanels[1];
-        ch2InjectionPanel.setVisible(false);
 
         buildUi(selectorPanel);
 
@@ -140,7 +138,6 @@ public class BidirectionalTest extends JFrame {
 
         root.add(selectorPanel, BorderLayout.NORTH);
 
-        voltageGraph.setBorder(new TitledBorder("Voltage (V)"));
         voltageGraph.setPreferredSize(new Dimension(420, 420));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, liveDataPanel, voltageGraph);
@@ -293,7 +290,9 @@ public class BidirectionalTest extends JFrame {
     private void setConnectedState(boolean connected) {
         SwingUtilities.invokeLater(() -> {
             injectionPanels[0].setControlsEnabled(connected);
-            injectionPanels[1].setControlsEnabled(connected && ch2InjectionPanel.isVisible());
+            injectionPanels[1].setControlsEnabled(connected && dualChannelActive);
+            liveDataPanel.setConnected(connected);
+            voltageGraph.setConnected(connected);
 
             if (!connected) {
                 liveDataPanel.resetReadings();
@@ -410,22 +409,21 @@ public class BidirectionalTest extends JFrame {
     }
 
     private void revealSecondChannel() {
-        if (ch2InjectionPanel.isVisible()) {
+        if (dualChannelActive) {
             return;
         }
 
+        dualChannelActive = true;
         liveDataPanel.setDualChannelAvailable(true);
         liveDataPanel.setChannelSelected(1, true);
-        ch2InjectionPanel.setVisible(true);
+        voltageGraph.setDualChannelAvailable(true);
         injectionPanels[1].setControlsEnabled(hasActiveConnection());
-        revalidate();
-        repaint();
     }
 
     private void hideSecondChannel() {
+        dualChannelActive = false;
         liveDataPanel.setDualChannelAvailable(false);
-        ch2InjectionPanel.setVisible(false);
-        voltageGraph.setChannelVisible(1, false);
+        voltageGraph.setDualChannelAvailable(false);
         voltageGraph.setInjection(1, false, 0.0);
         injectionPanels[1].setControlsEnabled(false);
     }

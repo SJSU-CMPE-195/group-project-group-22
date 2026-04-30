@@ -69,7 +69,7 @@ final class InjectionChannelPanel extends JPanel {
         controlRow.add(stopButton);
 
         JPanel modeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
-        continuousRadio = new JRadioButton("Continuous", true);
+        continuousRadio = new JRadioButton("Constant", true);
         intervalRadio = new JRadioButton("Interval");
 
         ButtonGroup modeGroup = new ButtonGroup();

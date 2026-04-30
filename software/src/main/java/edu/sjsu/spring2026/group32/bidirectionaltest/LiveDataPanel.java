@@ -18,7 +18,8 @@ final class LiveDataPanel extends JPanel {
     private final JLabel voltageLabel;
     private final JLabel ch2RawLabel;
     private final JLabel ch2VoltageLabel;
-    private final JLabel modeLabel;
+    private final JLabel ch1ModeLabel;
+    private final JLabel ch2ModeLabel;
     private final JCheckBox ch1Check;
     private final JCheckBox ch2Check;
     private final JTextArea dataDisplay;
@@ -35,13 +36,15 @@ final class LiveDataPanel extends JPanel {
         JPanel strip = new JPanel(new BorderLayout());
         strip.setBorder(new TitledBorder("Live Readings"));
 
-        JPanel labelsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));
+        // --- labels ---
         rawLabel = makeSummaryLabel("Ch1 ADC: -");
         voltageLabel = makeSummaryLabel("Ch1: - V");
+        ch1ModeLabel = makeSummaryLabel("Mode: -");
         ch2RawLabel = makeSummaryLabel("Ch2 ADC: -");
         ch2VoltageLabel = makeSummaryLabel("Ch2: - V");
-        modeLabel = makeSummaryLabel("Mode: -");
+        ch2ModeLabel = makeSummaryLabel("Mode: -");
 
+        // --- checkboxes ---
         ch1Check = new JCheckBox("Ch 1", true);
         ch2Check = new JCheckBox("Ch 2", false);
 
@@ -51,27 +54,51 @@ final class LiveDataPanel extends JPanel {
         ch2Check.setForeground(new Color(80, 180, 255));
         ch1Check.setToolTipText("Show or hide Channel 1 in graph and log");
         ch2Check.setToolTipText("Show or hide Channel 2 in graph and log");
+        ch1Check.setEnabled(false);
         ch2Check.setEnabled(false);
 
         ch1Check.addItemListener(e -> handleChannelToggle(0));
         ch2Check.addItemListener(e -> handleChannelToggle(1));
 
-        labelsPanel.add(rawLabel);
-        labelsPanel.add(voltageLabel);
-        labelsPanel.add(ch2RawLabel);
-        labelsPanel.add(ch2VoltageLabel);
-        labelsPanel.add(modeLabel);
-        labelsPanel.add(Box.createHorizontalStrut(12));
-        labelsPanel.add(new JLabel("Show:"));
-        labelsPanel.add(ch1Check);
-        labelsPanel.add(ch2Check);
-
+        // --- pause button ---
         pauseButton = new JButton("Pause");
         pauseButton.setToolTipText("Pause terminal output");
+        pauseButton.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        pauseButton.setMargin(new Insets(1, 5, 1, 5));
+        pauseButton.setFocusPainted(false);
         pauseButton.addActionListener(e -> togglePause());
 
-        strip.add(labelsPanel, BorderLayout.CENTER);
-        strip.add(pauseButton, BorderLayout.EAST);
+        // Row 1: Show checkboxes (left) + Pause button (right)
+        JPanel showPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+        JLabel showLabel = new JLabel("Show:");
+        showLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        showPanel.add(showLabel);
+        showPanel.add(ch1Check);
+        showPanel.add(ch2Check);
+
+        JPanel controlsRow = new JPanel(new BorderLayout());
+        controlsRow.add(showPanel, BorderLayout.WEST);
+        controlsRow.add(pauseButton, BorderLayout.EAST);
+
+        // Row 2: Ch1 readings + Ch1 mode (always visible)
+        JPanel ch1ReadingsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));
+        ch1ReadingsRow.add(rawLabel);
+        ch1ReadingsRow.add(voltageLabel);
+        ch1ReadingsRow.add(ch1ModeLabel);
+
+        // Row 3: Ch2 readings + Ch2 mode (always visible)
+        JPanel ch2ReadingsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));
+        ch2ReadingsRow.add(ch2RawLabel);
+        ch2ReadingsRow.add(ch2VoltageLabel);
+        ch2ReadingsRow.add(ch2ModeLabel);
+
+        JPanel readingsStack = new JPanel();
+        readingsStack.setLayout(new BoxLayout(readingsStack, BoxLayout.Y_AXIS));
+        readingsStack.add(controlsRow);
+        readingsStack.add(ch1ReadingsRow);
+        readingsStack.add(ch2ReadingsRow);
+
+        strip.add(readingsStack, BorderLayout.CENTER);
         add(strip, BorderLayout.NORTH);
 
         dataDisplay = new JTextArea();
@@ -94,9 +121,14 @@ final class LiveDataPanel extends JPanel {
         this.visibilityListener.accept(1, ch2Check.isSelected());
     }
 
+    void setConnected(boolean connected) {
+        ch1Check.setEnabled(connected);
+        if (!connected) {
+            ch2Check.setEnabled(false);
+        }
+    }
+
     void setDualChannelAvailable(boolean available) {
-        ch2RawLabel.setVisible(available);
-        ch2VoltageLabel.setVisible(available);
         ch2Check.setEnabled(available);
         if (!available) {
             setChannelSelected(1, false);
@@ -123,18 +155,26 @@ final class LiveDataPanel extends JPanel {
     }
 
     void setModeNormal() {
-        modeLabel.setText("Mode: NORMAL");
-        modeLabel.setForeground(new Color(40, 160, 40));
+        ch1ModeLabel.setText("Mode: NORMAL");
+        ch1ModeLabel.setForeground(new Color(40, 160, 40));
+        if (ch2Check.isEnabled()) {
+            ch2ModeLabel.setText("Mode: NORMAL");
+            ch2ModeLabel.setForeground(new Color(40, 160, 40));
+        }
     }
 
     void setModeInjecting(int channel) {
-        modeLabel.setText("Mode: INJECTING (Ch" + (channel + 1) + ")");
-        modeLabel.setForeground(new Color(220, 120, 0));
+        JLabel label = channel == 0 ? ch1ModeLabel : ch2ModeLabel;
+        label.setText("Mode: INJECTING");
+        label.setForeground(new Color(220, 120, 0));
     }
 
     void clearMode() {
-        modeLabel.setText("Mode: -");
-        modeLabel.setForeground(UIManager.getColor("Label.foreground"));
+        Color defaultFg = UIManager.getColor("Label.foreground");
+        ch1ModeLabel.setText("Mode: -");
+        ch1ModeLabel.setForeground(defaultFg);
+        ch2ModeLabel.setText("Mode: -");
+        ch2ModeLabel.setForeground(defaultFg);
     }
 
     void resetReadings() {
