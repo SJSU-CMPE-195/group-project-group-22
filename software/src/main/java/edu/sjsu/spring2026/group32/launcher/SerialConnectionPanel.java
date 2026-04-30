@@ -83,11 +83,15 @@ public class SerialConnectionPanel extends JPanel {
     //  Constructor
     // =========================================================================
     public SerialConnectionPanel() {
-        super(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        // Two-row BorderLayout: controls on top, status below.
+        // Avoids FlowLayout wrapping that would bleed into the panel beneath.
+        super(new BorderLayout(0, 0));
         setBorder(new TitledBorder("Serial Connection"));
 
+        // Narrower dropdown (200 px) so the controls row fits at minimum window width.
+        // The full name is still readable in the open dropdown list.
         portSelector  = new JComboBox<>();
-        portSelector.setPreferredSize(new Dimension(340, 26));
+        portSelector.setPreferredSize(new Dimension(200, 26));
 
         refreshBtn    = new JButton("↺  Refresh");
         connectBtn    = new JButton("Connect");
@@ -111,15 +115,22 @@ public class SerialConnectionPanel extends JPanel {
                 "When checked, only shows ports whose device name matches a known ESP32 USB-UART bridge");
         autoFilterCheck.addItemListener(e -> refreshPorts());
 
-        add(new JLabel("COM Port:"));
-        add(portSelector);
-        add(autoFilterCheck);
-        add(refreshBtn);
-        add(connectBtn);
-        add(disconnectBtn);
-        add(Box.createHorizontalStrut(12));
-        add(statusDot);
-        add(statusLabel);
+        // ── Row 1: port selector + buttons ───────────────────────────────────
+        JPanel controlsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        controlsRow.add(new JLabel("COM Port:"));
+        controlsRow.add(portSelector);
+        controlsRow.add(autoFilterCheck);
+        controlsRow.add(refreshBtn);
+        controlsRow.add(connectBtn);
+        controlsRow.add(disconnectBtn);
+
+        // ── Row 2: status indicator (own line — never wraps into panel below) ─
+        JPanel statusRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        statusRow.add(statusDot);
+        statusRow.add(statusLabel);
+
+        add(controlsRow, BorderLayout.CENTER);
+        add(statusRow,   BorderLayout.SOUTH);
 
         refreshBtn.addActionListener(e -> refreshPorts());
         connectBtn.addActionListener(e -> connect());
