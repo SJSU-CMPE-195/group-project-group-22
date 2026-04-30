@@ -132,6 +132,11 @@ final class LiveDataPanel extends JPanel {
         ch2Check.setEnabled(available);
         if (!available) {
             setChannelSelected(1, false);
+        } else {
+            // Ch2 just became live — it starts in NORMAL mode by definition
+            // (injection cannot have started before the channel was revealed).
+            ch2ModeLabel.setText("Mode: NORMAL");
+            ch2ModeLabel.setForeground(new Color(40, 160, 40));
         }
     }
 
