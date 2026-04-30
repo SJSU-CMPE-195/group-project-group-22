@@ -29,9 +29,9 @@ class ConnectionStatusPanelTest {
         SwingUtilities.invokeAndWait(() -> panel = new ConnectionStatusPanel());
     }
 
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
     //  Construction
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Panel constructs without error")
@@ -46,9 +46,9 @@ class ConnectionStatusPanelTest {
             "Panel should use BorderLayout to support left-indicators + right-button");
     }
 
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
     //  addDevice — null manager
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("addDevice with null manager shows 'Not connected' text")
@@ -70,9 +70,9 @@ class ConnectionStatusPanelTest {
             "Null manager should produce a red indicator");
     }
 
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
     //  addDevice — connected manager
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("addDevice with connected manager shows 'Connected' text")
@@ -99,9 +99,9 @@ class ConnectionStatusPanelTest {
             "Connected manager should produce a green indicator");
     }
 
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
     //  addDevice — disconnected manager
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("addDevice with disconnected manager shows 'Not connected' text")
@@ -124,9 +124,9 @@ class ConnectionStatusPanelTest {
             "The device name passed to addDevice() should appear in the label text");
     }
 
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
     //  Multiple devices
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Two addDevice calls produce exactly two indicator labels")
@@ -159,9 +159,9 @@ class ConnectionStatusPanelTest {
             "Second label should contain 'Pong'");
     }
 
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
     //  refresh()
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("refresh() updates label text when manager disconnects")
@@ -229,9 +229,9 @@ class ConnectionStatusPanelTest {
             "Null manager should always remain 'Not connected' after refresh()");
     }
 
-    // =========================================================================
-    //  ← Launcher button
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
+    //  Launcher button
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("'← Launcher' button is present in the panel")
@@ -281,9 +281,9 @@ class ConnectionStatusPanelTest {
             "Parent JFrame should be disposed (non-displayable) after '← Launcher' is clicked");
     }
 
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
     //  Component-tree helpers
-    // =========================================================================
+    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Returns the first {@link JLabel} found anywhere in the component subtree

@@ -71,7 +71,9 @@ class HitTheZoneHardwareAITest {
         assertNull(p.getNextMove(new HitTheZoneState(true)));
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // ── Out-of-zone scoring contract ──────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Returns SCORE when outside zone and voltage meets threshold (late-fire contract)")
@@ -89,7 +91,9 @@ class HitTheZoneHardwareAITest {
         assertNull(p.getNextMove(new HitTheZoneState(false)));
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
     // ── Rising-edge detection (wasFiring) ────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Scores once per threshold crossing: null on the tick immediately after SCORE while voltage stays high")
@@ -113,7 +117,9 @@ class HitTheZoneHardwareAITest {
         assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(true)),  "tick 3: re-entered zone --> SCORE again");
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // ── Injector side-effects ─────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("stopInjectionOnly() sends a stop command without closing the shared manager")
@@ -131,7 +137,9 @@ class HitTheZoneHardwareAITest {
         assertEquals(1, injector.stopCalls, "Closing the HTZ window must stop any active injection exactly once");
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // ── Two-arg / convenience constructors ────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("Two-arg constructor uses NeuralHardwareConfig default threshold")
@@ -148,7 +156,9 @@ class HitTheZoneHardwareAITest {
         assertNull(p.getNextMove(new HitTheZoneState(true)));
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // ── Metadata ──────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("getName() returns the name passed to the constructor")
@@ -164,7 +174,9 @@ class HitTheZoneHardwareAITest {
         assertEquals(PlayerType.HARDWARE, p.getType());
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
     // ── Lifecycle ─────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("close() does not throw when signal source is a lambda stub")
