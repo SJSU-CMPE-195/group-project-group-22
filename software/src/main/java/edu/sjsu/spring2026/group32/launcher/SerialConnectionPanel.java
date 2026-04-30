@@ -7,9 +7,12 @@ import edu.sjsu.spring2026.group32.hardware.serial.SerialDevice;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Reusable Swing panel that provides a complete Serial Connection UI:
@@ -53,8 +56,16 @@ public class SerialConnectionPanel extends JPanel {
     private SerialConnectionManager connectionManager;
     private ConnectionListener       listener;
 
+    /** System port name of the currently open connection, or {@code null}. */
+    private String connectedPortName = null;
+
     // ── Expected channel count (0 = no validation) ────────────────────────────
     private int expectedChannelCount = 0;
+
+    // ── Excluded ports supplier ───────────────────────────────────────────────
+    /** Returns port names that should be hidden from the dropdown (e.g. already
+     *  claimed by another panel).  Never {@code null}; defaults to empty set. */
+    private Supplier<Set<String>> excludedPortsSupplier = Collections::emptySet;
 
     // ── Disconnect watchdog ───────────────────────────────────────────────────
     /** Polls the firmware stream heartbeat once per second to detect USB removal. */
@@ -127,6 +138,27 @@ public class SerialConnectionPanel extends JPanel {
     }
 
     /**
+     * Returns the system port name currently held open by this panel
+     * (e.g. {@code "COM4"}), or {@code null} if not connected.
+     *
+     * <p>Intended for sibling panels to exclude this port from their dropdowns.</p>
+     */
+    public String getConnectedPortName() {
+        return connectedPortName;
+    }
+
+    /**
+     * Provide a supplier of port names that should be hidden from the COM port
+     * dropdown on every {@link #refreshPorts()} call.
+     *
+     * <p>Typical usage: pass a lambda that returns the sibling panel's connected
+     * port so users cannot accidentally select a port already in use.</p>
+     */
+    public void setExcludedPortsSupplier(Supplier<Set<String>> supplier) {
+        this.excludedPortsSupplier = supplier != null ? supplier : Collections::emptySet;
+    }
+
+    /**
      * Set the channel count this slot expects.  After a successful {@code INFO?}
      * handshake, {@link #connect()} will warn the user (and optionally abort) if
      * the connected device reports a different channel count.
@@ -164,6 +196,7 @@ public class SerialConnectionPanel extends JPanel {
         stopWatchdog();
         connectionManager.disconnect();
         connectionManager = null;
+        connectedPortName = null;
         setConnectedState(false, null);
         log("── Disconnected ──");
         if (listener != null) listener.onDisconnected();
@@ -182,11 +215,13 @@ public class SerialConnectionPanel extends JPanel {
 
         SerialDevice[] all = RealSerialDevice.getRealPorts();
         boolean filter = autoFilterCheck.isSelected();
+        Set<String> excluded = excludedPortsSupplier.get();
 
         int shown = 0;
         int reselect = -1;
         for (SerialDevice d : all) {
             if (filter && !looksLikeEsp32Bridge(d)) continue;
+            if (excluded.contains(d.getSystemPortName())) continue;   // already used by another panel
             portSelector.addItem(new PortItem(d));
             shown++;
             if (d.getSystemPortName().equals(prevName)) reselect = shown;
@@ -195,7 +230,13 @@ public class SerialConnectionPanel extends JPanel {
         if (reselect >= 0) portSelector.setSelectedIndex(reselect);
 
         if (shown == 0) {
-            if (filter && all.length > 0) {
+            if (!excluded.isEmpty() && all.length > 0) {
+                log(String.format(
+                        "No ports available (%d in use by another slot, %s). " +
+                        "Disconnect the other device first.",
+                        excluded.size(),
+                        filter ? "ESP32 filter on" : "filter off"));
+            } else if (filter && all.length > 0) {
                 log(String.format(
                         "No ESP32 ports found (%d other port(s) hidden by filter). " +
                         "Uncheck 'ESP32 only' to see all.", all.length));
@@ -323,6 +364,7 @@ public class SerialConnectionPanel extends JPanel {
                     + "(CH=" + actual + ", expected CH=" + expectedChannelCount + ")");
             log("── Connected (mismatch): " + logLabel + " ──");
             connectionManager = mgr;
+            connectedPortName = item.device.getSystemPortName();
             setConnectedState(true,
                     portShort + " — ⚠ CH=" + actual + " (need " + expectedChannelCount + ")",
                     new Color(220, 140, 0));
@@ -335,6 +377,7 @@ public class SerialConnectionPanel extends JPanel {
         // Compact status text keeps the FlowLayout row from wrapping.
         String shortStatus = portShort + (gotInfo ? " — CH=" + mgr.getDeviceChannelCount() : "");
         connectionManager = mgr;
+        connectedPortName = item.device.getSystemPortName();
         setConnectedState(true, shortStatus, new Color(40, 190, 40));
         log("── Connected: " + logLabel + " ──");
 
@@ -392,6 +435,7 @@ public class SerialConnectionPanel extends JPanel {
         log("⚠ Device disconnected unexpectedly.");
         try { connectionManager.disconnect(); } catch (Exception ignored) {}
         connectionManager = null;
+        connectedPortName = null;
         portSelector.setSelectedIndex(0);       // reset to "-- Select a port --"
         setConnectedState(false, null);
         refreshPorts();

@@ -9,6 +9,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.util.Collections;
+import java.util.Set;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.time.LocalTime;
@@ -71,12 +73,14 @@ public class Launcher extends JFrame {
             public void onConnected(SerialConnectionManager manager, String port) {
                 htzManager = manager;
                 log("Hit The Zone hardware ready on " + port);
+                pongPanel.refreshPorts();   // hide the now-claimed HTZ port from Pong dropdown
             }
 
             @Override
             public void onDisconnected() {
                 htzManager = null;
                 log("Hit The Zone hardware disconnected.");
+                pongPanel.refreshPorts();   // restore the freed port in Pong dropdown
             }
         });
 
@@ -89,13 +93,26 @@ public class Launcher extends JFrame {
             public void onConnected(SerialConnectionManager manager, String port) {
                 pongManager = manager;
                 log("Pong hardware ready on " + port);
+                htzPanel.refreshPorts();    // hide the now-claimed Pong port from HTZ dropdown
             }
 
             @Override
             public void onDisconnected() {
                 pongManager = null;
                 log("Pong hardware disconnected.");
+                htzPanel.refreshPorts();    // restore the freed port in HTZ dropdown
             }
+        });
+
+        // Each panel excludes ports already claimed by the other panel.
+        // The supplier is evaluated lazily on every refreshPorts() call.
+        htzPanel.setExcludedPortsSupplier(() -> {
+            String p = pongPanel.getConnectedPortName();
+            return p != null ? Set.of(p) : Collections.emptySet();
+        });
+        pongPanel.setExcludedPortsSupplier(() -> {
+            String p = htzPanel.getConnectedPortName();
+            return p != null ? Set.of(p) : Collections.emptySet();
         });
 
         launchBidirectional = makeLaunchButton(
