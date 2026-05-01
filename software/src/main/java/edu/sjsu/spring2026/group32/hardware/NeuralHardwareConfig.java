@@ -37,7 +37,7 @@ public final class NeuralHardwareConfig {
      * constant in {@code PongGame} so the hardware response can be tuned
      * independently without affecting human or software-AI paddle movement.
      */
-    public static final int PONG_HARDWARE_PADDLE_SPEED = 15;
+    public static final int PONG_HARDWARE_PADDLE_SPEED = 50;
 
     private NeuralHardwareConfig() {
         // Utility class.

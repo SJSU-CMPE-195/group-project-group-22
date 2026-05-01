@@ -104,7 +104,7 @@ public class PongGame extends JPanel {
     int bottomScore = 0;
 
     /** 0-based index into SPEED_VEL_X / SPEED_VEL_Y; shown in pause overlay as levels 1-5. */
-    private int ballSpeedLevel = 1; // default = level 2
+    private int ballSpeedLevel = 0; // default = level 1
 
     /**
      * Counts paddle moves made by the HARDWARE player during the current rally
