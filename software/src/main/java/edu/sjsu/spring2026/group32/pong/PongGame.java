@@ -34,6 +34,7 @@ public class PongGame extends JPanel {
     };
 
     private static final PlayerVariant HARDWARE_FALLBACK_VARIANT = PlayerVariant.AI_HARD;
+    private static final String HUMAN_CONTROLS_HINT = "Human controls: use Left and Right arrow keys to move the paddle.";
 
     private final PongEngine engine = new PongEngine();
     private final Scoreboard scoreboard = new Scoreboard();
@@ -72,7 +73,7 @@ public class PongGame extends JPanel {
         bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, BOTTOM_VARIANTS, bottomVariant, hardwareAvailable, scoreboard);
         canvas = new PongCanvas(
                 this::togglePause,
-                this::resetGame,
+                this::requestReset,
                 this::toggleConstantSpeed,
                 this::setBallSpeedLevel);
 
@@ -94,9 +95,10 @@ public class PongGame extends JPanel {
         inputController.bindGameKeys(
                 this,
                 this::togglePause,
-                this::resetGame,
+                this::requestReset,
                 this::toggleConstantSpeed,
                 this::setBallSpeedLevel,
+                () -> engine.getGameState() == PongGameState.PAUSED,
                 this::refreshCanvas);
 
         hardwareConnectionListener = new SerialConnectionManager.SerialListener() {
@@ -234,6 +236,13 @@ public class PongGame extends JPanel {
         refreshCanvas();
     }
 
+    private void requestReset() {
+        if (engine.getGameState() != PongGameState.PAUSED) {
+            return;
+        }
+        resetGame();
+    }
+
     private void gameLoop() {
         while (running) {
             long now = System.currentTimeMillis();
@@ -278,6 +287,7 @@ public class PongGame extends JPanel {
             humanPlayer = cast;
         }
         inputController.wireHumanPlayer(this, humanPlayer);
+        canvas.setBottomHintMessage(humanPlayer != null ? HUMAN_CONTROLS_HINT : null);
     }
 
     private void handleHardwareDisconnected(String reason) {
@@ -395,6 +405,6 @@ public class PongGame extends JPanel {
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> PongFrame.launchStandalone());
+        SwingUtilities.invokeLater(PongFrame::launchStandalone);
     }
 }

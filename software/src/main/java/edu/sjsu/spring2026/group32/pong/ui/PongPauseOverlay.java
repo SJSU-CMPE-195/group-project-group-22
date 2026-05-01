@@ -16,7 +16,9 @@ import java.util.function.IntConsumer;
  * Renders and hit-tests Pong's pause overlay.
  */
 public class PongPauseOverlay {
-    private final Rectangle[] speedReacts = new Rectangle[5];
+    private static final String[] SPEED_LABELS = {"Slow", "Normal", "High"};
+
+    private final Rectangle[] speedReacts = new Rectangle[SPEED_LABELS.length];
     private Rectangle checkboxRect;
     private Rectangle resumeRect;
     private Rectangle resetRect;
@@ -90,42 +92,43 @@ public class PongPauseOverlay {
         fm = g.getFontMetrics();
         String speedLabel = "BALL SPEED:";
         int labelW = fm.stringWidth(speedLabel);
-        int cellW = 30;
+        int cellW = 58;
+        int cellH = 28;
         int gap = 6;
-        int totalSpeedW = labelW + gap + 5 * cellW + 4 * gap;
+        int totalSpeedW = labelW + gap + speedReacts.length * cellW + (speedReacts.length - 1) * gap;
         int sx = PongEngine.FIELD_WIDTH / 2 - totalSpeedW / 2;
         int sy = PongEngine.FIELD_HEIGHT / 2 - 4;
 
         g.setColor(new Color(200, 200, 200));
         g.drawString(speedLabel, sx, sy + fm.getAscent());
         int bx = sx + labelW + gap;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < speedReacts.length; i++) {
             boolean active = i == snapshot.ballSpeedLevel();
             int rx = bx + i * (cellW + gap);
-            speedReacts[i] = new Rectangle(rx, sy, cellW, cellW);
+            speedReacts[i] = new Rectangle(rx, sy, cellW, cellH);
             boolean hovered = speedReacts[i].contains(mouseX, mouseY);
 
             if (active) {
                 g.setColor(new Color(255, 200, 0));
-                g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
+                g2.fillRoundRect(rx, sy, cellW, cellH, 6, 6);
                 g.setColor(Color.BLACK);
             } else if (hovered) {
                 g.setColor(new Color(120, 100, 0));
-                g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
+                g2.fillRoundRect(rx, sy, cellW, cellH, 6, 6);
                 g.setColor(new Color(255, 220, 100));
             } else {
                 g.setColor(new Color(80, 80, 80));
-                g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
+                g2.fillRoundRect(rx, sy, cellW, cellH, 6, 6);
                 g.setColor(new Color(180, 180, 180));
             }
 
-            String num = String.valueOf(i + 1);
+            String label = SPEED_LABELS[i];
             g.setFont(new Font("Monospaced", Font.BOLD, 14));
             fm = g.getFontMetrics();
             g.drawString(
-                    num,
-                    rx + cellW / 2 - fm.stringWidth(num) / 2,
-                    sy + cellW / 2 + fm.getAscent() / 2 - 2);
+                    label,
+                    rx + cellW / 2 - fm.stringWidth(label) / 2,
+                    sy + cellH / 2 + fm.getAscent() / 2 - 2);
         }
 
         int cby = PongEngine.FIELD_HEIGHT / 2 + 36;
@@ -172,7 +175,7 @@ public class PongPauseOverlay {
         g.setFont(new Font("SansSerif", Font.PLAIN, 11));
         g.setColor(new Color(90, 90, 90));
         fm = g.getFontMetrics();
-        String hint = "1-5 speed  |  C constant speed  |  ESC resume  |  R reset";
+        String hint = "1-3 speed  |  C constant speed  |  ESC resume  |  R reset";
         g.drawString(
                 hint,
                 PongEngine.FIELD_WIDTH / 2 - fm.stringWidth(hint) / 2,

@@ -1,0 +1,4 @@
+# Pong Scoreboard
+# variantA,variantB,pointsA,pointsB
+AI_HARD,HARDWARE,19,1
+HARDWARE,HUMAN,3,2

@@ -20,8 +20,8 @@ public class PongEngine {
     public static final long COUNTDOWN_MS = 2_000L;
 
     private static final int PADDLE_SPEED = 7;
-    private static final int[] SPEED_VEL_X = {3, 4, 5, 6, 7};
-    private static final int[] SPEED_VEL_Y = {3, 5, 7, 9, 11};
+    private static final int[] SPEED_VEL_X = {3, 5, 7};
+    private static final int[] SPEED_VEL_Y = {3, 5, 5};
 
     private volatile PongGameState gameState = PongGameState.PAUSED;
     private long countdownStartMs;
@@ -34,7 +34,7 @@ public class PongEngine {
     private int ballVelY;
     private int topScore;
     private int bottomScore;
-    private int ballSpeedLevel;
+    private int ballSpeedLevel = 0;
     private boolean constantSpeed = true;
 
     public PongEngine() {

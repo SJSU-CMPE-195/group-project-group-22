@@ -11,6 +11,7 @@ import javax.swing.JComponent;
 import javax.swing.KeyStroke;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 
 /**
@@ -22,6 +23,7 @@ public class PongInputController {
                              Runnable onReset,
                              Runnable onToggleConstantSpeed,
                              IntConsumer onSpeedSelected,
+                             BooleanSupplier isPauseMenuActive,
                              Runnable onRefresh) {
         InputMap inputMap = component.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap actionMap = component.getActionMap();
@@ -30,19 +32,22 @@ public class PongInputController {
         actionMap.put("game-esc", action(onTogglePause));
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, 0, false), "game-reset");
-        actionMap.put("game-reset", action(onReset));
+        actionMap.put("game-reset", guardedAction(isPauseMenuActive, onReset));
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, 0, false), "game-const-speed");
         actionMap.put("game-const-speed", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!isPauseMenuActive.getAsBoolean()) {
+                    return;
+                }
                 onToggleConstantSpeed.run();
                 onRefresh.run();
             }
         });
 
         int[] speedKeys = {
-                KeyEvent.VK_1, KeyEvent.VK_2, KeyEvent.VK_3, KeyEvent.VK_4, KeyEvent.VK_5
+                KeyEvent.VK_1, KeyEvent.VK_2, KeyEvent.VK_3
         };
         for (int i = 0; i < speedKeys.length; i++) {
             final int level = i;
@@ -51,6 +56,9 @@ public class PongInputController {
             actionMap.put(id, new AbstractAction() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
+                    if (!isPauseMenuActive.getAsBoolean()) {
+                        return;
+                    }
                     onSpeedSelected.accept(level);
                     onRefresh.run();
                 }
@@ -116,6 +124,18 @@ public class PongInputController {
         return new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                runnable.run();
+            }
+        };
+    }
+
+    private AbstractAction guardedAction(BooleanSupplier guard, Runnable runnable) {
+        return new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (!guard.getAsBoolean()) {
+                    return;
+                }
                 runnable.run();
             }
         };

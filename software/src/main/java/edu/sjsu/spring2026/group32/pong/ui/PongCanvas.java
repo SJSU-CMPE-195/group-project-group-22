@@ -27,6 +27,7 @@ public class PongCanvas extends JPanel {
     private String topPlayerName = "";
     private String bottomPlayerName = "";
     private String statusMessage;
+    private String bottomHintMessage;
 
     public PongCanvas(Runnable onResume,
                       Runnable onReset,
@@ -77,6 +78,10 @@ public class PongCanvas extends JPanel {
         this.statusMessage = statusMessage;
     }
 
+    public void setBottomHintMessage(String bottomHintMessage) {
+        this.bottomHintMessage = bottomHintMessage;
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -114,6 +119,16 @@ public class PongCanvas extends JPanel {
         g.setColor(new Color(120, 120, 120));
         g.drawString(topPlayerName, 8, PongEngine.TOP_PADDLE_Y + PongEngine.PADDLE_HEIGHT + 14);
         g.drawString(bottomPlayerName, 8, PongEngine.BOTTOM_PADDLE_Y - 4);
+
+        if (bottomHintMessage != null && !bottomHintMessage.isBlank()) {
+            g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            g.setColor(new Color(180, 180, 180));
+            FontMetrics hintMetrics = g.getFontMetrics();
+            g.drawString(
+                    bottomHintMessage,
+                    PongEngine.FIELD_WIDTH / 2 - hintMetrics.stringWidth(bottomHintMessage) / 2,
+                    PongEngine.FIELD_HEIGHT - 8);
+        }
 
         switch (snapshot.gameState()) {
             case COUNTDOWN -> pauseOverlay.paintCountdown(g, snapshot);
