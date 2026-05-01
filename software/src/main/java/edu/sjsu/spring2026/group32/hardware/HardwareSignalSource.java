@@ -3,6 +3,15 @@ package edu.sjsu.spring2026.group32.hardware;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 
 public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
+    /**
+     * Opt-in trace for raw parsed-voltage serial samples.
+     *
+     * <p>Disabled by default because the shared serial listener can emit this
+     * line at a very high rate in both Hit The Zone and Pong. Enable with:
+     * {@code -Dgroup32.trace.hardware.parsedVoltage=true}
+     */
+    private static final boolean TRACE_PARSED_VOLTAGE =
+            Boolean.getBoolean("group32.trace.hardware.parsedVoltage");
     private static final double LOGGED_VOLTAGE_MIN = 0.75;
 
     private final SerialConnectionManager connectionManager;
@@ -18,7 +27,7 @@ public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
                 public void onSample(SerialConnectionManager.SampleFrame frame) {
                     double voltage = parser.parseVoltage(frame.line());
                     latestVoltage = voltage;
-                    if (voltage >= LOGGED_VOLTAGE_MIN) {
+                    if (TRACE_PARSED_VOLTAGE && voltage >= LOGGED_VOLTAGE_MIN) {
                         System.out.printf("[HTZ-HW] parsed voltage=%.3fV line=%s%n", voltage, frame.line());
                     }
                 }
