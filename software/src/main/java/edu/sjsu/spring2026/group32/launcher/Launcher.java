@@ -33,7 +33,7 @@ import java.util.Set;
  */
 public class Launcher extends JFrame {
     private static final int WINDOW_MIN_WIDTH = 820;
-    private static final int WINDOW_MIN_HEIGHT = 520;
+    private static final int WINDOW_MIN_HEIGHT = 620;
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final LauncherProgramRegistry programRegistry = new LauncherProgramRegistry();
