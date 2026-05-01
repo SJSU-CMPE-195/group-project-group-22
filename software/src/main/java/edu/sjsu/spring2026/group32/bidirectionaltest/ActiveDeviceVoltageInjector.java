@@ -18,6 +18,7 @@ final class ActiveDeviceVoltageInjector implements VoltageInjector {
 
     @Override
     public void injectVoltage(int channel, double volts) {
+        validateChannel(channel);
         SerialConnectionManager manager = managerSupplier.get();
         if (manager == null || !manager.isConnected()) {
             return;
@@ -27,6 +28,10 @@ final class ActiveDeviceVoltageInjector implements VoltageInjector {
 
     @Override
     public void stopInjection(int channel) {
+        if (channel != 0) {
+            validateChannel(channel);
+        }
+
         SerialConnectionManager manager = managerSupplier.get();
         if (manager == null || !manager.isConnected()) {
             return;
@@ -38,5 +43,11 @@ final class ActiveDeviceVoltageInjector implements VoltageInjector {
         }
 
         manager.sendLine("STOP_INJECT_CH" + channel);
+    }
+
+    private static void validateChannel(int channel) {
+        if (channel < 1) {
+            throw new IllegalArgumentException("Channel must be >= 1");
+        }
     }
 }

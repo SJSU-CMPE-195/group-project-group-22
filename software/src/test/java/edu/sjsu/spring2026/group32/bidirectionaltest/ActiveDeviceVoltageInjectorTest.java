@@ -35,10 +35,10 @@ class ActiveDeviceVoltageInjectorTest {
     // ──────────────────────────────────────────────────────────────────────────
  
     @Test
-    @DisplayName("injectVoltage(0, 2.5) sends INJECT_V_CH0:2.500 when connected")
+    @DisplayName("injectVoltage(1, 2.5) sends INJECT_V_CH1:2.500 when connected")
     void injectVoltageSendsFormattedCommandWhenConnected() {
-        injector.injectVoltage(0, 2.5);
-        verify(mockManager, times(1)).sendLine("INJECT_V_CH0:2.500");
+        injector.injectVoltage(1, 2.5);
+        verify(mockManager, times(1)).sendLine("INJECT_V_CH1:2.500");
     }
  
     @Test
@@ -50,24 +50,29 @@ class ActiveDeviceVoltageInjectorTest {
  
     @Test
     @DisplayName("injectVoltage() formats voltage to exactly three decimal places")
-    void injectVoltageChannel0FormatsCorrectly() {
-        injector.injectVoltage(0, 1.0);
-        verify(mockManager, times(1)).sendLine("INJECT_V_CH0:1.000");
+    void injectVoltageFormatsVoltageToThreeDecimals() {
+        injector.injectVoltage(1, 1.0);
+        verify(mockManager, times(1)).sendLine("INJECT_V_CH1:1.000");
+    }
+ 
+    @Test
+    @DisplayName("injectVoltage() throws IllegalArgumentException for channel < 1")
+    void injectVoltageThrowsOnInvalidChannel() {
+        assertThrows(IllegalArgumentException.class, () -> injector.injectVoltage(0, 2.5));
     }
  
     @Test
     @DisplayName("injectVoltage() is a no-op when manager supplier returns null")
     void injectVoltageIsNoOpWhenManagerIsNull() {
         ActiveDeviceVoltageInjector nullInjector = new ActiveDeviceVoltageInjector(() -> null);
-        assertDoesNotThrow(() -> nullInjector.injectVoltage(0, 2.5));
-
+        assertDoesNotThrow(() -> nullInjector.injectVoltage(1, 2.5));
     }
  
     @Test
     @DisplayName("injectVoltage() is a no-op when manager is not connected")
     void injectVoltageIsNoOpWhenManagerNotConnected() {
         when(mockManager.isConnected()).thenReturn(false);
-        injector.injectVoltage(0, 2.5);
+        injector.injectVoltage(1, 2.5);
         verify(mockManager, never()).sendLine(anyString());
     }
  
@@ -94,6 +99,12 @@ class ActiveDeviceVoltageInjectorTest {
     void stopInjectionChannel2SendsStopInjectCh2() {
         injector.stopInjection(2);
         verify(mockManager, times(1)).sendLine("STOP_INJECT_CH2");
+    }
+
+    @Test
+    @DisplayName("stopInjection(channel) throws IllegalArgumentException for channel < 1 except 0")
+    void stopInjectionThrowsOnInvalidChannel() {
+        assertThrows(IllegalArgumentException.class, () -> injector.stopInjection(-1));
     }
  
     @Test
