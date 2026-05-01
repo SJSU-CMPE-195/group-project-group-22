@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.pong;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.player.HumanPlayer;
 import edu.sjsu.spring2026.group32.player.model.BasePlayer;
@@ -123,6 +124,7 @@ public class PongGame extends JPanel {
         }
     }
 
+    @GeneratedExcludeFromCoverage
     public static javax.swing.JFrame launchFromLauncher(SerialConnectionManager pongManager) {
         return PongFrame.launchFromLauncher(pongManager);
     }
@@ -404,6 +406,7 @@ public class PongGame extends JPanel {
         canvas.setSnapshot(engine.snapshot(), topPlayer.getName(), bottomPlayer.getName());
     }
 
+    @GeneratedExcludeFromCoverage
     public static void main(String[] args) {
         SwingUtilities.invokeLater(PongFrame::launchStandalone);
     }

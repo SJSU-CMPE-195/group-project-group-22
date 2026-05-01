@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.pong.core.PongScoreboardService;
 import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
 
@@ -99,6 +100,7 @@ public class Scoreboard {
      *
      * @param owner parent frame for centering; may be {@code null}
      */
+    @GeneratedExcludeFromCoverage
     public JDialog createPopupDialog(JFrame owner) {
         JDialog dialog = new JDialog(owner, "Pong Scoreboard", true);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);

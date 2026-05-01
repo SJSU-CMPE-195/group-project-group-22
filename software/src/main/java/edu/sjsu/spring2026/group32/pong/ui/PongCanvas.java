@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.pong.core.PongEngine;
 import edu.sjsu.spring2026.group32.pong.model.PongGameState;
 import edu.sjsu.spring2026.group32.pong.model.PongSnapshot;
@@ -83,6 +84,7 @@ public class PongCanvas extends JPanel {
     }
 
     @Override
+    @GeneratedExcludeFromCoverage
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (snapshot == null) {

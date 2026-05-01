@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.launcher;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.bidirectionaltest.BidirectionalTest;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.hitthezone.HitTheZoneGame;
@@ -45,6 +46,7 @@ public class Launcher extends JFrame {
     private final JButton launchPongButton;
     private final LauncherLogPanel logPanel;
 
+    @GeneratedExcludeFromCoverage
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new Launcher().setVisible(true));
     }

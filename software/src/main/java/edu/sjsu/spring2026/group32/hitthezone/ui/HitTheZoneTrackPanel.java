@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.hitthezone.ui;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.hitthezone.core.HitTheZoneEngine;
 import edu.sjsu.spring2026.group32.hitthezone.model.HitTheZoneSnapshot;
 import edu.sjsu.spring2026.group32.player.model.BasePlayer;
@@ -33,6 +34,7 @@ public class HitTheZoneTrackPanel extends JPanel {
     }
 
     @Override
+    @GeneratedExcludeFromCoverage
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (snapshot == null) {

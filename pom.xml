@@ -29,24 +29,6 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.11.0</version>
-                    <configuration>
-                        <excludes>
-                            <!-- Swing UI classes — not testable in headless CI -->
-                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/BidirectionalTest.java</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/DeviceSelectorPanel.java</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/InjectionChannelPanel.java</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/LiveDataPanel.java</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/VoltageGraphPanel.java</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/launcher/ConnectionStatusPanel.java</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/player/HumanPlayer.java</exclude>
-                            <!-- UI helper for BidirectionalTest; only referenced from excluded UI classes -->
-                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/ActiveDeviceVoltageInjector.java</exclude>
-                            <!-- Thin jSerialComm wrapper; only instantiated from excluded Launcher -->
-                            <exclude>edu/sjsu/spring2026/group32/hardware/serial/RealSerialDevice.java</exclude>
-                            <!-- Pure @interface annotation; zero executable bytecode -->
-                            <exclude>edu/sjsu/spring2026/group32/annotations/GeneratedExcludeFromCoverage.java</exclude>
-                        </excludes>
-                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -70,54 +52,35 @@
                     <groupId>org.jacoco</groupId>
                     <artifactId>jacoco-maven-plugin</artifactId>
                     <version>${jacoco.version}</version>
-
-                    <!--
-                      Plugin-level excludes: applied to both the report and check goals.
-                      Classes are excluded when they are not meaningfully testable:
-                        - Swing UI components (require a display; logic is rendering, not business)
-                        - Enums (auto-generated values()/valueOf() skew coverage metrics)
-                        - Records / DTOs (auto-generated accessors, equals, hashCode, toString)
-                        - HardwareSignalSource (tightly coupled to physical serial hardware)
-                      Interfaces are omitted here because they produce no bytecode instructions
-                      and therefore never appear in JaCoCo's instruction counter.
-                    -->
                     <configuration>
+                        <!--
+                          Keep exclusions narrow so coverage still reflects real logic.
+                          These patterns target manual-only UI/bootstrap code, trivial
+                          DTO-style records/enums, the coverage marker annotation, and
+                          the thin jSerialComm adapter.
+                        -->
                         <excludes>
-                            <!--
-                              Each pattern uses a trailing * to capture both the outer class
-                              and any compiler-generated inner / anonymous classes
-                              (e.g. PongGame$GameCanvas, BidirectionalTest$VoltageGraph).
-                              Without the wildcard, JaCoCo only drops the outer class entry
-                              while still counting all $ inner classes — which skews the ratio.
-                            -->
+                            <exclude>edu/sjsu/spring2026/group32/annotations/GeneratedExcludeFromCoverage*.class</exclude>
 
-                            <!-- Swing UI — require a real or virtual display to exercise meaningfully -->
-                            <exclude>edu/sjsu/spring2026/group32/launcher/Launcher*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/launcher/SerialConnectionPanel*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/hardware/serial/RealSerialDevice.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/BidirectionalTest*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/bidirectionaltest/ui/*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/ui/PongFrame*.class</exclude>
 
-                            <exclude>edu/sjsu/spring2026/group32/pong/ui/PongToolbar*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/pong/ui/Scoreboard*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/pong/PongGame*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/BidirectionalTest*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hardware/serial/RealSerialDevice*.class</exclude>
 
-                            <!-- PoC_HitTheZone: Swing rendering and UI methods untestable in headless mode -->
-                            <exclude>edu/sjsu/spring2026/group32/sandbox/PoC_HitTheZone$GamePanel.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/sandbox/PoC_HitTheZone$*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/player/model/PlayerType*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/launcher/model/LauncherProgram*.class</exclude>
 
-                            <!-- Enums — only auto-generated switch/valueOf bytecode; logic tested via callers -->
-                            <exclude>edu/sjsu/spring2026/group32/player/PlayerType*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/pong/PongAction*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/pong/PlayerVariant*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/sandbox/HitTheZoneAction*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/model/PongAction*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/model/PongGameState*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/model/PongSnapshot*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/model/PongState*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/pong/model/PongTickResult*.class</exclude>
 
-                            <!-- Records / DTOs — all methods are compiler-generated -->
-                            <exclude>edu/sjsu/spring2026/group32/sandbox/HitTheZoneState*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/group32/pong/PongState*.class</exclude>
-                            <exclude>edu/sjsu/spring2026/gheZoneState*.class</exclude>
-
-                            <!-- Hardware-coupled — depends on physical serial device; not mockable at unit level -->
-                            <exclude>edu/sjsu/spring2026/group32/hardware/HardwareSignalSource*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hitthezone/model/HitTheZoneAction*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hitthezone/model/HitTheZoneActionEffect*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hitthezone/model/HitTheZoneSnapshot*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hitthezone/model/HitTheZoneState*.class</exclude>
                         </excludes>
                     </configuration>
 

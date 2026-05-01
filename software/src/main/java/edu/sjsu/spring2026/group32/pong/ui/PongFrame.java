@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.launcher.ui.ConnectionStatusPanel;
 import edu.sjsu.spring2026.group32.pong.PongGame;
@@ -14,6 +15,7 @@ import java.awt.event.WindowEvent;
 /**
  * Window assembly for Pong.
  */
+@GeneratedExcludeFromCoverage
 public final class PongFrame {
     private PongFrame() {
     }

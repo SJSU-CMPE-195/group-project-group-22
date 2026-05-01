@@ -297,6 +297,7 @@ public class HitTheZoneGame extends JFrame {
         trackPanel.repaint();
     }
 
+    @GeneratedExcludeFromCoverage
     public static void main(String[] args) {
         SerialConnectionManager scm = new SerialConnectionManager(RealSerialDevice::getRealPorts);
         NeuralSignalParser parser = new NeuralSignalParser();
