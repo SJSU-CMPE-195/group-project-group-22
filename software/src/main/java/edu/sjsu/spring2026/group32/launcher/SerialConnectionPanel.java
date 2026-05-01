@@ -44,7 +44,7 @@ public class SerialConnectionPanel extends JPanel {
     private final JCheckBox           autoFilterCheck;
 
     // ── State ─────────────────────────────────────────────────────────────────
-    private SerialConnectionManager connectionManager;
+    private final SerialConnectionManager connectionManager;
     private ConnectionListener       listener;
 
     /** System port name of the currently open connection, or {@code null}. */
@@ -89,6 +89,7 @@ public class SerialConnectionPanel extends JPanel {
         // Avoids FlowLayout wrapping that would bleed into the panel beneath.
         super(new BorderLayout(0, 0));
         setBorder(new TitledBorder("Serial Connection"));
+        connectionManager = new SerialConnectionManager(RealSerialDevice::getRealPorts, 2000);
 
         // Narrower dropdown (200 px) so the controls row fits at minimum window width.
         // The full name is still readable in the open dropdown list.
@@ -188,8 +189,7 @@ public class SerialConnectionPanel extends JPanel {
     }
 
     /**
-     * Returns the active {@link SerialConnectionManager}, or {@code null}
-     * if not currently connected.
+     * Returns this panel's long-lived {@link SerialConnectionManager}.
      */
     public SerialConnectionManager getConnectionManager() {
         return connectionManager;
@@ -197,7 +197,7 @@ public class SerialConnectionPanel extends JPanel {
 
     /** @return {@code true} if a port is currently open. */
     public boolean isConnected() {
-        return connectionManager != null && connectionManager.isConnected();
+        return connectionManager.isConnected();
     }
 
     /**
@@ -205,10 +205,8 @@ public class SerialConnectionPanel extends JPanel {
      * Notifies the registered {@link ConnectionListener}.
      */
     public void disconnect() {
-        if (connectionManager == null) return;
         connectionManager.removeListener(disconnectWatcher);  // prevent spurious callback
         connectionManager.disconnect();
-        connectionManager = null;
         connectedPortName = null;
         setConnectedState();
         log("── Disconnected ──");
@@ -301,10 +299,7 @@ public class SerialConnectionPanel extends JPanel {
             return;
         }
 
-        SerialConnectionManager mgr =
-                new SerialConnectionManager(RealSerialDevice::getRealPorts, 2000);
-
-        if (!mgr.connectTo(item.device)) {
+        if (!connectionManager.connectTo(item.device)) {
             JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(this),
                     "Could not open " + item.device.getSystemPortName() +
                     ".\nIs another application using it?",
@@ -313,10 +308,11 @@ public class SerialConnectionPanel extends JPanel {
         }
 
         // Register for unexpected-disconnect events driven by the manager's internal watchdog.
-        mgr.addListener(disconnectWatcher);
+        connectionManager.removeListener(disconnectWatcher);
+        connectionManager.addListener(disconnectWatcher);
 
         // Send INFO? and parse the #INFO: capability response from the firmware.
-        boolean gotInfo = mgr.readInfoHandshake(20);
+        boolean gotInfo = connectionManager.readInfoHandshake(20);
 
         // Short COM name used in the status label (e.g. "COM4").
         // Full descriptive label goes to the log only — keeps the status row from wrapping.
@@ -325,17 +321,19 @@ public class SerialConnectionPanel extends JPanel {
         // Full label for log messages.
         String logLabel = item.toString();
         if (gotInfo) {
-            logLabel += "  [" + mgr.getDeviceName() + ", Channel Count: " + mgr.getDeviceChannelCount() + "]";
-            log("Device: " + mgr.getDeviceName() + ", channels: " + mgr.getDeviceChannelCount());
+            logLabel += "  [" + connectionManager.getDeviceName() + ", Channel Count: "
+                    + connectionManager.getDeviceChannelCount() + "]";
+            log("Device: " + connectionManager.getDeviceName() + ", channels: "
+                    + connectionManager.getDeviceChannelCount());
         } else {
             log("Warning: no #INFO response from device — channel count unknown");
         }
 
         // ── Mismatch check ────────────────────────────────────────────────────
         if (gotInfo && expectedChannelCount > 0
-                && mgr.getDeviceChannelCount() != expectedChannelCount) {
+                && connectionManager.getDeviceChannelCount() != expectedChannelCount) {
 
-            int actual = mgr.getDeviceChannelCount();
+            int actual = connectionManager.getDeviceChannelCount();
             String neededDesc = expectedChannelCount == 1
                     ? "1-channel  (Hit The Zone / 3-neuron)"
                     : "2-channel  (Pong / 6-neuron)";
@@ -355,7 +353,8 @@ public class SerialConnectionPanel extends JPanel {
                     new String[]{"Disconnect"},
                     "Disconnect");
 
-            mgr.disconnect();
+            connectionManager.removeListener(disconnectWatcher);
+            connectionManager.disconnect();
             log("⚠ Disconnected: wrong device for this slot "
                     + "(Channel Count: " + actual + ", expected Channel Count: " + expectedChannelCount + ")");
             return;
@@ -363,8 +362,8 @@ public class SerialConnectionPanel extends JPanel {
 
         // ── Normal connect path ───────────────────────────────────────────────
         // Compact status text keeps the FlowLayout row from wrapping.
-        String shortStatus = portShort + (gotInfo ? " — Channel Count: " + mgr.getDeviceChannelCount() : "");
-        connectionManager = mgr;
+        String shortStatus = portShort
+                + (gotInfo ? " — Channel Count: " + connectionManager.getDeviceChannelCount() : "");
         connectedPortName = item.device.getSystemPortName();
         setConnectedState(true, shortStatus, new Color(40, 190, 40));
         log("── Connected: " + logLabel + " ──");
@@ -383,9 +382,8 @@ public class SerialConnectionPanel extends JPanel {
      * UI state needs to be reset here.
      */
     private void handleUnexpectedDisconnect() {
-        if (connectionManager == null) return; // already handled
+        if (connectedPortName == null) return; // already handled
         log("⚠ Device disconnected unexpectedly.");
-        connectionManager = null;
         connectedPortName = null;
         portSelector.setSelectedIndex(0);       // reset to "-- Select a port --"
         setConnectedState();

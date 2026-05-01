@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 public class PoC_HitTheZone extends JFrame {
+    private static final String HARDWARE_PLAYER_NAME = "Neural";
 
     // ---- Layout constants ------------------------------------------------
     static final int WIDTH      = 820;
@@ -40,17 +41,20 @@ public class PoC_HitTheZone extends JFrame {
 
     // ---- Players ---------------------------------------------------------
     private final List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players;
+    private final SerialConnectionManager htzManager;
+    private HitTheZoneHardwareAI hardwarePlayer;
+    private boolean hardwareEverConnected = false;
 
     // Package-private so same-package tests (PoCTest) can inspect values directly.
-    final int[]              hits;
-    final int[]              attempts;
-    final boolean[]          canScore;
+    int[]                    hits;
+    int[]                    attempts;
+    boolean[]                canScore;
     /**
      * Debounce non-scoring control actions so held keys do not repeatedly
      * pause or reset the game. SCORE is intentionally excluded so players can
      * land multiple hits during a single zone pass.
      */
-    private final HitTheZoneAction[] lastActions;
+    private HitTheZoneAction[] lastActions;
 
     // ---- Shared game state -----------------------------------------------
     protected int     ballX       = START_X;
@@ -65,12 +69,25 @@ public class PoC_HitTheZone extends JFrame {
     private boolean   shutdownStarted = false;
 
     // ---- Swing -----------------------------------------------------------
-    private  final JLabel[]        playerLabels;
+    private JLabel[]               playerLabels;
+    private JPanel                 playerRow;
     private  final List<JButton>   humanScoreButtons = new ArrayList<>();
     private  final JLabel          infoLabel   = new JLabel("", SwingConstants.CENTER);
     private  final JButton    pauseButton = new JButton("Pause (Esc)");
     protected final GamePanel gamePanel   = new GamePanel();
     protected final Timer     tick;
+    private final SerialConnectionManager.SerialListener hardwareConnectionListener =
+            new SerialConnectionManager.SerialListener() {
+                @Override
+                public void onConnected(String portName) {
+                    SwingUtilities.invokeLater(() -> handleHardwareConnected(portName));
+                }
+
+                @Override
+                public void onDisconnected(String reason) {
+                    SwingUtilities.invokeLater(() -> handleHardwareDisconnected(reason));
+                }
+            };
 
     // ======================================================================
     // Headless constructor (unit tests)
@@ -79,6 +96,7 @@ public class PoC_HitTheZone extends JFrame {
     protected PoC_HitTheZone(List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
         super("Hit The Zone");
         this.players      = players;
+        this.htzManager   = null;
         int n             = players.size();
         this.hits         = new int[n];
         this.attempts     = new int[n];
@@ -105,11 +123,14 @@ public class PoC_HitTheZone extends JFrame {
         super("Hit The Zone");
 
         this.players     = players;
+        this.htzManager  = htzManager;
         int n            = players.size();
         this.hits        = new int[n];
         this.attempts    = new int[n];
         this.canScore    = new boolean[n];
         this.lastActions = new HitTheZoneAction[n];
+        this.hardwarePlayer = findHardwarePlayer();
+        this.hardwareEverConnected = hardwarePlayer != null;
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
@@ -124,7 +145,7 @@ public class PoC_HitTheZone extends JFrame {
         topPanel.add(statusPanel, BorderLayout.NORTH);
 
         playerLabels = new JLabel[n];
-        JPanel playerRow = new JPanel(new GridLayout(n, 1, 0, 2));
+        playerRow = new JPanel(new GridLayout(n, 1, 0, 2));
         for (int i = 0; i < n; i++) {
             playerLabels[i] = new JLabel("", SwingConstants.CENTER);
             playerLabels[i].setFont(playerLabels[i].getFont().deriveFont(Font.BOLD, 13f));
@@ -200,6 +221,10 @@ public class PoC_HitTheZone extends JFrame {
         tick = new Timer(16, e -> onTick());
         tick.start();
         togglePause();
+
+        if (htzManager != null) {
+            htzManager.addListener(hardwareConnectionListener);
+        }
     }
 
     /**
@@ -225,14 +250,18 @@ public class PoC_HitTheZone extends JFrame {
         }
         shutdownStarted = true;
 
+        if (htzManager != null) {
+            htzManager.removeListener(hardwareConnectionListener);
+        }
+
         if (tick != null) {
             tick.stop();
         }
         isPaused = true;
 
         for (BasePlayer<HitTheZoneState, HitTheZoneAction> player : players) {
-            if (player instanceof HitTheZoneHardwareAI hardwarePlayer) {
-                hardwarePlayer.stopInjectionOnly();
+            if (player instanceof HitTheZoneHardwareAI hardwareAi) {
+                hardwareAi.stopInjectionOnly();
             }
         }
     }
@@ -246,16 +275,21 @@ public class PoC_HitTheZone extends JFrame {
         players.add(new HitTheZoneSoftwareAI("Bot Alpha", 3));
         players.add(new HitTheZoneSoftwareAI("Bot Beta", 9));
 
-        if (htzManager != null && htzManager.isConnected()) {
-            NeuralSignalParser parser = new NeuralSignalParser(0);
-            HardwareSignalSource src = new HardwareSignalSource(htzManager, parser);
-            players.add(new HitTheZoneHardwareAI("Neural", src, src));
-        }
-
         Map<Integer, HitTheZoneAction> bindings =
                 Map.of(KeyEvent.VK_SPACE, HitTheZoneAction.SCORE);
         players.add(new HumanPlayer<>("Human", bindings, null));
+
+        if (htzManager != null && htzManager.isConnected()) {
+            players.add(createHardwarePlayer(htzManager));
+        }
+
         return players;
+    }
+
+    private static HitTheZoneHardwareAI createHardwarePlayer(SerialConnectionManager htzManager) {
+        NeuralSignalParser parser = new NeuralSignalParser(0);
+        HardwareSignalSource src = new HardwareSignalSource(htzManager, parser);
+        return new HitTheZoneHardwareAI(HARDWARE_PLAYER_NAME, src, src);
     }
 
     // ======================================================================
@@ -275,6 +309,92 @@ public class PoC_HitTheZone extends JFrame {
         am.put("resetAction", new AbstractAction() {
             @Override public void actionPerformed(ActionEvent e) { resetGame(); }
         });
+    }
+
+    private HitTheZoneHardwareAI findHardwarePlayer() {
+        for (BasePlayer<HitTheZoneState, HitTheZoneAction> player : players) {
+            if (player instanceof HitTheZoneHardwareAI hardwareAi) {
+                return hardwareAi;
+            }
+        }
+        return null;
+    }
+
+    private void handleHardwareConnected(String portName) {
+        if (shutdownStarted || htzManager == null || !htzManager.isConnected()) {
+            return;
+        }
+
+        boolean addedPlayer = false;
+        if (hardwarePlayer == null) {
+            hardwarePlayer = createHardwarePlayer(htzManager);
+            appendPlayer(hardwarePlayer);
+            addedPlayer = true;
+        }
+
+        if (hardwarePlayer != null) {
+            hardwareEverConnected = true;
+        }
+
+        if (addedPlayer) {
+            updateHud(true);
+            gamePanel.repaint();
+        }
+
+        pauseForHardwareEvent(addedPlayer
+                ? "Hardware player connected on " + portName + "."
+                : "Hardware reconnected on " + portName + ".");
+    }
+
+    private void handleHardwareDisconnected(String reason) {
+        if (shutdownStarted || !hardwareEverConnected) {
+            return;
+        }
+
+        if (hardwarePlayer != null) {
+            hardwarePlayer.stopInjectionOnly();
+        }
+        pauseForHardwareEvent("Hardware disconnected: " + reason + ".");
+    }
+
+    private void pauseForHardwareEvent(String message) {
+        if (!isPaused) {
+            togglePause();
+        }
+        infoLabel.setText(message + " Press Esc to resume.");
+    }
+
+    private void appendPlayer(BasePlayer<HitTheZoneState, HitTheZoneAction> player) {
+        players.add(player);
+        ensureCapacity(players.size());
+
+        int newIndex = players.size() - 1;
+        if (playerLabels != null && playerRow != null) {
+            JLabel label = new JLabel("", SwingConstants.CENTER);
+            label.setFont(infoLabel.getFont().deriveFont(Font.BOLD, 13f));
+            label.setForeground(playerColor(newIndex));
+
+            JLabel[] expandedLabels = Arrays.copyOf(playerLabels, players.size());
+            expandedLabels[newIndex] = label;
+            playerLabels = expandedLabels;
+
+            playerRow.setLayout(new GridLayout(players.size(), 1, 0, 2));
+            playerRow.add(label);
+            playerRow.revalidate();
+            playerRow.repaint();
+            pack();
+        }
+    }
+
+    private void ensureCapacity(int size) {
+        if (hits.length >= size) {
+            return;
+        }
+
+        hits = Arrays.copyOf(hits, size);
+        attempts = Arrays.copyOf(attempts, size);
+        canScore = Arrays.copyOf(canScore, size);
+        lastActions = Arrays.copyOf(lastActions, size);
     }
 
     // ======================================================================
@@ -393,8 +513,8 @@ public class PoC_HitTheZone extends JFrame {
             // that on resume the first tick correctly re-arms injection if the
             // ball is still in the zone.
             for (BasePlayer<HitTheZoneState, HitTheZoneAction> player : players) {
-                if (player instanceof HitTheZoneHardwareAI hardwarePlayer) {
-                    hardwarePlayer.stopInjectionOnly();
+                if (player instanceof HitTheZoneHardwareAI hardwareAi) {
+                    hardwareAi.stopInjectionOnly();
                 }
             }
         } else {
@@ -428,7 +548,12 @@ public class PoC_HitTheZone extends JFrame {
 
     @GeneratedExcludeFromCoverage
     protected void updateHud() {
-        if (isPaused) return;
+        updateHud(false);
+    }
+
+    @GeneratedExcludeFromCoverage
+    private void updateHud(boolean includePausedLabels) {
+        if (isPaused && !includePausedLabels) return;
 
         // Per-player row — minified:
         // Name [TYPE]  |  Hits: X / Y  |  Accuracy: X/Y (Z%)  |  Hits/Pass: X/P (Z%)
@@ -450,9 +575,11 @@ public class PoC_HitTheZone extends JFrame {
         long   mins  = (elapsedMs / 60_000);
         String timer = String.format("%02d:%02d", mins, secs);
 
-        infoLabel.setText(String.format(
-                "Time: %s   |   Total Passes: %d   |   Ball X: %d   |   %s",
-                timer, totalPasses, ballX, inZone ? "★  IN ZONE  ★" : "Out of Zone"));
+        if (!isPaused || includePausedLabels) {
+            infoLabel.setText(String.format(
+                    "Time: %s   |   Total Passes: %d   |   Ball X: %d   |   %s",
+                    timer, totalPasses, ballX, inZone ? "★  IN ZONE  ★" : "Out of Zone"));
+        }
     }
 
     // ======================================================================

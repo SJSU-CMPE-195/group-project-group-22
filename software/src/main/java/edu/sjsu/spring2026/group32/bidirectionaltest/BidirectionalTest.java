@@ -71,14 +71,27 @@ public class BidirectionalTest extends JFrame {
                 }
 
                 @Override
-                public void onDisconnected(String reason) {
-                    if (running.get()) {
-                        SwingUtilities.invokeLater(() -> {
-                            liveDataPanel.appendSystemLog("Connection lost: " + reason);
-                            stopReadLoop();
-                            setConnectedState(false);
-                        });
+                public void onConnected(String portName) {
+                    activeDeviceChannelCount = connectionManager != null
+                            ? connectionManager.getDeviceChannelCount()
+                            : 0;
+                    if (!running.get()) {
+                        running.set(true);
                     }
+                    SwingUtilities.invokeLater(() -> {
+                        liveDataPanel.appendSystemLog("Connection restored on " + portName + ".");
+                        setConnectedState(true);
+                    });
+                }
+
+                @Override
+                public void onDisconnected(String reason) {
+                    running.set(false);
+                    SwingUtilities.invokeLater(() -> {
+                        liveDataPanel.appendSystemLog("Connection lost: " + reason);
+                        stopAllInjectionUiOnly();
+                        setConnectedState(false);
+                    });
                 }
             };
 
@@ -94,7 +107,7 @@ public class BidirectionalTest extends JFrame {
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
-                stopReadLoop();
+                detachCurrentDevice();
                 injectionScheduler.shutdownNow();
                 liveDataPanel.appendSystemLog("-- Closed (ports stay open in Launcher) --");
             }
@@ -122,7 +135,7 @@ public class BidirectionalTest extends JFrame {
             selectorPanel.selectPong();
             switchToDevice(pongManager, "Pong - 6-neuron");
         } else {
-            liveDataPanel.appendSystemLog("-- No devices connected. Connect a device in Launcher and reopen. --");
+            liveDataPanel.appendSystemLog("-- No devices connected. Connect a device in Launcher to enable selection. --");
             setConnectedState(false);
         }
 
@@ -154,7 +167,7 @@ public class BidirectionalTest extends JFrame {
     }
 
     private void switchToDevice(SerialConnectionManager manager, String label) {
-        stopReadLoop();
+        detachCurrentDevice();
         connectionManager = manager;
         activeDeviceChannelCount = manager != null ? manager.getDeviceChannelCount() : 0;
 
@@ -169,49 +182,54 @@ public class BidirectionalTest extends JFrame {
             liveDataPanel.appendSystemLog("Single-channel device detected; Ch2 controls disabled.");
         }
         voltageInjector.stopInjection();
-        startReadLoop();
-        setConnectedState(true);
-        liveDataPanel.appendSystemLog("Injection off by default.");
+        attachCurrentDevice();
+        if (manager != null && manager.isConnected()) {
+            setConnectedState(true);
+            liveDataPanel.appendSystemLog("Injection off by default.");
+        } else {
+            setConnectedState(false);
+            liveDataPanel.appendSystemLog("Device currently disconnected. Reconnect in Launcher to resume.");
+        }
     }
 
-    private void stopReadLoop() {
+    private void detachCurrentDevice() {
         stopAllInjectionForCurrentDevice();
-        if (!running.getAndSet(false)) {
-            return;
-        }
-
-        cancelPendingTask(0);
-        cancelPendingTask(1);
+        running.set(false);
         if (connectionManager != null) {
             connectionManager.removeListener(deviceListener);
         }
     }
 
-    private void stopAllInjectionForCurrentDevice() {
-        if (connectionManager == null || !connectionManager.isConnected()) {
+    private void attachCurrentDevice() {
+        if (connectionManager == null) {
+            running.set(false);
             return;
         }
 
+        connectionManager.removeListener(deviceListener);
+        connectionManager.addListener(deviceListener);
+        running.set(connectionManager.isConnected());
+    }
+
+    private void stopAllInjectionForCurrentDevice() {
         cancelPendingTask(0);
         cancelPendingTask(1);
         remainingRepeats[0] = 0;
         remainingRepeats[1] = 0;
-        connectionManager.stopAllInjection();
+        if (connectionManager != null && connectionManager.isConnected()) {
+            connectionManager.stopAllInjection();
+        }
+        stopAllInjectionUiOnly();
+        if (connectionManager != null && connectionManager.isConnected()) {
+            liveDataPanel.appendSystemLog("-> STOP_INJECT");
+        }
+    }
+
+    private void stopAllInjectionUiOnly() {
         voltageGraph.setInjection(0, false, 0.0);
         voltageGraph.setInjection(1, false, 0.0);
         injectionPanels[0].setInjecting(false);
         injectionPanels[1].setInjecting(false);
-        liveDataPanel.appendSystemLog("-> STOP_INJECT");
-    }
-
-    private void startReadLoop() {
-        if (connectionManager == null || !connectionManager.isConnected()) {
-            setConnectedState(false);
-            return;
-        }
-
-        running.set(true);
-        connectionManager.addListener(deviceListener);
     }
 
     private void handleSample(SerialConnectionManager.SampleFrame frame) {

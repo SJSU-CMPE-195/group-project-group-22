@@ -66,6 +66,7 @@ public class PongGame extends JPanel {
     /** Ball X/Y velocities for speed levels 1-5 (index 0-4). Default level: 2 (index 1). */
     private static final int[] SPEED_VEL_X = { 3, 4, 5, 6, 7 };
     private static final int[] SPEED_VEL_Y = { 3, 5, 7, 9, 11 };
+    private static final PlayerVariant HARDWARE_FALLBACK_VARIANT = PlayerVariant.AI_HARD;
 
     /**
      * Variants available for the TOP paddle.
@@ -127,8 +128,10 @@ public class PongGame extends JPanel {
     BasePlayer<PongState, PongAction> topPlayer;
     private BasePlayer<PongState, PongAction> bottomPlayer;
 
-    /** Provided by Launcher; null = no hardware connected. */
-    private final PongHardwareAI hardwarePlayer;
+    /** Provided by Launcher; null until hardware is available. */
+    private PongHardwareAI hardwarePlayer;
+    private final SerialConnectionManager pongManager;
+    private volatile boolean hardwareConnected;
 
     // -------------------------------------------------------------------------
     // UIq
@@ -138,6 +141,25 @@ public class PongGame extends JPanel {
     private final PongToolbar topToolbar;
     private final PongToolbar bottomToolbar;
     private final GameCanvas  canvas;
+    private final SerialConnectionManager.SerialListener hardwareConnectionListener =
+            new SerialConnectionManager.SerialListener() {
+                @Override
+                public void onConnected(String portName) {
+                    hardwareConnected = true;
+                    SwingUtilities.invokeLater(() -> handleHardwareConnected(portName));
+                }
+
+                @Override
+                public void onInfoUpdated(String deviceName, int channelCount) {
+                    SwingUtilities.invokeLater(() -> handleHardwareInfoUpdated(channelCount));
+                }
+
+                @Override
+                public void onDisconnected(String reason) {
+                    hardwareConnected = false;
+                    SwingUtilities.invokeLater(() -> handleHardwareDisconnected(reason));
+                }
+            };
 
     // -------------------------------------------------------------------------
     // Game loop
@@ -154,9 +176,13 @@ public class PongGame extends JPanel {
      *                       {@code null} if no device is connected (grays out
      *                       the HARDWARE option in both toolbars).
      */
-    public PongGame(PongHardwareAI hardwarePlayer) {
+    public PongGame(PongHardwareAI hardwarePlayer, SerialConnectionManager pongManager) {
         this.hardwarePlayer = hardwarePlayer;
-        boolean hwAvail = (hardwarePlayer != null);
+        this.pongManager = pongManager;
+        this.hardwareConnected = hardwarePlayer != null
+                && pongManager != null
+                && pongManager.isConnected();
+        boolean hwAvail = hardwareConnected;
 
         // Defaults: top gets hardware if available, otherwise Software AI Easy;
         //           bottom always starts as Software AI Hard.
@@ -171,9 +197,6 @@ public class PongGame extends JPanel {
         // Toolbars — each side only shows the variants valid for that side
         topToolbar    = new PongToolbar(PongToolbar.Side.TOP,    TOP_VARIANTS,    topVariant,    hwAvail, scoreboard);
         bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, BOTTOM_VARIANTS, bottomVariant, hwAvail, scoreboard);
-
-        topToolbar.setLockedOutVariant(bottomVariant);
-        bottomToolbar.setLockedOutVariant(topVariant);
 
         topToolbar.setOnVariantChanged(   v -> onVariantSelected(PongToolbar.Side.TOP,    v));
         bottomToolbar.setOnVariantChanged(v -> onVariantSelected(PongToolbar.Side.BOTTOM, v));
@@ -201,6 +224,10 @@ public class PongGame extends JPanel {
         resetBall();
         lockToolbars(false); // start PAUSED, toolbars unlocked
         topToolbar.setHardwareCountsVisible(topVariant == PlayerVariant.HARDWARE);
+
+        if (pongManager != null) {
+            pongManager.addListener(hardwareConnectionListener);
+        }
     }
 
     /**
@@ -212,7 +239,7 @@ public class PongGame extends JPanel {
         // window listener and shutdown hook can reference it directly —
         // matching the same two-layer teardown used by PoC_HitTheZone.
         PongHardwareAI hwPlayer = createHardwarePlayer(pongManager);
-        PongGame game = new PongGame(hwPlayer);
+        PongGame game = new PongGame(hwPlayer, pongManager);
 
         JFrame frame = new JFrame("Pong");
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -221,9 +248,10 @@ public class PongGame extends JPanel {
             @Override
             public void windowClosed(WindowEvent e) {
                 game.stop();
+                game.shutdownHardwareListener();
+                game.stopHardwareInjection();
                 // Layer 1: stop injection when the window closes (port stays open,
                 // mirroring HTZ's dispose() → shutdownForWindowClose() pattern).
-                if (hwPlayer != null) hwPlayer.stopInjectionOnly();
             }
         });
 
@@ -374,7 +402,9 @@ public class PongGame extends JPanel {
     private BasePlayer<PongState, PongAction> createPlayer(PlayerVariant variant) {
         return switch (variant) {
             case HUMAN    -> buildHumanPlayer();
-            case HARDWARE -> hardwarePlayer;
+            case HARDWARE -> hardwarePlayer != null
+                    ? hardwarePlayer
+                    : new PongSoftwareAI("Software AI Hard", 8, 1.00);
             case AI_HARD  -> new PongSoftwareAI("Software AI Hard",  8, 1.00);
             case AI_EASY  -> new PongSoftwareAI("Software AI Easy", 22, 0.72);
         };
@@ -387,21 +417,80 @@ public class PongGame extends JPanel {
                 PongAction.IDLE);
     }
 
+    private void handleHardwareDisconnected(String reason) {
+        stopHardwareInjection();
+        topToolbar.setHardwareAvailable(false);
+        bottomToolbar.setHardwareAvailable(false);
+
+        boolean fellBack = false;
+        if (topVariant == PlayerVariant.HARDWARE) {
+            topVariant = HARDWARE_FALLBACK_VARIANT;
+            topToolbar.setSelectedVariant(topVariant);
+            topToolbar.setHardwareCountsVisible(false);
+            fellBack = true;
+        }
+        if (bottomVariant == PlayerVariant.HARDWARE) {
+            bottomVariant = HARDWARE_FALLBACK_VARIANT;
+            bottomToolbar.setSelectedVariant(bottomVariant);
+            fellBack = true;
+        }
+
+        if (fellBack) {
+            topPlayer = createPlayer(topVariant);
+            bottomPlayer = createPlayer(bottomVariant);
+            wireHumanPlayer();
+            resetEventCounts();
+            resetBall();
+        }
+
+        pauseForHardwareEvent("Hardware disconnected: " + reason);
+    }
+
+    private void handleHardwareConnected(String portName) {
+        pauseForHardwareEvent("Hardware reconnected on " + portName);
+    }
+
+    private void handleHardwareInfoUpdated(int channelCount) {
+        if (channelCount < 2) {
+            topToolbar.setHardwareAvailable(false);
+            bottomToolbar.setHardwareAvailable(false);
+            return;
+        }
+
+        if (hardwarePlayer == null) {
+            hardwarePlayer = createHardwarePlayer(pongManager);
+        }
+        boolean available = hardwarePlayer != null;
+        topToolbar.setHardwareAvailable(available);
+        bottomToolbar.setHardwareAvailable(available);
+    }
+
+    private void pauseForHardwareEvent(String message) {
+        if (gameState != GameState.PAUSED) {
+            stopHardwareInjection();
+            gameState = GameState.PAUSED;
+            lockToolbars(false);
+        }
+        canvas.setStatusMessage(message + ". Press ESC to resume.");
+        canvas.repaint();
+    }
+
+    private void shutdownHardwareListener() {
+        if (pongManager != null) {
+            pongManager.removeListener(hardwareConnectionListener);
+        }
+    }
+
     // =========================================================================
     // Toolbar callbacks
     // =========================================================================
 
     void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
-        PlayerVariant other = (side == PongToolbar.Side.TOP) ? bottomVariant : topVariant;
-        if (chosen == other) return;
-
         if (side == PongToolbar.Side.TOP) {
             topVariant = chosen;
-            bottomToolbar.setLockedOutVariant(topVariant);
             topToolbar.setHardwareCountsVisible(topVariant == PlayerVariant.HARDWARE);
         } else {
             bottomVariant = chosen;
-            topToolbar.setLockedOutVariant(bottomVariant);
         }
 
         topPlayer    = createPlayer(topVariant);
@@ -528,7 +617,10 @@ public class PongGame extends JPanel {
 
     void togglePause() {
         switch (gameState) {
-            case PAUSED    -> startCountdown();
+            case PAUSED    -> {
+                clearPauseStatusMessage();
+                startCountdown();
+            }
             case PLAYING,
                  COUNTDOWN -> {
                      stopHardwareInjection();
@@ -542,6 +634,7 @@ public class PongGame extends JPanel {
         stopHardwareInjection();
         topScore = 0; bottomScore = 0;
         resetEventCounts();
+        clearPauseStatusMessage();
         gameState = GameState.PAUSED;
         lockToolbars(false);
         resetBall();
@@ -549,6 +642,7 @@ public class PongGame extends JPanel {
 
     void startCountdown() {
         stopHardwareInjection();
+        clearPauseStatusMessage();
         gameState        = GameState.COUNTDOWN;
         countdownStartMs = System.currentTimeMillis();
         lockToolbars(true);
@@ -638,6 +732,10 @@ public class PongGame extends JPanel {
         });
     }
 
+    private void clearPauseStatusMessage() {
+        canvas.setStatusMessage(null);
+    }
+
     /**
      * Resets both the hardware spike counter and the local paddle-event counter
      * to zero.  Called after every ball hit (paddle collision) and ball miss
@@ -679,6 +777,11 @@ public class PongGame extends JPanel {
 
         // Current mouse position, used for hover highlighting in the pause overlay.
         private int mouseX = -1, mouseY = -1;
+        private String statusMessage = null;
+
+        void setStatusMessage(String statusMessage) {
+            this.statusMessage = statusMessage;
+        }
 
         GameCanvas() {
             // Click handler
@@ -896,6 +999,15 @@ public class PongGame extends JPanel {
             g.drawString(hint,
                     FIELD_WIDTH / 2 - fm.stringWidth(hint) / 2,
                     FIELD_HEIGHT / 2 + 106);
+
+            if (statusMessage != null && !statusMessage.isBlank()) {
+                g.setFont(new Font("SansSerif", Font.BOLD, 12));
+                g.setColor(new Color(255, 220, 160));
+                fm = g.getFontMetrics();
+                g.drawString(statusMessage,
+                        FIELD_WIDTH / 2 - fm.stringWidth(statusMessage) / 2,
+                        FIELD_HEIGHT / 2 + 126);
+            }
         }
 
         /** Draws a labeled button rectangle with hover tinting. */
@@ -925,7 +1037,7 @@ public class PongGame extends JPanel {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            PongGame game = new PongGame(null);
+            PongGame game = new PongGame(null, null);
             JFrame frame = new JFrame("Pong");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setResizable(false);

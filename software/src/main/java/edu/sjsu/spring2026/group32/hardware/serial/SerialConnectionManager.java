@@ -22,6 +22,7 @@ public class SerialConnectionManager {
                               Integer secondaryRaw) {}
 
     public interface SerialListener {
+        default void onConnected(String portName) {}
         default void onSample(SampleFrame frame) {}
         default void onSampleLine(String line) {}
         default void onStatusPayload(String payload) {}
@@ -129,6 +130,9 @@ public class SerialConnectionManager {
         infoUpdateCount = 0;
         initWriter();
         startReader();
+        for (SerialListener listener : listeners) {
+            listener.onConnected(port.getSystemPortName());
+        }
         return true;
     }
 

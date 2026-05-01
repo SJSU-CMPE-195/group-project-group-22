@@ -4,12 +4,16 @@ import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 
 public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
     private static final double LOGGED_VOLTAGE_MIN = 0.75;
-    private static final long RECONNECT_COOLDOWN_MS = 5000;
 
     private final SerialConnectionManager connectionManager;
     private final NeuralSignalParser parser;
     private final SerialConnectionManager.SerialListener serialListener =
             new SerialConnectionManager.SerialListener() {
+                @Override
+                public void onConnected(String portName) {
+                    seedFromLatestSample();
+                }
+
                 @Override
                 public void onSample(SerialConnectionManager.SampleFrame frame) {
                     double voltage = parser.parseVoltage(frame.line());
@@ -26,16 +30,13 @@ public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
                 }
             };
 
-    private long lastReconnectAttemptTime = 0;
     private volatile double latestVoltage = 0.0;
 
     public HardwareSignalSource(SerialConnectionManager connectionManager, NeuralSignalParser parser) {
         this.connectionManager = connectionManager;
         this.parser = parser;
         this.connectionManager.addListener(serialListener);
-        if (!this.connectionManager.isConnected()) {
-            this.connectionManager.connect();
-        } else {
+        if (this.connectionManager.isConnected()) {
             seedFromLatestSample();
         }
     }
@@ -43,7 +44,6 @@ public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
     @Override
     public double getNextVoltage() {
         if (!connectionManager.isConnected()) {
-            handleDisconnection();
             return 0.0;
         }
 
@@ -62,16 +62,6 @@ public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
     public boolean hasSpike(double threshold) {
         if (!connectionManager.isConnected()) return false;
         return parser.hasSpike(threshold);
-    }
-
-    private void handleDisconnection() {
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastReconnectAttemptTime > RECONNECT_COOLDOWN_MS) {
-            System.out.println(">>> Attempting to reconnect to hardware...");
-            lastReconnectAttemptTime = currentTime;
-            connectionManager.connect();
-            seedFromLatestSample();
-        }
     }
 
     private void seedFromLatestSample() {

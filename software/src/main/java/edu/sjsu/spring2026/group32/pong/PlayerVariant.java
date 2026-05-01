@@ -7,11 +7,9 @@ import edu.sjsu.spring2026.group32.player.PlayerType;
  *
  * <p>Rules enforced by the UI:
  * <ul>
- *   <li>The same variant <em>cannot</em> appear on both sides simultaneously.</li>
- *   <li>{@link #HUMAN} may only appear on one side (covered by the rule above,
- *       since HUMAN is a single variant).</li>
  *   <li>{@link #HARDWARE} is grayed out when no {@link PongHardwareAI} was
  *       provided to {@link PongGame} (i.e., no device is connected).</li>
+ *   <li>Software AI variants may be selected on both sides at the same time.</li>
  * </ul>
  *
  * <p>AI presets are parameterized inside {@link PongGame\#createPlayer}:

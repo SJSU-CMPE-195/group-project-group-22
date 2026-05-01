@@ -12,9 +12,6 @@ import java.util.function.Consumer;
  * <h3>Responsibilities</h3>
  * <ul>
  *   <li>Show a {@link PlayerVariant} dropdown for this side.</li>
- *   <li>Prevent selecting the variant that is already in use on the other side
- *       (the renderer grays it out; the action listener silently reverts the
- *       selection if the user somehow picks it).</li>
  *   <li>Gray out {@link PlayerVariant#HARDWARE} when no hardware player is
  *       available (constructor parameter {@code hardwareAvailable}).</li>
  *   <li>Provide a "Scoreboard" button that opens
@@ -42,11 +39,10 @@ public class PongToolbar extends JPanel {
     // ─── Fields ───────────────────────────────────────────────────────────────
 
     private final Scoreboard scoreboard;
-    private final boolean    hardwareAvailable;
+    private boolean          hardwareAvailable;
 
     final JComboBox<PlayerVariant> dropdown;
     private PlayerVariant lastValidSelection;
-    private PlayerVariant lockedOutVariant;     // the other side's current choice
     private Consumer<PlayerVariant> onVariantChanged;
 
     /** Label shown in the toolbar when the HARDWARE variant is active. */
@@ -132,17 +128,6 @@ public class PongToolbar extends JPanel {
     }
 
     /**
-     * Tells this toolbar which variant the <em>other</em> side has chosen so it
-     * can gray out that option in the dropdown.
-     *
-     * @param otherVariant the other toolbar's current selection
-     */
-    public void setLockedOutVariant(PlayerVariant otherVariant) {
-        this.lockedOutVariant = otherVariant;
-        dropdown.repaint();
-    }
-
-    /**
      * Locks or unlocks the dropdown.
      *
      * <ul>
@@ -175,6 +160,16 @@ public class PongToolbar extends JPanel {
         SwingUtilities.invokeLater(() -> channelSpikeLabel.setVisible(visible));
     }
 
+    public void setHardwareAvailable(boolean hardwareAvailable) {
+        this.hardwareAvailable = hardwareAvailable;
+        dropdown.repaint();
+    }
+
+    public void setSelectedVariant(PlayerVariant variant) {
+        lastValidSelection = variant;
+        dropdown.setSelectedItem(variant);
+    }
+
     // ─── Internal ────────────────────────────────────────────────────────────
 
     /** Called by the dropdown action listener. */
@@ -182,8 +177,7 @@ public class PongToolbar extends JPanel {
         PlayerVariant chosen = (PlayerVariant) dropdown.getSelectedItem();
         if (chosen == null) return;
 
-        boolean unavailable = (chosen == lockedOutVariant)
-                || (chosen == PlayerVariant.HARDWARE && !hardwareAvailable);
+        boolean unavailable = chosen == PlayerVariant.HARDWARE && !hardwareAvailable;
 
         if (unavailable) {
             // Silently revert without firing the callback
@@ -207,7 +201,7 @@ public class PongToolbar extends JPanel {
 
     /**
      * Grays out variants that cannot currently be selected:
-     * the other side's choice and HARDWARE when unavailable.
+     * HARDWARE when unavailable.
      */
     private class VariantCellRenderer extends DefaultListCellRenderer {
         @Override
@@ -218,8 +212,7 @@ public class PongToolbar extends JPanel {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 
             if (value instanceof PlayerVariant v) {
-                boolean unavailable = (v == lockedOutVariant)
-                        || (v == PlayerVariant.HARDWARE && !hardwareAvailable);
+                boolean unavailable = v == PlayerVariant.HARDWARE && !hardwareAvailable;
 
                 if (unavailable) {
                     setText(v.getDisplayName() + " (unavailable)");

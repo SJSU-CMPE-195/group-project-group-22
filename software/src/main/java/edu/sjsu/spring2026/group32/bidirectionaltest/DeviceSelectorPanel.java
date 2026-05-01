@@ -10,6 +10,10 @@ import java.awt.*;
 final class DeviceSelectorPanel extends JPanel {
     private final JRadioButton htzRadio;
     private final JRadioButton pongRadio;
+    private final SerialConnectionManager htzManager;
+    private final SerialConnectionManager pongManager;
+    private final SerialConnectionManager.SerialListener htzListener;
+    private final SerialConnectionManager.SerialListener pongListener;
 
     DeviceSelectorPanel(SerialConnectionManager htzManager,
                         SerialConnectionManager pongManager,
@@ -17,6 +21,8 @@ final class DeviceSelectorPanel extends JPanel {
                         Runnable onPongSelected) {
         super(new FlowLayout(FlowLayout.LEFT, 12, 4));
         setBorder(new TitledBorder("Device (connections managed by Launcher)"));
+        this.htzManager = htzManager;
+        this.pongManager = pongManager;
 
         htzRadio = new JRadioButton("HTZ - 3-neuron (single ch)");
         pongRadio = new JRadioButton("Pong - 6-neuron (dual ch)");
@@ -27,6 +33,42 @@ final class DeviceSelectorPanel extends JPanel {
 
         htzRadio.setEnabled(htzManager != null && htzManager.isConnected());
         pongRadio.setEnabled(pongManager != null && pongManager.isConnected());
+
+        htzListener = new SerialConnectionManager.SerialListener() {
+            @Override
+            public void onConnected(String portName) {
+                SwingUtilities.invokeLater(() -> htzRadio.setEnabled(true));
+            }
+
+            @Override
+            public void onDisconnected(String reason) {
+                SwingUtilities.invokeLater(() -> {
+                    htzRadio.setEnabled(false);
+                    htzRadio.setSelected(false);
+                });
+            }
+        };
+        pongListener = new SerialConnectionManager.SerialListener() {
+            @Override
+            public void onConnected(String portName) {
+                SwingUtilities.invokeLater(() -> pongRadio.setEnabled(true));
+            }
+
+            @Override
+            public void onDisconnected(String reason) {
+                SwingUtilities.invokeLater(() -> {
+                    pongRadio.setEnabled(false);
+                    pongRadio.setSelected(false);
+                });
+            }
+        };
+
+        if (htzManager != null) {
+            htzManager.addListener(htzListener);
+        }
+        if (pongManager != null) {
+            pongManager.addListener(pongListener);
+        }
 
         htzRadio.addActionListener(e -> {
             if (htzManager != null && htzManager.isConnected()) {
@@ -48,6 +90,17 @@ final class DeviceSelectorPanel extends JPanel {
         add(pongRadio);
         add(Box.createHorizontalStrut(20));
         add(statusPanel);
+    }
+
+    @Override
+    public void removeNotify() {
+        if (htzManager != null) {
+            htzManager.removeListener(htzListener);
+        }
+        if (pongManager != null) {
+            pongManager.removeListener(pongListener);
+        }
+        super.removeNotify();
     }
 
     void selectHtz() {

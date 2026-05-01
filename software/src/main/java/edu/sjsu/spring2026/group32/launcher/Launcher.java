@@ -33,9 +33,9 @@ public class Launcher extends JFrame {
     SerialConnectionPanel htzPanel;
     SerialConnectionPanel pongPanel;
 
-    /** Live manager for the HTZ device; null when disconnected. */
+    /** Long-lived manager for the HTZ slot. */
     SerialConnectionManager htzManager;
-    /** Live manager for the Pong device; null when disconnected. */
+    /** Long-lived manager for the Pong slot. */
     SerialConnectionManager pongManager;
 
     private final JButton launchBidirectional;
@@ -72,40 +72,38 @@ public class Launcher extends JFrame {
         });
 
         htzPanel = new SerialConnectionPanel();
+        htzManager = htzPanel.getConnectionManager();
         htzPanel.setExpectedChannelCount(1);   // 3-neuron single-channel firmware
         htzPanel.setBorder(new TitledBorder("Hit The Zone  -  3-neuron (single channel)"));
         htzPanel.setLogSink(msg -> log("[HTZ] " + msg));
         htzPanel.setConnectionListener(new SerialConnectionPanel.ConnectionListener() {
             @Override
             public void onConnected(SerialConnectionManager manager, String port) {
-                htzManager = manager;
                 log("Hit The Zone hardware ready on " + port);
                 pongPanel.refreshPorts();   // hide the now-claimed HTZ port from Pong dropdown
             }
 
             @Override
             public void onDisconnected() {
-                htzManager = null;
                 log("Hit The Zone hardware disconnected.");
                 pongPanel.refreshPorts();   // restore the freed port in Pong dropdown
             }
         });
 
         pongPanel = new SerialConnectionPanel();
+        pongManager = pongPanel.getConnectionManager();
         pongPanel.setExpectedChannelCount(2);  // 6-neuron dual-channel firmware
         pongPanel.setBorder(new TitledBorder("Pong  -  6-neuron (dual channel)"));
         pongPanel.setLogSink(msg -> log("[Pong] " + msg));
         pongPanel.setConnectionListener(new SerialConnectionPanel.ConnectionListener() {
             @Override
             public void onConnected(SerialConnectionManager manager, String port) {
-                pongManager = manager;
                 log("Pong hardware ready on " + port);
                 htzPanel.refreshPorts();    // hide the now-claimed Pong port from HTZ dropdown
             }
 
             @Override
             public void onDisconnected() {
-                pongManager = null;
                 log("Pong hardware disconnected.");
                 htzPanel.refreshPorts();    // restore the freed port in HTZ dropdown
             }
