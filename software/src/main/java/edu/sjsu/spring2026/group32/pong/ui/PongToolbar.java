@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
+import edu.sjsu.spring2026.group32.hardware.NeuralHardwareConfig;
 import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
 
 import javax.swing.*;
@@ -35,6 +36,7 @@ public class PongToolbar extends JPanel {
     /** Format string for the per-channel spike label.  Args: ch1 count, ch2 count. */
     private static final String CHANNEL_SPIKE_FMT   = "Ch1 Spikes: %d  Ch2 Spikes: %d";
     private static final Color  CHANNEL_SPIKE_COLOR  = new Color(100, 255, 150);
+    private static final Dimension TOOLBAR_BUTTON_SIZE = new Dimension(26, 26);
 
     // ─── Fields ───────────────────────────────────────────────────────────────
 
@@ -44,6 +46,7 @@ public class PongToolbar extends JPanel {
     final JComboBox<PlayerVariant> dropdown;
     private PlayerVariant lastValidSelection;
     private Consumer<PlayerVariant> onVariantChanged;
+    private final JButton hardwareSettingsButton;
 
     /** Label shown in the toolbar when the HARDWARE variant is active. */
     private final JLabel channelSpikeLabel;
@@ -97,9 +100,21 @@ public class PongToolbar extends JPanel {
         sbButton.addActionListener(e -> openScoreboard());
         add(sbButton);
 
+        hardwareSettingsButton = new JButton("\u2699");
+        hardwareSettingsButton.setFocusPainted(false);
+        hardwareSettingsButton.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        hardwareSettingsButton.setMargin(new Insets(0, 0, 0, 0));
+        hardwareSettingsButton.setPreferredSize(TOOLBAR_BUTTON_SIZE);
+        hardwareSettingsButton.setMinimumSize(TOOLBAR_BUTTON_SIZE);
+        hardwareSettingsButton.setMaximumSize(TOOLBAR_BUTTON_SIZE);
+        hardwareSettingsButton.setToolTipText("Hardware paddle speed");
+        hardwareSettingsButton.addActionListener(e -> openHardwareSettings());
+        add(hardwareSettingsButton);
+
         // ── Hardware event counters (hidden until HARDWARE variant is active) ──
         channelSpikeLabel = makeCountLabel(String.format(CHANNEL_SPIKE_FMT, 0, 0), CHANNEL_SPIKE_COLOR);
         add(channelSpikeLabel);
+        updateHardwareControls();
     }
 
     // ─── Private helpers ─────────────────────────────────────────────────────
@@ -137,6 +152,7 @@ public class PongToolbar extends JPanel {
      */
     public void setSelectionLocked(boolean locked) {
         dropdown.setEnabled(!locked);
+        hardwareSettingsButton.setEnabled(!locked && isHardwareSettingsVisible());
     }
 
     /**
@@ -157,17 +173,22 @@ public class PongToolbar extends JPanel {
      * @param visible {@code true} when HARDWARE variant is active
      */
     public void setHardwareCountsVisible(boolean visible) {
-        SwingUtilities.invokeLater(() -> channelSpikeLabel.setVisible(visible));
+        SwingUtilities.invokeLater(() -> {
+            channelSpikeLabel.setVisible(visible);
+            updateHardwareControls();
+        });
     }
 
     public void setHardwareAvailable(boolean hardwareAvailable) {
         this.hardwareAvailable = hardwareAvailable;
         dropdown.repaint();
+        updateHardwareControls();
     }
 
     public void setSelectedVariant(PlayerVariant variant) {
         lastValidSelection = variant;
         dropdown.setSelectedItem(variant);
+        updateHardwareControls();
     }
 
     // ─── Internal ────────────────────────────────────────────────────────────
@@ -188,6 +209,7 @@ public class PongToolbar extends JPanel {
         if (chosen == lastValidSelection) return; // no real change
 
         lastValidSelection = chosen;
+        updateHardwareControls();
         if (onVariantChanged != null) onVariantChanged.accept(chosen);
     }
 
@@ -195,6 +217,58 @@ public class PongToolbar extends JPanel {
     private void openScoreboard() {
         JFrame owner = (JFrame) SwingUtilities.getWindowAncestor(this);
         scoreboard.createPopupDialog(owner).setVisible(true);
+    }
+
+    private void openHardwareSettings() {
+        if (!isHardwareSettingsVisible()) {
+            return;
+        }
+
+        JFrame owner = (JFrame) SwingUtilities.getWindowAncestor(this);
+        SpinnerNumberModel model = new SpinnerNumberModel(
+                NeuralHardwareConfig.getPongHardwarePaddleSpeed(),
+                NeuralHardwareConfig.MIN_PONG_HARDWARE_PADDLE_SPEED,
+                NeuralHardwareConfig.MAX_PONG_HARDWARE_PADDLE_SPEED,
+                1);
+        JSpinner spinner = new JSpinner(model);
+        spinner.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        ((JSpinner.NumberEditor) spinner.getEditor()).getTextField().setColumns(4);
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+
+        JLabel descriptionLabel = new JLabel("One spike moves the paddle this distance (px).");
+        descriptionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel inputRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        inputRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        inputRow.add(new JLabel("Paddle speed:"));
+        inputRow.add(spinner);
+
+        panel.add(descriptionLabel);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(inputRow);
+
+        int result = JOptionPane.showConfirmDialog(
+                owner,
+                panel,
+                "Hardware Paddle Speed",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            NeuralHardwareConfig.setPongHardwarePaddleSpeed((Integer) spinner.getValue());
+        }
+    }
+
+    private boolean isHardwareSettingsVisible() {
+        return hardwareAvailable && lastValidSelection == PlayerVariant.HARDWARE;
+    }
+
+    private void updateHardwareControls() {
+        boolean visible = isHardwareSettingsVisible();
+        hardwareSettingsButton.setVisible(visible);
+        hardwareSettingsButton.setEnabled(visible && dropdown.isEnabled());
     }
 
     // ─── Custom renderer ─────────────────────────────────────────────────────

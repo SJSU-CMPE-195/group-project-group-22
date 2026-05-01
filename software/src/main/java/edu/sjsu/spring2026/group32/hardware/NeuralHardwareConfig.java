@@ -4,6 +4,8 @@ package edu.sjsu.spring2026.group32.hardware;
  * Shared defaults for neural-hardware integration.
  */
 public final class NeuralHardwareConfig {
+    public static final int MIN_PONG_HARDWARE_PADDLE_SPEED = 10;
+    public static final int MAX_PONG_HARDWARE_PADDLE_SPEED = 120;
 
     /**
      * Default voltage threshold used by hardware-backed game AIs to treat
@@ -37,9 +39,27 @@ public final class NeuralHardwareConfig {
      * constant in {@code PongGame} so the hardware response can be tuned
      * independently without affecting human or software-AI paddle movement.
      */
-    public static final int PONG_HARDWARE_PADDLE_SPEED = 50;
+    public static final int DEFAULT_PONG_HARDWARE_PADDLE_SPEED = 70;
+
+    private static volatile int pongHardwarePaddleSpeed = DEFAULT_PONG_HARDWARE_PADDLE_SPEED;
 
     private NeuralHardwareConfig() {
         // Utility class.
+    }
+
+    public static int getPongHardwarePaddleSpeed() {
+        return pongHardwarePaddleSpeed;
+    }
+
+    public static void setPongHardwarePaddleSpeed(int speed) {
+        if (speed < MIN_PONG_HARDWARE_PADDLE_SPEED || speed > MAX_PONG_HARDWARE_PADDLE_SPEED) {
+            throw new IllegalArgumentException(
+                    "Pong hardware paddle speed must be between "
+                            + MIN_PONG_HARDWARE_PADDLE_SPEED
+                            + " and "
+                            + MAX_PONG_HARDWARE_PADDLE_SPEED
+                            + '.');
+        }
+        pongHardwarePaddleSpeed = speed;
     }
 }

@@ -191,7 +191,7 @@ public class PongEngine {
     }
 
     private static int dx(PongAction action, boolean isHardware) {
-        int speed = isHardware ? NeuralHardwareConfig.PONG_HARDWARE_PADDLE_SPEED : PADDLE_SPEED;
+        int speed = isHardware ? NeuralHardwareConfig.getPongHardwarePaddleSpeed() : PADDLE_SPEED;
         return switch (action) {
             case LEFT -> -speed;
             case RIGHT -> speed;
