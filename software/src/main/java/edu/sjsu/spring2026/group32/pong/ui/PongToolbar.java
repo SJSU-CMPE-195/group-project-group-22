@@ -33,6 +33,12 @@ public class PongToolbar extends JPanel {
     /** Which edge of the game field this toolbar is attached to. */
     public enum Side { TOP, BOTTOM }
 
+    // ─── Label configuration — edit here to change text or color ─────────────
+
+    /** Format string for the per-channel spike label.  Args: ch1 count, ch2 count. */
+    private static final String CHANNEL_SPIKE_FMT   = "Ch1 Spikes: %d  Ch2 Spikes: %d";
+    private static final Color  CHANNEL_SPIKE_COLOR  = new Color(100, 255, 150);
+
     // ─── Fields ───────────────────────────────────────────────────────────────
 
     private final Scoreboard scoreboard;
@@ -43,9 +49,8 @@ public class PongToolbar extends JPanel {
     private PlayerVariant lockedOutVariant;     // the other side's current choice
     private Consumer<PlayerVariant> onVariantChanged;
 
-    /** Labels shown in the toolbar when the HARDWARE variant is active. */
-    private final JLabel spikeCountLabel;
-    private final JLabel paddleCountLabel;
+    /** Label shown in the toolbar when the HARDWARE variant is active. */
+    private final JLabel channelSpikeLabel;
 
     // ─── Constructor ──────────────────────────────────────────────────────────
 
@@ -97,10 +102,8 @@ public class PongToolbar extends JPanel {
         add(sbButton);
 
         // ── Hardware event counters (hidden until HARDWARE variant is active) ──
-        spikeCountLabel  = makeCountLabel("Spikes: 0",  new Color(100, 200, 255));
-        paddleCountLabel = makeCountLabel("Paddle: 0",  new Color(100, 255, 150));
-        add(spikeCountLabel);
-        add(paddleCountLabel);
+        channelSpikeLabel = makeCountLabel(String.format(CHANNEL_SPIKE_FMT, 0, 0), CHANNEL_SPIKE_COLOR);
+        add(channelSpikeLabel);
     }
 
     // ─── Private helpers ─────────────────────────────────────────────────────
@@ -152,15 +155,14 @@ public class PongToolbar extends JPanel {
     }
 
     /**
-     * Updates the spike and paddle event counter labels.
+     * Updates the per-channel spike label.
      * Must be called on the Swing EDT.
      *
-     * @param spikes  number of spike events since the last ball hit/miss
-     * @param paddles number of paddle move events since the last ball hit/miss
+     * @param ch1  Channel 1 spike events since the last ball hit/miss
+     * @param ch2  Channel 2 spike events since the last ball hit/miss
      */
-    public void setEventCounts(int spikes, int paddles) {
-        spikeCountLabel.setText("Spikes: "  + spikes);
-        paddleCountLabel.setText("Paddle: " + paddles);
+    public void setEventCounts(int ch1, int ch2) {
+        channelSpikeLabel.setText(String.format(CHANNEL_SPIKE_FMT, ch1, ch2));
     }
 
     /**
@@ -170,10 +172,7 @@ public class PongToolbar extends JPanel {
      * @param visible {@code true} when HARDWARE variant is active
      */
     public void setHardwareCountsVisible(boolean visible) {
-        SwingUtilities.invokeLater(() -> {
-            spikeCountLabel.setVisible(visible);
-            paddleCountLabel.setVisible(visible);
-        });
+        SwingUtilities.invokeLater(() -> channelSpikeLabel.setVisible(visible));
     }
 
     // ─── Internal ────────────────────────────────────────────────────────────

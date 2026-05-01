@@ -106,15 +106,9 @@ public class PongGame extends JPanel {
     /** 0-based index into SPEED_VEL_X / SPEED_VEL_Y; shown in pause overlay as levels 1-5. */
     private int ballSpeedLevel = 0; // default = level 1
 
-    /**
-     * Counts paddle moves made by the HARDWARE player during the current rally
-     * (since the last ball hit or miss).  Reset via {@link #resetEventCounts()}.
-     */
-    private int paddleEventCount = 0;
-
     /** Last values pushed to the toolbar; used to avoid redundant EDT dispatches. */
-    private int lastDisplayedSpikes  = -1;
-    private int lastDisplayedPaddles = -1;
+    private int lastDisplayedCh1 = -1;
+    private int lastDisplayedCh2 = -1;
 
     /**
      * When true (default), each paddle hit normalizes the ball velocity back to
@@ -470,11 +464,6 @@ public class PongGame extends JPanel {
         PongAction topAct    = topPlayer.getNextMove(topState);
         PongAction bottomAct = bottomPlayer.getNextMove(bottomState);
 
-        // Count hardware paddle events (each tick the hardware paddle moves)
-        if (topVariant == PlayerVariant.HARDWARE && topAct != PongAction.IDLE) {
-            paddleEventCount++;
-        }
-
         // Move paddles — hardware player uses its own configured speed
         topPaddleX    = clampPaddle(topPaddleX    + dx(topAct,    topPlayer    instanceof PongHardwareAI));
         bottomPaddleX = clampPaddle(bottomPaddleX + dx(bottomAct, bottomPlayer instanceof PongHardwareAI));
@@ -655,25 +644,24 @@ public class PongGame extends JPanel {
      * (ball exits the field) so the counts always reflect the current rally.
      */
     private void resetEventCounts() {
-        paddleEventCount    = 0;
-        lastDisplayedSpikes  = -1; // force display refresh on next tick
-        lastDisplayedPaddles = -1;
+        lastDisplayedCh1 = -1; // force display refresh on next tick
+        lastDisplayedCh2 = -1;
         if (hardwarePlayer != null) hardwarePlayer.resetSpikeCount();
     }
 
     /**
-     * Pushes the current spike / paddle counts to the top toolbar label.
+     * Pushes the current Ch1 / Ch2 spike counts to the top toolbar label.
      * Only dispatches to the EDT when the values have actually changed, to
      * avoid flooding the event queue at 60 fps.
      */
     private void updateEventDisplay() {
         if (topVariant != PlayerVariant.HARDWARE || hardwarePlayer == null) return;
-        int spikes  = hardwarePlayer.getSpikeCount();
-        int paddles = paddleEventCount;
-        if (spikes != lastDisplayedSpikes || paddles != lastDisplayedPaddles) {
-            lastDisplayedSpikes  = spikes;
-            lastDisplayedPaddles = paddles;
-            SwingUtilities.invokeLater(() -> topToolbar.setEventCounts(spikes, paddles));
+        int ch1 = hardwarePlayer.getCh1SpikeCount();
+        int ch2 = hardwarePlayer.getCh2SpikeCount();
+        if (ch1 != lastDisplayedCh1 || ch2 != lastDisplayedCh2) {
+            lastDisplayedCh1 = ch1;
+            lastDisplayedCh2 = ch2;
+            SwingUtilities.invokeLater(() -> topToolbar.setEventCounts(ch1, ch2));
         }
     }
 

@@ -6,6 +6,7 @@ import edu.sjsu.spring2026.group32.hardware.NeuralHardwareConfig;
 import edu.sjsu.spring2026.group32.hardware.VoltageInjector;
 import edu.sjsu.spring2026.group32.player.BasePlayer;
 import edu.sjsu.spring2026.group32.player.PlayerType;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Hardware AI player for vertical Pong.
@@ -77,11 +78,18 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     private volatile boolean injectionEnabled = false;
 
     /**
-     * Number of spike events detected since the last reset.
+     * Total spike events detected since the last reset (both channels combined).
      * Incremented each game tick a channel's voltage meets or exceeds the
      * firing threshold.  Reset via {@link #resetSpikeCount()}.
+     * AtomicInteger is used because {@code ++} on a volatile int is not atomic.
      */
-    private volatile int spikeCount = 0;
+    private final AtomicInteger spikeCount    = new AtomicInteger(0);
+
+    /** Spike events from Channel 1 (left source) since the last reset. */
+    private final AtomicInteger ch1SpikeCount = new AtomicInteger(0);
+
+    /** Spike events from Channel 2 (right source) since the last reset. */
+    private final AtomicInteger ch2SpikeCount = new AtomicInteger(0);
 
     // =========================================================================
     // Constructors
@@ -163,16 +171,26 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     @Override
     public PongAction getNextMove(PongState state) {
         updateInjection(state);
-        if (leftSource.hasSpike(threshold))  { spikeCount++; return PongAction.LEFT;  }
-        if (rightSource.hasSpike(threshold)) { spikeCount++; return PongAction.RIGHT; }
+        if (leftSource.hasSpike(threshold))  { spikeCount.incrementAndGet(); ch1SpikeCount.incrementAndGet(); return PongAction.LEFT;  }
+        if (rightSource.hasSpike(threshold)) { spikeCount.incrementAndGet(); ch2SpikeCount.incrementAndGet(); return PongAction.RIGHT; }
         return PongAction.IDLE;
     }
 
-    /** Returns the number of spike events detected since the last {@link #resetSpikeCount()}. */
-    public int getSpikeCount() { return spikeCount; }
+    /** Returns the total spike events (both channels) since the last {@link #resetSpikeCount()}. */
+    public int getSpikeCount()    { return spikeCount.get();    }
 
-    /** Resets the spike counter to zero. Call after each ball hit or miss. */
-    public void resetSpikeCount() { spikeCount = 0; }
+    /** Returns Channel 1 (left) spike events since the last {@link #resetSpikeCount()}. */
+    public int getCh1SpikeCount() { return ch1SpikeCount.get(); }
+
+    /** Returns Channel 2 (right) spike events since the last {@link #resetSpikeCount()}. */
+    public int getCh2SpikeCount() { return ch2SpikeCount.get(); }
+
+    /** Resets all spike counters (total, Ch1, Ch2) to zero. Call after each ball hit or miss. */
+    public void resetSpikeCount() {
+        spikeCount.set(0);
+        ch1SpikeCount.set(0);
+        ch2SpikeCount.set(0);
+    }
 
     @Override public String     getName() { return name;                }
     @Override public PlayerType getType() { return PlayerType.HARDWARE; }
