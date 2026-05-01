@@ -217,20 +217,17 @@ public class BidirectionalTest extends JFrame {
     private void handleSample(SerialConnectionManager.SampleFrame frame) {
         long millis = frame.millis();
         int raw0 = frame.primaryRaw();
-        double volts0 = (raw0 / (double) ADC_MAX) * V_REF;
+        double firstVolts = (raw0 / (double) ADC_MAX) * V_REF;
 
         Integer raw1Value = frame.secondaryRaw();
-        int raw1 = raw1Value != null ? raw1Value : -1;
-        double volts1 = raw1Value != null ? (raw1 / (double) ADC_MAX) * V_REF : 0.0;
+        int secondRaw = raw1Value != null ? raw1Value : -1;
+        double secondVolts = raw1Value != null ? (secondRaw / (double) ADC_MAX) * V_REF : 0.0;
 
         String time = LocalTime.now().format(TIME_FMT);
-        int secondRaw = raw1;
-        double firstVolts = volts0;
-        double secondVolts = volts1;
         String ch1LogLine = String.format("%s  Ch1: %5.3f V (raw %4d)  t=%dms",
-                time, volts0, raw0, millis);
-        String ch2LogLine = raw1 >= 0
-                ? String.format("%s  Ch2: %5.3f V (raw %4d)  t=%dms", time, volts1, raw1, millis)
+                time, firstVolts, raw0, millis);
+        String ch2LogLine = secondRaw >= 0
+                ? String.format("%s  Ch2: %5.3f V (raw %4d)  t=%dms", time, secondVolts, secondRaw, millis)
                 : null;
 
         SwingUtilities.invokeLater(() -> {
@@ -257,8 +254,12 @@ public class BidirectionalTest extends JFrame {
                 voltageIndex = 3;
             }
 
+            // Only update the live-data mode indicator and graph — do NOT call
+            // setInjecting(true) here. Panel state is driven exclusively by
+            // startInjectionCycle / onPulseEnd / stopInjection so that injection
+            // initiated by an external source (e.g. Pong) does not gray out the
+            // voltage injector controls.
             liveDataPanel.setModeInjecting(channel);
-            injectionPanels[channel].setInjecting(true);
             if (parts.length > voltageIndex) {
                 try {
                     double volts = Double.parseDouble(parts[voltageIndex].replace("V", "").trim());
@@ -275,17 +276,11 @@ public class BidirectionalTest extends JFrame {
             if (parts.length >= 2 && parts[1].startsWith("CH")) {
                 int channel = "CH2".equals(parts[1]) ? 1 : 0;
                 voltageGraph.setInjection(channel, false, 0.0);
-                // Only release the panel if the interval cycle is fully done.
-                // During interval mode the Java side stops/restarts pulses itself;
-                // remainingRepeats > 0 means another pulse is still queued.
-                if (remainingRepeats[channel] == 0) {
-                    injectionPanels[channel].setInjecting(false);
-                }
+                // Panel state is managed by onPulseEnd / stopInjection; skip here
+                // to prevent external stops from interfering with our panel.
             } else {
                 voltageGraph.setInjection(0, false, 0.0);
                 voltageGraph.setInjection(1, false, 0.0);
-                if (remainingRepeats[0] == 0) injectionPanels[0].setInjecting(false);
-                if (remainingRepeats[1] == 0) injectionPanels[1].setInjecting(false);
             }
             if (remainingRepeats[0] == 0 && remainingRepeats[1] == 0) {
                 liveDataPanel.setModeNormal();
@@ -420,10 +415,7 @@ public class BidirectionalTest extends JFrame {
         if (secondRaw < 0) {
             return false;
         }
-        if (activeDeviceChannelCount == 1) {
-            return false;
-        }
-        return true;
+        return activeDeviceChannelCount != 1;
     }
 
     private void revealSecondChannel() {
