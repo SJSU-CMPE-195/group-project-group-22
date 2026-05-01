@@ -140,4 +140,98 @@ class NeuralSignalParserTest {
         double afterMalformed = parser.parseVoltage("0,0,0,BAD");
         assertEquals(lastGood, afterMalformed, 0.0001, "Malformed line should return last known EMA value unchanged");
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // hasSpike() — rising-edge detection
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("hasSpike() returns true only on the first above-threshold call (rising edge)")
+    void hasSpikeReturnsTrueOnlyOnRisingEdge() {
+        double threshold = 0.5;
+
+        // Seed below threshold so lastWasAbove starts false
+        parser.parseVoltage("0,0,0,0");          // 0 V — below
+        assertFalse(parser.hasSpike(threshold),  "Below threshold: no spike");
+
+        // Voltage crosses above threshold → rising edge → spike
+        parser.parseVoltage("0,0,0,4095");       // 3.3 V — above
+        assertTrue(parser.hasSpike(threshold),   "First above-threshold call: rising edge → spike");
+
+        // Voltage stays high → NO second spike
+        parser.parseVoltage("0,0,0,4095");       // still 3.3 V
+        assertFalse(parser.hasSpike(threshold),  "Voltage held high: plateau suppressed");
+
+        // Voltage returns to baseline → resets state
+        parser.parseVoltage("0,0,0,0");          // 0 V — below
+        assertFalse(parser.hasSpike(threshold),  "Falling edge: no spike");
+
+        // New spike after baseline
+        parser.parseVoltage("0,0,0,4095");       // 3.3 V again
+        assertTrue(parser.hasSpike(threshold),   "Second crossing: new spike detected");
+    }
+
+    @Test
+    @DisplayName("hasSpike() correctly counts discrete spikes separated by baseline")
+    void hasSpikeCountsDiscreteEvents() {
+        double threshold = 1.0;
+        int spikeCount = 0;
+
+        // Three spike-then-baseline cycles
+        for (int i = 0; i < 3; i++) {
+            parser.parseVoltage("0,0,0,0");      // baseline
+            parser.hasSpike(threshold);           // ensure lastWasAbove = false
+
+            parser.parseVoltage("0,0,0,4095");   // spike onset
+            if (parser.hasSpike(threshold)) spikeCount++;
+
+            // Held high for two more ticks — must NOT increment count
+            parser.parseVoltage("0,0,0,4095");
+            if (parser.hasSpike(threshold)) spikeCount++;
+
+            parser.parseVoltage("0,0,0,4095");
+            if (parser.hasSpike(threshold)) spikeCount++;
+        }
+
+        assertEquals(3, spikeCount,
+                "Each low-to-high crossing counts as exactly one spike");
+    }
+
+    @Test
+    @DisplayName("hasSpike() at exact threshold boundary fires on crossing, not below")
+    void hasSpikeRespectsBoundary() {
+        double threshold = 1.0;
+
+        // Simulate just-below voltage (raw ≈ 1240 for 1.0 V threshold)
+        // Use a custom parser for fine-grained control
+        NeuralSignalParser p2 = new NeuralSignalParser(4095.0, 3.3, 1.0, 0);
+
+        // Just below threshold (0.999 V ≈ raw 1240)
+        p2.parseVoltage("0,0,0,1240");
+        assertFalse(p2.hasSpike(threshold), "Just below 1.0 V: no spike");
+
+        // At exact threshold (1.0 V ≈ raw 1241)
+        p2.parseVoltage("0,0,0,1241");
+        assertTrue(p2.hasSpike(threshold), "At or above threshold: spike fires");
+    }
+
+    @Test
+    @DisplayName("resetFilter() clears lastWasAbove so next above-threshold call fires again")
+    void resetFilterClearsSpikeLatchState() {
+        double threshold = 0.5;
+
+        parser.parseVoltage("0,0,0,4095");       // 3.3 V
+        assertTrue(parser.hasSpike(threshold),   "First spike fires");
+
+        parser.parseVoltage("0,0,0,4095");       // still high
+        assertFalse(parser.hasSpike(threshold),  "Plateau suppressed");
+
+        // Reset simulates hardware reconnect / game reset
+        parser.resetFilter();
+
+        // After reset, next above-threshold read is treated as a fresh rising edge
+        parser.parseVoltage("0,0,0,4095");
+        assertTrue(parser.hasSpike(threshold),
+                "After resetFilter(), next above-threshold call fires as a new spike");
+    }
 }

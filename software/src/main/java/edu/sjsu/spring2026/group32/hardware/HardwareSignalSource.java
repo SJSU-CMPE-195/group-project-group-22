@@ -50,6 +50,20 @@ public class HardwareSignalSource implements BaseSignalSource, VoltageInjector {
         return latestVoltage;
     }
 
+    /**
+     * Delegates to {@link NeuralSignalParser#hasSpike(double)}, providing
+     * stateful rising-edge detection: returns {@code true} exactly once per
+     * low-to-high crossing regardless of how many game ticks the spike spans.
+     *
+     * <p>Returns {@code false} immediately when the hardware is disconnected,
+     * matching the behavior of {@link #getNextVoltage()}.
+     */
+    @Override
+    public boolean hasSpike(double threshold) {
+        if (!connectionManager.isConnected()) return false;
+        return parser.hasSpike(threshold);
+    }
+
     private void handleDisconnection() {
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastReconnectAttemptTime > RECONNECT_COOLDOWN_MS) {

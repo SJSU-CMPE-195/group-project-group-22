@@ -39,8 +39,6 @@ public class HitTheZoneHardwareAI
 
     /** Tracks the zone state from the previous tick to detect entry/exit edges. */
     private boolean wasInZone = false;
-    /** Tracks whether the voltage was already above threshold on the prior tick. */
-    private boolean wasFiring = false;
 
     /**
      * Canonical constructor.
@@ -72,19 +70,26 @@ public class HitTheZoneHardwareAI
         if (!wasInZone && state.inZone()) {
             debug(String.format("zone enter -> inject %.3fV", NeuralHardwareConfig.CONSTANT_INJECT_VOLTAGE));
             injector.injectVoltage(NeuralHardwareConfig.CONSTANT_INJECT_VOLTAGE);
-            wasFiring = false;
         } else if (wasInZone && !state.inZone()) {
             debug("zone exit -> stop injection");
             injector.stopInjection();
-            wasFiring = false;
+            // Voltage returns to 0 after injection stops, which naturally resets
+            // the parser's lastWasAbove flag before the next zone entry.
         }
         wasInZone = state.inZone();
     }
 
     private HitTheZoneAction actionFromVoltage(HitTheZoneState state, double voltage) {
         if (!state.inZone()) {
-            if (voltage >= voltageThreshold) {
-                debug(String.format("score %.3fV because ball is outside zone", voltage));
+            // Late-fire contract: a genuine new spike (rising edge) that occurs after
+            // zone exit still registers a SCORE event.  Using sourceHasSpike() here —
+            // rather than a stateless voltage comparison — prevents the plateau of a
+            // spike already counted in-zone from spilling over into a spurious out-of-zone
+            // attempt when the ball exits while voltage is still high.  Without this,
+            // every in-zone hit produces one extra uncredited processScore() call,
+            // inflating the attempts counter and halving the displayed accuracy.
+            if (sourceHasSpike(voltageThreshold)) {
+                debug(String.format("score %.3fV (late-fire, out of zone)", voltage));
                 return HitTheZoneAction.SCORE;
             }
             return null;
@@ -92,14 +97,13 @@ public class HitTheZoneHardwareAI
         if (voltage >= LOGGED_VOLTAGE_MIN) {
             debug(String.format("in-zone voltage %.3fV (threshold %.3fV)", voltage, voltageThreshold));
         }
-        if (voltage >= voltageThreshold) {
-            if (!wasFiring) {
-                wasFiring = true;
-                debugGreen(String.format("emit SCORE at %.3fV", voltage));
-                return HitTheZoneAction.SCORE;
-            }
+        // Rising-edge detection is delegated to NeuralSignalParser.hasSpike() via
+        // HardwareAIPlayer.sourceHasSpike().  A multi-tick spike plateau produces
+        // exactly one SCORE instead of one per game tick.
+        if (sourceHasSpike(voltageThreshold)) {
+            debugGreen(String.format("emit SCORE at %.3fV", voltage));
+            return HitTheZoneAction.SCORE;
         }
-        wasFiring = false;
         return null;
     }
 
@@ -162,7 +166,8 @@ public class HitTheZoneHardwareAI
         debug("stopInjectionOnly()");
         injector.stopInjection();
         wasInZone = false;
-        wasFiring = false;
+        // The voltage drops to 0 once injection stops, which naturally resets
+        // the parser's lastWasAbove flag before the next session.
     }
 
     /**

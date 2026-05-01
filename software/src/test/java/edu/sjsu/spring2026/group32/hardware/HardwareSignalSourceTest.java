@@ -248,6 +248,54 @@ class HardwareSignalSourceTest {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // hasSpike() — rising-edge detection via NeuralSignalParser
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("hasSpike() returns true once on rising edge and false on the held-high plateau")
+    void testHasSpikeRisingEdgeOnly() {
+        when(mockManager.isConnected()).thenReturn(true);
+
+        ArgumentCaptor<SerialConnectionManager.SerialListener> listenerCaptor =
+                ArgumentCaptor.forClass(SerialConnectionManager.SerialListener.class);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+        verify(mockManager).addListener(listenerCaptor.capture());
+        SerialConnectionManager.SerialListener listener = listenerCaptor.getValue();
+
+        // Seed baseline (0 V) so the parser's lastWasAbove starts false
+        listener.onSample(new SerialConnectionManager.SampleFrame("0,0,0,0",    0L, 0,    null));
+        assertFalse(signalSource.hasSpike(0.5), "Baseline: no spike");
+
+        // Rising edge — first tick above threshold
+        listener.onSample(new SerialConnectionManager.SampleFrame("0,0,0,4095", 1L, 4095, null));
+        assertTrue(signalSource.hasSpike(0.5),  "Rising edge: spike detected");
+
+        // Plateau — voltage still high, must NOT fire again
+        listener.onSample(new SerialConnectionManager.SampleFrame("0,0,0,4095", 2L, 4095, null));
+        assertFalse(signalSource.hasSpike(0.5), "Plateau: duplicate suppressed");
+
+        // Return to baseline then a new spike
+        listener.onSample(new SerialConnectionManager.SampleFrame("0,0,0,0",    3L, 0,    null));
+        assertFalse(signalSource.hasSpike(0.5), "Baseline again: no spike");
+
+        listener.onSample(new SerialConnectionManager.SampleFrame("0,0,0,4095", 4L, 4095, null));
+        assertTrue(signalSource.hasSpike(0.5),  "Second crossing: new spike detected");
+    }
+
+    @Test
+    @DisplayName("hasSpike() returns false immediately when the manager is disconnected")
+    void testHasSpikeReturnsFalseWhenDisconnected() {
+        when(mockManager.isConnected()).thenReturn(false);
+        when(mockManager.connect()).thenReturn(false);
+
+        signalSource = new HardwareSignalSource(mockManager, realParser);
+
+        assertFalse(signalSource.hasSpike(0.5),
+                "Disconnected hardware should never report a spike");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Shutdown
     // ──────────────────────────────────────────────────────────────────────────
 

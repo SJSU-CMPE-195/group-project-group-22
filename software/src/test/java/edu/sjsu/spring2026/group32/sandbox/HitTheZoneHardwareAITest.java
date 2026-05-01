@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.sandbox;
 
 import edu.sjsu.spring2026.group32.hardware.BaseSignalSource;
+import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.VoltageInjector;
 import edu.sjsu.spring2026.group32.player.PlayerType;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,10 +21,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * <ul>
  *   <li>Rising-edge detection: SCORE is emitted only on the first tick voltage
  *       crosses the threshold from below while in-zone.  Subsequent held-high
- *       ticks return {@code null} because {@code wasFiring} is set.</li>
+ *       ticks return {@code null} because {@link NeuralSignalParser#hasSpike(double)}
+ *       in the parser layer suppresses the plateau.  The {@code scoresOncePerThresholdCrossing}
+ *       test uses a parser-backed source to exercise this full-stack behaviour.</li>
  *   <li>Out-of-zone scoring: when the ball is outside the zone and voltage ≥
  *       threshold the source intentionally returns SCORE (late-fire after zone
- *       exit is treated as a valid hit by the game).</li>
+ *       exit is treated as a valid hit by the game).  This path is stateless by design.</li>
  *   <li>Zone transition side-effects: injector is called on entry/exit edges.</li>
  * </ul>
  */
@@ -32,6 +35,26 @@ class HitTheZoneHardwareAITest {
 
     private static BaseSignalSource fixed(double voltage) {
         return () -> voltage;
+    }
+
+    /**
+     * Builds a {@link BaseSignalSource} backed by a real {@link NeuralSignalParser}
+     * so that {@link BaseSignalSource#hasSpike(double)} uses stateful rising-edge
+     * detection rather than the stateless lambda default.
+     *
+     * <p>The caller pre-feeds the parser with a baseline sample (0 V) so that
+     * {@code lastWasAbove} starts {@code false}, then returns the source.
+     * Subsequent calls to {@link NeuralSignalParser#parseVoltage} on the returned
+     * parser advance the internal voltage seen by {@code hasSpike()}.
+     */
+    private static Object[] parserBacked() {
+        NeuralSignalParser parser = new NeuralSignalParser();
+        parser.parseVoltage("0,0,0,0"); // seed baseline so lastWasAbove = false
+        BaseSignalSource src = new BaseSignalSource() {
+            @Override public double getNextVoltage() { return 0.0; } // not used by HTZ in-zone path
+            @Override public boolean hasSpike(double threshold) { return parser.hasSpike(threshold); }
+        };
+        return new Object[]{parser, src};
     }
 
     // ── Basic scoring ─────────────────────────────────────────────────────────
@@ -76,10 +99,11 @@ class HitTheZoneHardwareAITest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Returns SCORE when outside zone and voltage meets threshold (late-fire contract)")
+    @DisplayName("Returns SCORE when outside zone and a genuine rising-edge spike is present (late-fire contract)")
     void scoreWhenOutsideZoneAndVoltageHigh() {
-        // actionFromVoltage() returns SCORE on the !inZone branch when voltage >= threshold.
-        // This is the intended contract: a spike that fires just after the ball exits still counts.
+        // The out-of-zone branch now uses sourceHasSpike() (rising-edge detection).
+        // For a stateless lambda stub hasSpike() delegates to getNextVoltage() >= threshold,
+        // so fixed(2.0) still returns SCORE — the stateless default models a fresh spike each call.
         HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 1.0);
         assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(false)));
     }
@@ -91,18 +115,84 @@ class HitTheZoneHardwareAITest {
         assertNull(p.getNextMove(new HitTheZoneState(false)));
     }
 
+    @Test
+    @DisplayName("Out-of-zone plateau suppressed: in-zone spike does not produce a second SCORE on zone exit")
+    void outOfZonePlateauSuppressedAfterInZoneSpike() {
+        // Root-cause regression test for the double-attempt bug:
+        // Before the fix, actionFromVoltage() used a stateless voltage >= threshold check
+        // in the out-of-zone branch.  When the ball exited while voltage was still high
+        // from the same spike that was already counted in-zone, a spurious SCORE was
+        // returned, incrementing attempts without crediting a hit — halving accuracy.
+        //
+        // The fix: both branches now call sourceHasSpike() so the parser's lastWasAbove
+        // latch suppresses the plateau regardless of whether the ball is in- or out-of-zone.
+        Object[] parserAndSource = parserBacked();
+        NeuralSignalParser parser = (NeuralSignalParser) parserAndSource[0];
+        BaseSignalSource   src    = (BaseSignalSource)   parserAndSource[1];
+
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", src, 1.0);
+
+        // Rising edge fires while ball is in zone → exactly one SCORE
+        parser.parseVoltage("0,0,0,4095");
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(true)),
+                "in-zone rising edge → SCORE");
+
+        // Ball exits zone; voltage is still high (plateau from the same spike) →
+        // the out-of-zone branch must suppress this, not produce another SCORE
+        parser.parseVoltage("0,0,0,4095");
+        assertNull(p.getNextMove(new HitTheZoneState(false)),
+                "out-of-zone plateau → null (no spurious second SCORE)");
+
+        // Voltage drops; still out-of-zone → null
+        parser.parseVoltage("0,0,0,0");
+        assertNull(p.getNextMove(new HitTheZoneState(false)),
+                "out-of-zone, voltage low → null");
+
+        // A genuine NEW spike fires after zone exit (late-fire) → SCORE
+        parser.parseVoltage("0,0,0,4095");
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(new HitTheZoneState(false)),
+                "out-of-zone genuine new rising edge → SCORE (late-fire contract)");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
-    // ── Rising-edge detection (wasFiring) ────────────────────────────────────
+    // ── Rising-edge detection (NeuralSignalParser.hasSpike) ──────────────────
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Scores once per threshold crossing: null on the tick immediately after SCORE while voltage stays high")
+    @DisplayName("Scores once per threshold crossing: parser rising-edge suppresses duplicate on held-high plateau")
     void scoresOncePerThresholdCrossing() {
-        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", fixed(2.0), 1.0);
+        // Use a NeuralSignalParser-backed source so hasSpike() performs real
+        // rising-edge detection instead of the stateless lambda default.
+        // This exercises the full stack: parser → BaseSignalSource → HardwareAIPlayer → HTZ AI.
+        Object[] parserAndSource = parserBacked();
+        NeuralSignalParser parser = (NeuralSignalParser) parserAndSource[0];
+        BaseSignalSource src      = (BaseSignalSource)   parserAndSource[1];
+
+        HitTheZoneHardwareAI p = new HitTheZoneHardwareAI("Bot", src, 1.0);
         HitTheZoneState inZone = new HitTheZoneState(true);
 
-        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(inZone), "tick 1: should SCORE on rising edge");
-        assertNull(p.getNextMove(inZone), "tick 2: voltage still high — wasFiring suppresses second SCORE");
+        // Feed a high-voltage sample (3.3 V) → rising edge
+        parser.parseVoltage("0,0,0,4095");
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(inZone),
+                "tick 1: rising edge → SCORE");
+
+        // Voltage stays high (same line) → plateau must be suppressed
+        parser.parseVoltage("0,0,0,4095");
+        assertNull(p.getNextMove(inZone),
+                "tick 2: voltage still high — parser's lastWasAbove suppresses second SCORE");
+
+        // Plateau suppressed for a third tick too
+        parser.parseVoltage("0,0,0,4095");
+        assertNull(p.getNextMove(inZone),
+                "tick 3: still high — no SCORE");
+
+        // Voltage returns to baseline, then a fresh spike produces a new SCORE
+        parser.parseVoltage("0,0,0,0");
+        p.getNextMove(inZone); // consume the falling-edge tick
+
+        parser.parseVoltage("0,0,0,4095");
+        assertEquals(HitTheZoneAction.SCORE, p.getNextMove(inZone),
+                "tick 5: new rising edge after baseline → SCORE again");
     }
 
     @Test

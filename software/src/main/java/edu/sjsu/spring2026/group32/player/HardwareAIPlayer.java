@@ -57,6 +57,25 @@ public abstract class HardwareAIPlayer<S extends GameState, A extends Action>
         return voltageToAction(state, signalSource.getNextVoltage());
     }
 
+    /**
+     * Returns {@code true} when the underlying signal source reports a discrete
+     * spike at or above {@code threshold}.
+     *
+     * <p>For real hardware ({@link edu.sjsu.spring2026.group32.hardware.HardwareSignalSource})
+     * this is a stateful rising-edge check — one {@code true} per low-to-high
+     * crossing.  For test stubs it falls through to the stateless default
+     * ({@code voltage >= threshold}).
+     *
+     * <p>Subclasses call this from within {@link #voltageToAction} whenever they
+     * need discrete spike semantics rather than a raw voltage comparison.
+     *
+     * @param threshold firing threshold in volts
+     * @return {@code true} on a rising-edge spike event
+     */
+    protected boolean sourceHasSpike(double threshold) {
+        return signalSource.hasSpike(threshold);
+    }
+
     @Override
     public String getName() { return name; }
 

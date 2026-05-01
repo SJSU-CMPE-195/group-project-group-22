@@ -76,6 +76,13 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
      */
     private volatile boolean injectionEnabled = false;
 
+    /**
+     * Number of spike events detected since the last reset.
+     * Incremented each game tick a channel's voltage meets or exceeds the
+     * firing threshold.  Reset via {@link #resetSpikeCount()}.
+     */
+    private volatile int spikeCount = 0;
+
     // =========================================================================
     // Constructors
     // =========================================================================
@@ -101,22 +108,6 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
         this.rightSource = rightSource;
         this.injector    = injector;
         this.threshold   = threshold;
-    }
-
-    /**
-     * Constructor with injector and the shared default firing threshold.
-     *
-     * @param name        display name shown in scoreboard and overlays
-     * @param leftSource  ADC signal source for LEFT movement (CH1 / GPIO34)
-     * @param rightSource ADC signal source for RIGHT movement (CH2 / GPIO35)
-     * @param injector    used to send injection commands to the ESP32
-     */
-    public PongHardwareAI(String name,
-                          BaseSignalSource leftSource,
-                          BaseSignalSource rightSource,
-                          VoltageInjector  injector) {
-        this(name, leftSource, rightSource, injector,
-             NeuralHardwareConfig.DEFAULT_FIRING_THRESHOLD_VOLTS);
     }
 
     /**
@@ -155,7 +146,11 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
 
     /**
      * Injects voltage on the appropriate channel based on ball-vs-paddle offset,
-     * then reads both ADC channels and returns the corresponding action.
+     * then reads both ADC channels for a discrete spike using rising-edge detection.
+     *
+     * <p>{@link BaseSignalSource#hasSpike(double)} is used instead of a raw
+     * {@code >= threshold} comparison so that a single biological spike spanning
+     * multiple game ticks is counted and acted upon exactly once.
      *
      * <p>Injection state transitions:
      * <ul>
@@ -168,10 +163,16 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     @Override
     public PongAction getNextMove(PongState state) {
         updateInjection(state);
-        if (leftSource.getNextVoltage()  >= threshold) return PongAction.LEFT;
-        if (rightSource.getNextVoltage() >= threshold) return PongAction.RIGHT;
+        if (leftSource.hasSpike(threshold))  { spikeCount++; return PongAction.LEFT;  }
+        if (rightSource.hasSpike(threshold)) { spikeCount++; return PongAction.RIGHT; }
         return PongAction.IDLE;
     }
+
+    /** Returns the number of spike events detected since the last {@link #resetSpikeCount()}. */
+    public int getSpikeCount() { return spikeCount; }
+
+    /** Resets the spike counter to zero. Call after each ball hit or miss. */
+    public void resetSpikeCount() { spikeCount = 0; }
 
     @Override public String     getName() { return name;                }
     @Override public PlayerType getType() { return PlayerType.HARDWARE; }

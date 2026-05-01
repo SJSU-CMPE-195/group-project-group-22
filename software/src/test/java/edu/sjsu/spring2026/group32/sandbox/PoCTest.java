@@ -6,17 +6,13 @@ import org.junit.jupiter.api.Test;
 
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.player.BasePlayer;
-import edu.sjsu.spring2026.group32.player.HumanPlayer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.awt.Component;
-import java.awt.event.KeyEvent;
 import java.util.List;
-import java.util.Map;
 
 class PoCTest {
 
@@ -28,7 +24,7 @@ class PoCTest {
         List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players = List.of(new HitTheZoneSoftwareAI("Bot", 0)); 
 
         // Headless mode to skip Swing UI: updateHud() is overridden to prevent NPE from uninitialized JLabel arr in headless constructor
-        game = new PoC_HitTheZone(true, players) { 
+        game = new PoC_HitTheZone(players) {
             @Override
             protected void updateHud() {}
         }; 
@@ -271,7 +267,7 @@ class PoCTest {
         BasePlayer<HitTheZoneState, HitTheZoneAction> mockPlayer = mock(BasePlayer.class);
         when(mockPlayer.getNextMove(any())).thenReturn(HitTheZoneAction.RESET, null);
 
-        game = new PoC_HitTheZone(true, List.of(mockPlayer)) {
+        game = new PoC_HitTheZone(List.of(mockPlayer)) {
             @Override protected void updateHud() {}
         };
 
@@ -292,7 +288,7 @@ class PoCTest {
         BasePlayer<HitTheZoneState, HitTheZoneAction> mockPlayer = mock(BasePlayer.class);
         when(mockPlayer.getNextMove(any())).thenReturn(HitTheZoneAction.SCORE);
  
-        game = new PoC_HitTheZone(true, List.of(mockPlayer)) {
+        game = new PoC_HitTheZone(List.of(mockPlayer)) {
             @Override protected void updateHud() {}
         };
  
@@ -408,7 +404,7 @@ class PoCTest {
                 HitTheZoneAction.SCORE  // tick 3 (press again)
             );
 
-        game = new PoC_HitTheZone(true, List.of(mockPlayer)) {
+        game = new PoC_HitTheZone(List.of(mockPlayer)) {
             @Override protected void updateHud() {}
         };
 

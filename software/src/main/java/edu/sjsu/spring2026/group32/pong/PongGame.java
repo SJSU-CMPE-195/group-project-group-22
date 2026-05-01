@@ -107,6 +107,16 @@ public class PongGame extends JPanel {
     private int ballSpeedLevel = 1; // default = level 2
 
     /**
+     * Counts paddle moves made by the HARDWARE player during the current rally
+     * (since the last ball hit or miss).  Reset via {@link #resetEventCounts()}.
+     */
+    private int paddleEventCount = 0;
+
+    /** Last values pushed to the toolbar; used to avoid redundant EDT dispatches. */
+    private int lastDisplayedSpikes  = -1;
+    private int lastDisplayedPaddles = -1;
+
+    /**
      * When true (default), each paddle hit normalizes the ball velocity back to
      * the magnitude set by {@code ballSpeedLevel}, preventing accumulated drift.
      * Toggled with the C key; displayed as a checkbox in the pause overlay.
@@ -196,6 +206,7 @@ public class PongGame extends JPanel {
 
         resetBall();
         lockToolbars(false); // start PAUSED, toolbars unlocked
+        topToolbar.setHardwareCountsVisible(topVariant == PlayerVariant.HARDWARE);
     }
 
     /**
@@ -393,6 +404,7 @@ public class PongGame extends JPanel {
         if (side == PongToolbar.Side.TOP) {
             topVariant = chosen;
             bottomToolbar.setLockedOutVariant(topVariant);
+            topToolbar.setHardwareCountsVisible(topVariant == PlayerVariant.HARDWARE);
         } else {
             bottomVariant = chosen;
             topToolbar.setLockedOutVariant(bottomVariant);
@@ -402,6 +414,7 @@ public class PongGame extends JPanel {
         bottomPlayer = createPlayer(bottomVariant);
         syncHardwareInjection();
         wireHumanPlayer();
+        resetEventCounts();
         resetBall();
         // Stay in PAUSED so the user can review before pressing ESC
     }
@@ -429,6 +442,7 @@ public class PongGame extends JPanel {
                 case PLAYING   -> tickPlaying();
                 case PAUSED    -> { /* idle */ }
             }
+            updateEventDisplay();
             canvas.repaint();
             try { Thread.sleep(16); } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
@@ -456,6 +470,11 @@ public class PongGame extends JPanel {
         PongAction topAct    = topPlayer.getNextMove(topState);
         PongAction bottomAct = bottomPlayer.getNextMove(bottomState);
 
+        // Count hardware paddle events (each tick the hardware paddle moves)
+        if (topVariant == PlayerVariant.HARDWARE && topAct != PongAction.IDLE) {
+            paddleEventCount++;
+        }
+
         // Move paddles — hardware player uses its own configured speed
         topPaddleX    = clampPaddle(topPaddleX    + dx(topAct,    topPlayer    instanceof PongHardwareAI));
         bottomPaddleX = clampPaddle(bottomPaddleX + dx(bottomAct, bottomPlayer instanceof PongHardwareAI));
@@ -481,6 +500,7 @@ public class PongGame extends JPanel {
             ballVelX += deflect(ballX, topPaddleX);
             maybeNormalizeSpeed();
             ballY = TOP_PADDLE_Y + PADDLE_HEIGHT + 1;
+            resetEventCounts();
         }
 
         // Bottom paddle collision (ball moving down: VelY > 0)
@@ -493,12 +513,14 @@ public class PongGame extends JPanel {
             ballVelX += deflect(ballX, bottomPaddleX);
             maybeNormalizeSpeed();
             ballY = BOTTOM_PADDLE_Y - BALL_SIZE - 1;
+            resetEventCounts();
         }
 
         // Ball exits top -> bottom scores
         if (ballY + BALL_SIZE < 0) {
             bottomScore++;
             scoreboard.recordPoint(bottomVariant, topVariant);
+            resetEventCounts();
             startCountdown(); return;
         }
 
@@ -506,6 +528,7 @@ public class PongGame extends JPanel {
         if (ballY > FIELD_HEIGHT) {
             topScore++;
             scoreboard.recordPoint(topVariant, bottomVariant);
+            resetEventCounts();
             startCountdown();
         }
     }
@@ -529,6 +552,7 @@ public class PongGame extends JPanel {
     private void resetGame() {
         stopHardwareInjection();
         topScore = 0; bottomScore = 0;
+        resetEventCounts();
         gameState = GameState.PAUSED;
         lockToolbars(false);
         resetBall();
@@ -623,6 +647,34 @@ public class PongGame extends JPanel {
             topToolbar.setSelectionLocked(lock);
             bottomToolbar.setSelectionLocked(lock);
         });
+    }
+
+    /**
+     * Resets both the hardware spike counter and the local paddle-event counter
+     * to zero.  Called after every ball hit (paddle collision) and ball miss
+     * (ball exits the field) so the counts always reflect the current rally.
+     */
+    private void resetEventCounts() {
+        paddleEventCount    = 0;
+        lastDisplayedSpikes  = -1; // force display refresh on next tick
+        lastDisplayedPaddles = -1;
+        if (hardwarePlayer != null) hardwarePlayer.resetSpikeCount();
+    }
+
+    /**
+     * Pushes the current spike / paddle counts to the top toolbar label.
+     * Only dispatches to the EDT when the values have actually changed, to
+     * avoid flooding the event queue at 60 fps.
+     */
+    private void updateEventDisplay() {
+        if (topVariant != PlayerVariant.HARDWARE || hardwarePlayer == null) return;
+        int spikes  = hardwarePlayer.getSpikeCount();
+        int paddles = paddleEventCount;
+        if (spikes != lastDisplayedSpikes || paddles != lastDisplayedPaddles) {
+            lastDisplayedSpikes  = spikes;
+            lastDisplayedPaddles = paddles;
+            SwingUtilities.invokeLater(() -> topToolbar.setEventCounts(spikes, paddles));
+        }
     }
 
     // =========================================================================

@@ -43,6 +43,10 @@ public class PongToolbar extends JPanel {
     private PlayerVariant lockedOutVariant;     // the other side's current choice
     private Consumer<PlayerVariant> onVariantChanged;
 
+    /** Labels shown in the toolbar when the HARDWARE variant is active. */
+    private final JLabel spikeCountLabel;
+    private final JLabel paddleCountLabel;
+
     // ─── Constructor ──────────────────────────────────────────────────────────
 
     /**
@@ -91,6 +95,22 @@ public class PongToolbar extends JPanel {
         sbButton.setFont(new Font("SansSerif", Font.PLAIN, 12));
         sbButton.addActionListener(e -> openScoreboard());
         add(sbButton);
+
+        // ── Hardware event counters (hidden until HARDWARE variant is active) ──
+        spikeCountLabel  = makeCountLabel("Spikes: 0",  new Color(100, 200, 255));
+        paddleCountLabel = makeCountLabel("Paddle: 0",  new Color(100, 255, 150));
+        add(spikeCountLabel);
+        add(paddleCountLabel);
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────
+
+    private static JLabel makeCountLabel(String text, Color fg) {
+        JLabel lbl = new JLabel(text);
+        lbl.setForeground(fg);
+        lbl.setFont(new Font("Monospaced", Font.BOLD, 12));
+        lbl.setVisible(false);
+        return lbl;
     }
 
     // ─── Public API ──────────────────────────────────────────────────────────
@@ -129,6 +149,31 @@ public class PongToolbar extends JPanel {
      */
     public void setSelectionLocked(boolean locked) {
         dropdown.setEnabled(!locked);
+    }
+
+    /**
+     * Updates the spike and paddle event counter labels.
+     * Must be called on the Swing EDT.
+     *
+     * @param spikes  number of spike events since the last ball hit/miss
+     * @param paddles number of paddle move events since the last ball hit/miss
+     */
+    public void setEventCounts(int spikes, int paddles) {
+        spikeCountLabel.setText("Spikes: "  + spikes);
+        paddleCountLabel.setText("Paddle: " + paddles);
+    }
+
+    /**
+     * Shows or hides the hardware event counter labels.
+     * Safe to call from any thread.
+     *
+     * @param visible {@code true} when HARDWARE variant is active
+     */
+    public void setHardwareCountsVisible(boolean visible) {
+        SwingUtilities.invokeLater(() -> {
+            spikeCountLabel.setVisible(visible);
+            paddleCountLabel.setVisible(visible);
+        });
     }
 
     // ─── Internal ────────────────────────────────────────────────────────────

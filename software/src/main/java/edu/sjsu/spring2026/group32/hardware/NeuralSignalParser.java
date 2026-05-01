@@ -7,8 +7,22 @@ public class NeuralSignalParser {
 
     // EMA Filter configuration and state
     private final double smoothingFactor; // Alpha (0.0 to 1.0)
-    private double currentEmaVoltage = 0.0;
+    /**
+     * Most recently computed EMA voltage.  Declared {@code volatile} so that
+     * {@link #hasSpike(double)}, which may be called from the game-loop thread,
+     * always sees the value last written by the serial-listener thread via
+     * {@link #parseVoltage(String)}.
+     */
+    private volatile double currentEmaVoltage = 0.0;
     private boolean isFirstReading = true;
+
+    /**
+     * Previous above-threshold state, used by {@link #hasSpike(double)} to
+     * detect rising edges.  {@code volatile} because {@link #resetFilter()} can
+     * be called from the serial-listener thread while {@link #hasSpike(double)}
+     * is called from the game-loop thread.
+     */
+    private volatile boolean lastWasAbove = false;
 
     /**
      * CSV column index of the ADC reading to parse.
@@ -86,9 +100,36 @@ public class NeuralSignalParser {
         return currentEmaVoltage;
     }
 
+    /**
+     * Detects a discrete spike as a <em>rising edge</em>: returns {@code true}
+     * exactly once per low-to-high threshold crossing, regardless of how many
+     * subsequent calls are made while the voltage remains above
+     * {@code threshold}.
+     *
+     * <p>This eliminates the multi-count problem caused by a biological spike
+     * lasting longer than one game tick.  For example, a 40 ms spike sampled at
+     * 60 fps (≈16 ms per tick) would previously register as 2-3 events; with
+     * rising-edge detection it registers as exactly one.
+     *
+     * <p>Thread-safe: reads the {@code volatile currentEmaVoltage} and writes
+     * the {@code volatile lastWasAbove} flag.
+     *
+     * @param threshold voltage (V) at or above which the channel is considered
+     *                  "firing"
+     * @return {@code true} on the first call where voltage ≥ threshold after
+     *         one or more calls where it was below; {@code false} otherwise
+     */
+    public boolean hasSpike(double threshold) {
+        boolean above = currentEmaVoltage >= threshold;
+        boolean spike = above && !lastWasAbove;
+        lastWasAbove = above;
+        return spike;
+    }
+
     // Optional: A way to reset the filter if the hardware reconnects
     public void resetFilter() {
         isFirstReading = true;
         currentEmaVoltage = 0.0;
+        lastWasAbove     = false;
     }
 }

@@ -8,11 +8,11 @@ import java.util.Random;
 /**
  * Parameterised software AI for vertical Pong.
  *
- * <p>The AI tracks the ball X position relative to its own paddle centre.
+ * <p>The AI tracks the ball X position relative to its own paddle center.
  * Two parameters control perceived difficulty:
  * <ul>
  *   <li>reactionDeadZone: half-width dead zone in pixels around the paddle
- *       centre. Larger values mean sloppier tracking. Typical range: 5-60 px.</li>
+ *       center. Larger values mean sloppier tracking. Typical range: 5-60 px.</li>
  *   <li>reactionProbability: 0.0-1.0 chance of acting each tick.
  *       1.0 = perfect reaction; 0.55 = misses ~45% of ticks.</li>
  * </ul>

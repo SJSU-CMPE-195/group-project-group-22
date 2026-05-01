@@ -46,7 +46,7 @@ public class PoC_HitTheZone extends JFrame {
     final int[]              attempts;
     final boolean[]          canScore;
     /**
-     * Debounces non-scoring control actions so held keys do not repeatedly
+     * Debounce non-scoring control actions so held keys do not repeatedly
      * pause or reset the game. SCORE is intentionally excluded so players can
      * land multiple hits during a single zone pass.
      */
@@ -76,8 +76,7 @@ public class PoC_HitTheZone extends JFrame {
     // Headless constructor (unit tests)
     // ======================================================================
 
-    protected PoC_HitTheZone(boolean headless,
-                             List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
+    protected PoC_HitTheZone(List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
         super("Hit The Zone");
         this.players      = players;
         int n             = players.size();
@@ -92,16 +91,6 @@ public class PoC_HitTheZone extends JFrame {
     // ======================================================================
     // Full GUI constructor
     // ======================================================================
-
-    /**
-     * Convenience constructor for launching without a hardware connection.
-     * Equivalent to {@link #PoC_HitTheZone(List, SerialConnectionManager)
-     * PoC_HitTheZone(players, null)}.
-     */
-    @GeneratedExcludeFromCoverage
-    public PoC_HitTheZone(List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players) {
-        this(players, null);
-    }
 
     /**
      * Full GUI constructor.
@@ -190,7 +179,7 @@ public class PoC_HitTheZone extends JFrame {
             if (players.get(i) instanceof KeyListener) {
                 final int idx = i;
                 JButton scoreBtn = new JButton("Score (Space) — " + players.get(i).getName());
-                scoreBtn.setFocusable(false);  // prevents spacebar double-firing via focus
+                scoreBtn.setFocusable(false);  // prevents space bar double-firing via focus
                 scoreBtn.setForeground(playerColor(i));
                 scoreBtn.setFont(scoreBtn.getFont().deriveFont(Font.BOLD));
                 scoreBtn.addActionListener(e -> processScore(idx));
