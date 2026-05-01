@@ -6,14 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.InvocationTargetException;
-
 import javax.swing.JDialog;
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.*;
 
-import edu.sjsu.spring2026.group32.pong.PlayerVariant;
+import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
 
 /**
  * Unit / integration tests for {@link PongToolbar}.

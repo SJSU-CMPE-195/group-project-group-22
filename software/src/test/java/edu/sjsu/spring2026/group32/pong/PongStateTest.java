@@ -1,6 +1,7 @@
 package edu.sjsu.spring2026.group32.pong;
 
-import edu.sjsu.spring2026.group32.player.GameState;
+import edu.sjsu.spring2026.group32.player.model.GameState;
+import edu.sjsu.spring2026.group32.pong.model.PongState;
 import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;

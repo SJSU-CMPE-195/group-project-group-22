@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.bidirectionaltest;
 
+import edu.sjsu.spring2026.group32.bidirectionaltest.core.ActiveDeviceVoltageInjector;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import org.junit.jupiter.api.*;
 

@@ -1,7 +1,11 @@
 package edu.sjsu.spring2026.group32.player;
 
-import edu.sjsu.spring2026.group32.hardware.BaseSignalSource;
-import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.signal.BaseSignalSource;
+import edu.sjsu.spring2026.group32.hardware.signal.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.player.model.Action;
+import edu.sjsu.spring2026.group32.player.model.BasePlayer;
+import edu.sjsu.spring2026.group32.player.model.GameState;
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
 
 /**
  * Generic abstract base class for hardware-driven AI players.
@@ -61,7 +65,7 @@ public abstract class HardwareAIPlayer<S extends GameState, A extends Action>
      * Returns {@code true} when the underlying signal source reports a discrete
      * spike at or above {@code threshold}.
      *
-     * <p>For real hardware ({@link edu.sjsu.spring2026.group32.hardware.HardwareSignalSource})
+     * <p>For real hardware ({@link HardwareSignalSource})
      * this is a stateful rising-edge check — one {@code true} per low-to-high
      * crossing.  For test stubs it falls through to the stateless default
      * ({@code voltage >= threshold}).

@@ -1,6 +1,8 @@
 package edu.sjsu.spring2026.group32.hardware;
 
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
+import edu.sjsu.spring2026.group32.hardware.signal.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.signal.NeuralSignalParser;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 

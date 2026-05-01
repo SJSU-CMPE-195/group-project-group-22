@@ -1,8 +1,11 @@
 package edu.sjsu.spring2026.group32.pong;
 
-import edu.sjsu.spring2026.group32.hardware.BaseSignalSource;
-import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
-import edu.sjsu.spring2026.group32.player.PlayerType;
+import edu.sjsu.spring2026.group32.hardware.signal.BaseSignalSource;
+import edu.sjsu.spring2026.group32.hardware.signal.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
+import edu.sjsu.spring2026.group32.pong.ai.PongHardwareAI;
+import edu.sjsu.spring2026.group32.pong.model.PongAction;
+import edu.sjsu.spring2026.group32.pong.model.PongState;
 import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;

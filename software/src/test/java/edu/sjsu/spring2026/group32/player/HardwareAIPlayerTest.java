@@ -1,9 +1,10 @@
 package edu.sjsu.spring2026.group32.player;
 
-import edu.sjsu.spring2026.group32.hardware.BaseSignalSource;
-import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
-import edu.sjsu.spring2026.group32.sandbox.HitTheZoneAction;
-import edu.sjsu.spring2026.group32.sandbox.HitTheZoneState;
+import edu.sjsu.spring2026.group32.hardware.signal.BaseSignalSource;
+import edu.sjsu.spring2026.group32.hardware.signal.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hitthezone.model.HitTheZoneAction;
+import edu.sjsu.spring2026.group32.hitthezone.model.HitTheZoneState;
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
 import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;

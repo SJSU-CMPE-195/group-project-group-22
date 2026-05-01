@@ -1,10 +1,10 @@
 package edu.sjsu.spring2026.group32.stress;
 
-import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
-import edu.sjsu.spring2026.group32.pong.PongSoftwareAI;
-import edu.sjsu.spring2026.group32.pong.PongState;
-import edu.sjsu.spring2026.group32.sandbox.HitTheZoneSoftwareAI;
-import edu.sjsu.spring2026.group32.sandbox.HitTheZoneState;
+import edu.sjsu.spring2026.group32.hardware.signal.NeuralSignalParser;
+import edu.sjsu.spring2026.group32.pong.ai.PongSoftwareAI;
+import edu.sjsu.spring2026.group32.pong.model.PongState;
+import edu.sjsu.spring2026.group32.hitthezone.ai.HitTheZoneSoftwareAI;
+import edu.sjsu.spring2026.group32.hitthezone.model.HitTheZoneState;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 

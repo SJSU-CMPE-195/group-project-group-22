@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.InvocationTargetException;
-
 import javax.swing.SwingUtilities;
 
+import edu.sjsu.spring2026.group32.pong.ai.PongHardwareAI;
+import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
 import org.junit.jupiter.api.*;
 
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;

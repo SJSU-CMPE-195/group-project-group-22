@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.hardware;
 
+import edu.sjsu.spring2026.group32.hardware.signal.NeuralSignalParser;
 import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
 

@@ -2,8 +2,9 @@ package edu.sjsu.spring2026.group32.launcher;
 
 import edu.sjsu.spring2026.group32.bidirectionaltest.BidirectionalTest;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
+import edu.sjsu.spring2026.group32.launcher.ui.SerialConnectionPanel;
 import edu.sjsu.spring2026.group32.pong.PongGame;
-import edu.sjsu.spring2026.group32.sandbox.PoC_HitTheZone;
+import edu.sjsu.spring2026.group32.hitthezone.HitTheZoneGame;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -63,7 +64,7 @@ public class Launcher extends JFrame {
     /** Non-null while a Bidirectional Test window is open (only one allowed at a time). */
     private BidirectionalTest bidirectionalInstance = null;
     /** Non-null while a Hit The Zone window is open (only one allowed at a time). */
-    private PoC_HitTheZone htzInstance = null;
+    private HitTheZoneGame htzInstance = null;
     /** Non-null while a Pong window is open (only one allowed at a time). */
     private JFrame pongInstance = null;
 
@@ -302,7 +303,7 @@ public class Launcher extends JFrame {
             return;
         }
         log("Launching Hit The Zone...");
-        PoC_HitTheZone frame = PoC_HitTheZone.launchFromLauncher(htzManager);
+        HitTheZoneGame frame = HitTheZoneGame.launchFromLauncher(htzManager);
         htzInstance = frame;
         launchHitTheZone.setEnabled(false);
         frame.addWindowListener(new WindowAdapter() {

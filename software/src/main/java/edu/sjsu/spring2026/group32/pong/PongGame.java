@@ -1,12 +1,17 @@
 package edu.sjsu.spring2026.group32.pong;
 
-import edu.sjsu.spring2026.group32.hardware.HardwareSignalSource;
+import edu.sjsu.spring2026.group32.hardware.signal.HardwareSignalSource;
 import edu.sjsu.spring2026.group32.hardware.NeuralHardwareConfig;
-import edu.sjsu.spring2026.group32.hardware.NeuralSignalParser;
+import edu.sjsu.spring2026.group32.hardware.signal.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
-import edu.sjsu.spring2026.group32.launcher.ConnectionStatusPanel;
-import edu.sjsu.spring2026.group32.player.BasePlayer;
+import edu.sjsu.spring2026.group32.launcher.ui.ConnectionStatusPanel;
+import edu.sjsu.spring2026.group32.player.model.BasePlayer;
 import edu.sjsu.spring2026.group32.player.HumanPlayer;
+import edu.sjsu.spring2026.group32.pong.ai.PongHardwareAI;
+import edu.sjsu.spring2026.group32.pong.ai.PongSoftwareAI;
+import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
+import edu.sjsu.spring2026.group32.pong.model.PongAction;
+import edu.sjsu.spring2026.group32.pong.model.PongState;
 import edu.sjsu.spring2026.group32.pong.ui.PongToolbar;
 import edu.sjsu.spring2026.group32.pong.ui.Scoreboard;
 

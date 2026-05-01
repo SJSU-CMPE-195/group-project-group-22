@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javax.swing.SwingUtilities;
 
+import edu.sjsu.spring2026.group32.launcher.ui.SerialConnectionPanel;
 import org.junit.jupiter.api.*;
 
 /**

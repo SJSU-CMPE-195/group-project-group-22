@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.player;
 
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
 import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;

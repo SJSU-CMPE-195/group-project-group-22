@@ -1,6 +1,11 @@
 package edu.sjsu.spring2026.group32.bidirectionaltest;
 
-import edu.sjsu.spring2026.group32.hardware.VoltageInjector;
+import edu.sjsu.spring2026.group32.bidirectionaltest.core.ActiveDeviceVoltageInjector;
+import edu.sjsu.spring2026.group32.bidirectionaltest.ui.DeviceSelectorPanel;
+import edu.sjsu.spring2026.group32.bidirectionaltest.ui.InjectionChannelPanel;
+import edu.sjsu.spring2026.group32.bidirectionaltest.ui.LiveDataPanel;
+import edu.sjsu.spring2026.group32.bidirectionaltest.ui.VoltageGraphPanel;
+import edu.sjsu.spring2026.group32.hardware.signal.VoltageInjector;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 
 import javax.swing.*;

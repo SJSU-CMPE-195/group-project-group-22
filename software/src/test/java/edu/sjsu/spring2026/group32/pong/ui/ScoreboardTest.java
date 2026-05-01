@@ -1,6 +1,6 @@
 package edu.sjsu.spring2026.group32.pong.ui;
 
-import edu.sjsu.spring2026.group32.pong.PlayerVariant;
+import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
