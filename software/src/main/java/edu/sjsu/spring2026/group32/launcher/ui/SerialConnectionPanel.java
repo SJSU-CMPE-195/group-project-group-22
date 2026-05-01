@@ -277,9 +277,14 @@ public class SerialConnectionPanel extends JPanel {
             return;
         }
 
-        if (!SerialConnectionManager.isKnownEsp32Bridge(item.device)) {
-            String desc = item.device.getDescriptivePortName();
-            String portName = item.device.getSystemPortName();
+        SerialDevice selectedPort = resolveSelectedPort(item);
+        if (selectedPort == null) {
+            return;
+        }
+
+        if (!SerialConnectionManager.isKnownEsp32Bridge(selectedPort)) {
+            String desc = selectedPort.getDescriptivePortName();
+            String portName = selectedPort.getSystemPortName();
             String displayName = desc.isBlank() ? portName : portName + "  " + desc;
 
             JOptionPane.showOptionDialog(
@@ -301,10 +306,10 @@ public class SerialConnectionPanel extends JPanel {
             return;
         }
 
-        if (!connectionManager.connectTo(item.device)) {
+        if (!connectionManager.connectTo(selectedPort)) {
             JOptionPane.showMessageDialog(
                     SwingUtilities.getWindowAncestor(this),
-                    "Could not open " + item.device.getSystemPortName()
+                    "Could not open " + selectedPort.getSystemPortName()
                             + ".\nIs another application using it?",
                     "Connection Failed",
                     JOptionPane.ERROR_MESSAGE);
@@ -314,8 +319,8 @@ public class SerialConnectionPanel extends JPanel {
         connectionManager.removeListener(disconnectWatcher);
         connectionManager.addListener(disconnectWatcher);
 
-        boolean gotInfo = connectionManager.readInfoHandshake(20);
-        String portShort = item.device.getSystemPortName();
+        boolean gotInfo = connectionManager.readInfoHandshake(40);
+        String portShort = selectedPort.getSystemPortName();
 
         String logLabel = item.toString();
         if (gotInfo) {
@@ -324,7 +329,17 @@ public class SerialConnectionPanel extends JPanel {
             log("Device: " + connectionManager.getDeviceName() + ", channels: "
                     + connectionManager.getDeviceChannelCount());
         } else {
-            log("Warning: no #INFO response from device - channel count unknown");
+            connectionManager.removeListener(disconnectWatcher);
+            connectionManager.disconnect();
+            refreshPorts();
+            JOptionPane.showMessageDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "Opened " + portShort + ", but the device did not answer INFO?\n"
+                            + "Refresh the port list and reconnect the ESP32.",
+                    "Device Not Ready",
+                    JOptionPane.WARNING_MESSAGE);
+            log("Disconnected: no #INFO response from device after opening " + portShort);
+            return;
         }
 
         if (gotInfo && expectedChannelCount > 0
@@ -359,13 +374,32 @@ public class SerialConnectionPanel extends JPanel {
 
         String shortStatus = portShort
                 + (gotInfo ? " - CH" + connectionManager.getDeviceChannelCount() : "");
-        connectedPortName = item.device.getSystemPortName();
+        connectedPortName = selectedPort.getSystemPortName();
         setConnectedState(true, shortStatus, new Color(40, 190, 40));
         log("-- Connected: " + logLabel + " --");
 
         if (listener != null) {
             listener.onConnected(connectionManager, logLabel);
         }
+    }
+
+    private SerialDevice resolveSelectedPort(PortItem item) {
+        String selectedPortName = item.device.getSystemPortName();
+        for (SerialDevice device : RealSerialDevice.getRealPorts()) {
+            if (selectedPortName.equals(device.getSystemPortName())) {
+                return device;
+            }
+        }
+
+        refreshPorts();
+        JOptionPane.showMessageDialog(
+                SwingUtilities.getWindowAncestor(this),
+                selectedPortName + " is no longer available.\n"
+                        + "Refresh the port list and choose the reconnected ESP32.",
+                "Port Changed",
+                JOptionPane.WARNING_MESSAGE);
+        log("Selected port disappeared before connect: " + selectedPortName);
+        return null;
     }
 
     /**
