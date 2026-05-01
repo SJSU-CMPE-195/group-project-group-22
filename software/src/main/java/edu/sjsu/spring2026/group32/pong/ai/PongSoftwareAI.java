@@ -2,6 +2,7 @@ package edu.sjsu.spring2026.group32.pong.ai;
 
 import edu.sjsu.spring2026.group32.player.model.BasePlayer;
 import edu.sjsu.spring2026.group32.player.model.PlayerType;
+import edu.sjsu.spring2026.group32.pong.core.PongEngine;
 import edu.sjsu.spring2026.group32.pong.model.PongAction;
 import edu.sjsu.spring2026.group32.pong.model.PongState;
 
@@ -27,9 +28,6 @@ import java.util.Random;
  */
 public class PongSoftwareAI implements BasePlayer<PongState, PongAction> {
 
-    /** Must match PongGame.PADDLE_WIDTH. */
-    private static final int PADDLE_WIDTH = 80;
-
     private final String name;
     private final int    reactionDeadZone;
     private final double reactionProbability;
@@ -52,7 +50,7 @@ public class PongSoftwareAI implements BasePlayer<PongState, PongAction> {
         // Probabilistic skip: simulate slower reflexes
         if (rng.nextDouble() > reactionProbability) return PongAction.IDLE;
 
-        int paddleCenter = state.paddleX() + PADDLE_WIDTH / 2;
+        int paddleCenter = state.paddleX() + PongEngine.PADDLE_WIDTH / 2;
         int diff         = state.ballX() - paddleCenter;
 
         if (diff < -reactionDeadZone) return PongAction.LEFT;

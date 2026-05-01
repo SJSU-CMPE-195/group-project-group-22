@@ -1,425 +1,283 @@
 package edu.sjsu.spring2026.group32.pong;
 
-import edu.sjsu.spring2026.group32.hardware.signal.HardwareSignalSource;
-import edu.sjsu.spring2026.group32.hardware.NeuralHardwareConfig;
-import edu.sjsu.spring2026.group32.hardware.signal.NeuralSignalParser;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
-import edu.sjsu.spring2026.group32.launcher.ui.ConnectionStatusPanel;
-import edu.sjsu.spring2026.group32.player.model.BasePlayer;
 import edu.sjsu.spring2026.group32.player.HumanPlayer;
+import edu.sjsu.spring2026.group32.player.model.BasePlayer;
 import edu.sjsu.spring2026.group32.pong.ai.PongHardwareAI;
-import edu.sjsu.spring2026.group32.pong.ai.PongSoftwareAI;
+import edu.sjsu.spring2026.group32.pong.core.PongEngine;
+import edu.sjsu.spring2026.group32.pong.model.PongGameState;
+import edu.sjsu.spring2026.group32.pong.core.PongHardwareFactory;
+import edu.sjsu.spring2026.group32.pong.core.PongPlayerFactory;
+import edu.sjsu.spring2026.group32.pong.model.PongTickResult;
 import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
 import edu.sjsu.spring2026.group32.pong.model.PongAction;
 import edu.sjsu.spring2026.group32.pong.model.PongState;
+import edu.sjsu.spring2026.group32.pong.ui.PongCanvas;
+import edu.sjsu.spring2026.group32.pong.ui.PongFrame;
+import edu.sjsu.spring2026.group32.pong.ui.PongInputController;
 import edu.sjsu.spring2026.group32.pong.ui.PongToolbar;
 import edu.sjsu.spring2026.group32.pong.ui.Scoreboard;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.util.Map;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import java.awt.BorderLayout;
 
 /**
- * Vertical Pong game panel.
- *
- * <p>Paddles sit at the top and bottom of the field and slide horizontally.
- * The ball travels up and down, bouncing off left/right walls and the paddles.
- *
- * <h3>State machine</h3>
- * <pre>
- *   PAUSED -ESC-> COUNTDOWN -(2 s)-> PLAYING
- *     ^                                  |
- *     +------------------ESC-------------+
- *   PLAYING -(ball out)-> COUNTDOWN -> PLAYING
- *   R (any state) -> PAUSED (scores reset)
- *   PAUSED + variant change -> stays PAUSED (players rebuilt, ball reset)
- * </pre>
- *
- * <h3>Key bindings (WHEN_IN_FOCUSED_WINDOW)</h3>
- * <ul>
- *   <li>ESC   - toggle pause / resume</li>
- *   <li>R     - reset scores, return to PAUSED</li>
- *   <li>LEFT / RIGHT arrow - human player paddle</li>
- * </ul>
+ * Coordinator for Pong's engine, players, and Swing widgets.
  */
 public class PongGame extends JPanel {
+    static final PlayerVariant[] TOP_VARIANTS = {
+            PlayerVariant.HARDWARE, PlayerVariant.AI_EASY, PlayerVariant.AI_HARD
+    };
+    static final PlayerVariant[] BOTTOM_VARIANTS = {
+            PlayerVariant.HUMAN, PlayerVariant.AI_EASY, PlayerVariant.AI_HARD
+    };
 
-    // -------------------------------------------------------------------------
-    // Field / paddle / ball constants
-    // -------------------------------------------------------------------------
-
-    public static final int FIELD_WIDTH   = 600;
-    public static final int FIELD_HEIGHT  = 460;
-    public static final int PADDLE_WIDTH  = 80;
-    public static final int PADDLE_HEIGHT = 12;
-    public static final int BALL_SIZE     = 12;
-
-    private static final int  PADDLE_MARGIN  = 28;
-    static  final int  TOP_PADDLE_Y    = PADDLE_MARGIN;
-    static  final int  BOTTOM_PADDLE_Y = FIELD_HEIGHT - PADDLE_MARGIN - PADDLE_HEIGHT;
-
-    private static final int  PADDLE_SPEED   = 7;
-    private static final long COUNTDOWN_MS   = 2_000;
-
-    /** Ball X/Y velocities for speed levels 1-5 (index 0-4). Default level: 2 (index 1). */
-    private static final int[] SPEED_VEL_X = { 3, 4, 5, 6, 7 };
-    private static final int[] SPEED_VEL_Y = { 3, 5, 7, 9, 11 };
     private static final PlayerVariant HARDWARE_FALLBACK_VARIANT = PlayerVariant.AI_HARD;
 
-    /**
-     * Variants available for the TOP paddle.
-     * HUMAN is excluded: the top is intended for AI/hardware opponents only.
-     */
-    static final PlayerVariant[] TOP_VARIANTS = {
-        PlayerVariant.HARDWARE, PlayerVariant.AI_EASY, PlayerVariant.AI_HARD
-    };
-
-    /**
-     * Variants available for the BOTTOM paddle.
-     * HARDWARE is excluded: the bottom is intended for human or software AI play.
-     */
-    static final PlayerVariant[] BOTTOM_VARIANTS = {
-        PlayerVariant.HUMAN, PlayerVariant.AI_EASY, PlayerVariant.AI_HARD
-    };
-
-    // -------------------------------------------------------------------------
-    // State machine
-    // -------------------------------------------------------------------------
-
-    enum GameState { PAUSED, COUNTDOWN, PLAYING }
-    volatile GameState gameState = GameState.PAUSED;
-    long countdownStartMs;
-
-    // -------------------------------------------------------------------------
-    // Game variables
-    // -------------------------------------------------------------------------
-
-    private int topPaddleX, bottomPaddleX;
-    int ballX;
-    int ballY;
-    int ballVelX;
-    int ballVelY;
-    int topScore = 0;
-    int bottomScore = 0;
-
-    /** 0-based index into SPEED_VEL_X / SPEED_VEL_Y; shown in pause overlay as levels 1-5. */
-    private int ballSpeedLevel = 0; // default = level 1
-
-    /** Last values pushed to the toolbar; used to avoid redundant EDT dispatches. */
-    private int lastDisplayedCh1 = -1;
-    private int lastDisplayedCh2 = -1;
-
-    /**
-     * When true (default), each paddle hit normalizes the ball velocity back to
-     * the magnitude set by {@code ballSpeedLevel}, preventing accumulated drift.
-     * Toggled with the C key; displayed as a checkbox in the pause overlay.
-     */
-    private boolean constantSpeed = true;
-
-    // -------------------------------------------------------------------------
-    // Players
-    // -------------------------------------------------------------------------
-
-    PlayerVariant topVariant;
-    private PlayerVariant bottomVariant;
-
-    BasePlayer<PongState, PongAction> topPlayer;
-    private BasePlayer<PongState, PongAction> bottomPlayer;
-
-    /** Provided by Launcher; null until hardware is available. */
-    private PongHardwareAI hardwarePlayer;
+    private final PongEngine engine = new PongEngine();
+    private final Scoreboard scoreboard = new Scoreboard();
+    private final PongInputController inputController = new PongInputController();
     private final SerialConnectionManager pongManager;
-    private volatile boolean hardwareConnected;
-
-    // -------------------------------------------------------------------------
-    // UIq
-    // -------------------------------------------------------------------------
-
-    private final Scoreboard  scoreboard;
     private final PongToolbar topToolbar;
     private final PongToolbar bottomToolbar;
-    private final GameCanvas  canvas;
-    private final SerialConnectionManager.SerialListener hardwareConnectionListener =
-            new SerialConnectionManager.SerialListener() {
-                @Override
-                public void onConnected(String portName) {
-                    hardwareConnected = true;
-                    SwingUtilities.invokeLater(() -> handleHardwareConnected(portName));
-                }
+    private final PongCanvas canvas;
+    private final SerialConnectionManager.SerialListener hardwareConnectionListener;
 
-                @Override
-                public void onInfoUpdated(String deviceName, int channelCount) {
-                    SwingUtilities.invokeLater(() -> handleHardwareInfoUpdated(channelCount));
-                }
+    private PlayerVariant topVariant;
+    private PlayerVariant bottomVariant;
+    private BasePlayer<PongState, PongAction> topPlayer;
+    private BasePlayer<PongState, PongAction> bottomPlayer;
+    private PongHardwareAI hardwarePlayer;
 
-                @Override
-                public void onDisconnected(String reason) {
-                    hardwareConnected = false;
-                    SwingUtilities.invokeLater(() -> handleHardwareDisconnected(reason));
-                }
-            };
+    private int lastDisplayedCh1 = -1;
+    private int lastDisplayedCh2 = -1;
+    private volatile boolean running;
 
-    // -------------------------------------------------------------------------
-    // Game loop
-    // -------------------------------------------------------------------------
-
-    private volatile boolean running = false;
-
-    // =========================================================================
-    // Constructor
-    // =========================================================================
-
-    /**
-     * @param hardwarePlayer pre-wired hardware AI from the Launcher, or
-     *                       {@code null} if no device is connected (grays out
-     *                       the HARDWARE option in both toolbars).
-     */
     public PongGame(PongHardwareAI hardwarePlayer, SerialConnectionManager pongManager) {
         this.hardwarePlayer = hardwarePlayer;
         this.pongManager = pongManager;
-        this.hardwareConnected = hardwarePlayer != null
+
+        boolean hardwareAvailable = hardwarePlayer != null
                 && pongManager != null
                 && pongManager.isConnected();
-        boolean hwAvail = hardwareConnected;
-
-        // Defaults: top gets hardware if available, otherwise Software AI Easy;
-        //           bottom always starts as Software AI Hard.
-        topVariant    = hwAvail ? PlayerVariant.HARDWARE : PlayerVariant.AI_EASY;
+        topVariant = hardwareAvailable ? PlayerVariant.HARDWARE : PlayerVariant.AI_EASY;
         bottomVariant = PlayerVariant.AI_HARD;
 
-        scoreboard = new Scoreboard();
-
         setLayout(new BorderLayout());
-        setBackground(Color.BLACK);
+        setBackground(java.awt.Color.BLACK);
+        setFocusable(true);
 
-        // Toolbars — each side only shows the variants valid for that side
-        topToolbar    = new PongToolbar(PongToolbar.Side.TOP,    TOP_VARIANTS,    topVariant,    hwAvail, scoreboard);
-        bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, BOTTOM_VARIANTS, bottomVariant, hwAvail, scoreboard);
+        topToolbar = new PongToolbar(PongToolbar.Side.TOP, TOP_VARIANTS, topVariant, hardwareAvailable, scoreboard);
+        bottomToolbar = new PongToolbar(PongToolbar.Side.BOTTOM, BOTTOM_VARIANTS, bottomVariant, hardwareAvailable, scoreboard);
+        canvas = new PongCanvas(
+                this::togglePause,
+                this::resetGame,
+                this::toggleConstantSpeed,
+                this::setBallSpeedLevel);
 
-        topToolbar.setOnVariantChanged(   v -> onVariantSelected(PongToolbar.Side.TOP,    v));
+        topToolbar.setOnVariantChanged(v -> onVariantSelected(PongToolbar.Side.TOP, v));
         bottomToolbar.setOnVariantChanged(v -> onVariantSelected(PongToolbar.Side.BOTTOM, v));
 
-        // Canvas
-        canvas = new GameCanvas();
-        canvas.setPreferredSize(new Dimension(FIELD_WIDTH, FIELD_HEIGHT));
-        canvas.setBackground(Color.BLACK);
-        canvas.setFocusable(false);
-
-        add(topToolbar,    BorderLayout.NORTH);
-        add(canvas,        BorderLayout.CENTER);
+        add(topToolbar, BorderLayout.NORTH);
+        add(canvas, BorderLayout.CENTER);
         add(bottomToolbar, BorderLayout.SOUTH);
 
-        // Key bindings (WHEN_IN_FOCUSED_WINDOW covers toolbar-focus edge case)
-        setFocusable(true);
-        bindGameKeys();
-
-        // Initial players
-        topPlayer    = createPlayer(topVariant);
+        topPlayer = createPlayer(topVariant);
         bottomPlayer = createPlayer(bottomVariant);
-        syncHardwareInjection(); // enable injection if hardware is the default top player
+        syncHardwareInjection();
         wireHumanPlayer();
-
-        resetBall();
-        lockToolbars(false); // start PAUSED, toolbars unlocked
+        lockToolbars(false);
         topToolbar.setHardwareCountsVisible(topVariant == PlayerVariant.HARDWARE);
+        refreshCanvas();
+
+        inputController.bindGameKeys(
+                this,
+                this::togglePause,
+                this::resetGame,
+                this::toggleConstantSpeed,
+                this::setBallSpeedLevel,
+                this::refreshCanvas);
+
+        hardwareConnectionListener = new SerialConnectionManager.SerialListener() {
+            @Override
+            public void onConnected(String portName) {
+                SwingUtilities.invokeLater(() -> handleHardwareConnected(portName));
+            }
+
+            @Override
+            public void onInfoUpdated(String deviceName, int channelCount) {
+                SwingUtilities.invokeLater(() -> handleHardwareInfoUpdated(channelCount));
+            }
+
+            @Override
+            public void onDisconnected(String reason) {
+                SwingUtilities.invokeLater(() -> handleHardwareDisconnected(reason));
+            }
+        };
 
         if (pongManager != null) {
             pongManager.addListener(hardwareConnectionListener);
         }
     }
 
-    /**
-     * Launcher-facing entry point that keeps Pong's hardware assembly inside
-     * the Pong module instead of in {@code Launcher}.
-     */
-    public static JFrame launchFromLauncher(SerialConnectionManager pongManager) {
-        // Capture the hardware player before handing it to the game so the
-        // window listener and shutdown hook can reference it directly —
-        // matching the same two-layer teardown used by PoC_HitTheZone.
-        PongHardwareAI hwPlayer = createHardwarePlayer(pongManager);
-        PongGame game = new PongGame(hwPlayer, pongManager);
-
-        JFrame frame = new JFrame("Pong");
-        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        frame.setResizable(false);
-        frame.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                game.stop();
-                game.shutdownHardwareListener();
-                game.stopHardwareInjection();
-                // Layer 1: stop injection when the window closes (port stays open,
-                // mirroring HTZ's dispose() → shutdownForWindowClose() pattern).
-            }
-        });
-
-        // Layer 2: release the serial port when the JVM exits (window close,
-        // Ctrl-C, or any other exit path), mirroring HTZ's shutdown-hook pattern.
-        if (hwPlayer != null) {
-            Runtime.getRuntime().addShutdownHook(new Thread(hwPlayer::close));
-        }
-
-        ConnectionStatusPanel pongStatus = new ConnectionStatusPanel();
-        pongStatus.addDevice("Pong", pongManager);
-        frame.add(pongStatus, BorderLayout.NORTH);
-        frame.add(game, BorderLayout.CENTER);
-        frame.pack();
-        frame.setLocationRelativeTo(null);
-        frame.setVisible(true);
-        game.start();
-        return frame;
+    public static javax.swing.JFrame launchFromLauncher(SerialConnectionManager pongManager) {
+        return PongFrame.launchFromLauncher(pongManager);
     }
 
     static PongHardwareAI createHardwarePlayer(SerialConnectionManager pongManager) {
-        if (pongManager == null || !pongManager.isConnected() || pongManager.getDeviceChannelCount() < 2) {
-            return null;
-        }
-
-        NeuralSignalParser leftParser = new NeuralSignalParser(0);
-        NeuralSignalParser rightParser = new NeuralSignalParser(1);
-        HardwareSignalSource leftSource  = new HardwareSignalSource(pongManager, leftParser);
-        HardwareSignalSource rightSource = new HardwareSignalSource(pongManager, rightParser);
-        // leftSource implements both BaseSignalSource and VoltageInjector; both sources
-        // share the same serial connection so either can send injection commands.
-        return new PongHardwareAI("Hardware", leftSource, rightSource, leftSource,
-                NeuralHardwareConfig.PONG_FIRING_THRESHOLD_VOLTS);
+        return PongHardwareFactory.createHardwarePlayer(pongManager);
     }
 
-    // =========================================================================
-    // Key bindings
-    // =========================================================================
+    public void start() {
+        running = true;
+        Thread gameThread = new Thread(this::gameLoop, "pong-loop");
+        gameThread.setDaemon(true);
+        gameThread.start();
+        requestFocusInWindow();
+    }
 
-    private void bindGameKeys() {
-        InputMap  im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap am = getActionMap();
+    public void stop() {
+        running = false;
+    }
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0, false), "game-esc");
-        am.put("game-esc", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) { togglePause(); }
-        });
+    public void stopHardwareInjection() {
+        if (hardwarePlayer != null) {
+            hardwarePlayer.stopInjectionOnly();
+        }
+    }
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, 0, false), "game-reset");
-        am.put("game-reset", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) { resetGame(); }
-        });
+    public void shutdownHardwareListener() {
+        if (pongManager != null) {
+            pongManager.removeListener(hardwareConnectionListener);
+        }
+    }
 
-        // C key: toggle constant-speed mode
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, 0, false), "game-const-speed");
-        am.put("game-const-speed", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) {
-                constantSpeed = !constantSpeed;
-                canvas.repaint();
+    void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
+        if (side == PongToolbar.Side.TOP) {
+            topVariant = chosen;
+            topToolbar.setHardwareCountsVisible(topVariant == PlayerVariant.HARDWARE);
+        } else {
+            bottomVariant = chosen;
+        }
+
+        rebuildPlayers();
+        resetEventCounts();
+        engine.resetBall();
+        refreshCanvas();
+    }
+
+    void tickCountdown(long now) {
+        engine.tickCountdown(now);
+    }
+
+    void tickPlaying() {
+        if (engine.snapshot().ballVelX() == 0 && engine.snapshot().ballVelY() == 0) {
+            stopHardwareInjection();
+            return;
+        }
+
+        PongAction topAction = topPlayer.getNextMove(engine.topPlayerState());
+        PongAction bottomAction = bottomPlayer.getNextMove(engine.bottomPlayerState());
+
+        PongTickResult result = engine.tickPlaying(
+                topAction,
+                bottomAction,
+                topPlayer instanceof PongHardwareAI,
+                bottomPlayer instanceof PongHardwareAI);
+
+        if (result == PongTickResult.NONE) {
+            return;
+        }
+
+        if (result == PongTickResult.RALLY_RESET) {
+            resetEventCounts();
+            return;
+        }
+
+        if (result == PongTickResult.TOP_SCORED) {
+            scoreboard.recordPoint(topVariant, bottomVariant);
+        } else if (result == PongTickResult.BOTTOM_SCORED) {
+            scoreboard.recordPoint(bottomVariant, topVariant);
+        }
+
+        resetEventCounts();
+        startCountdown();
+    }
+
+    void togglePause() {
+        if (engine.getGameState() == PongGameState.PAUSED) {
+            clearPauseStatusMessage();
+            startCountdown();
+        } else {
+            stopHardwareInjection();
+            engine.pause();
+            lockToolbars(false);
+            refreshCanvas();
+        }
+    }
+
+    void startCountdown() {
+        stopHardwareInjection();
+        clearPauseStatusMessage();
+        engine.startCountdown(System.currentTimeMillis());
+        lockToolbars(true);
+        refreshCanvas();
+    }
+
+    private void resetGame() {
+        stopHardwareInjection();
+        resetEventCounts();
+        clearPauseStatusMessage();
+        engine.resetMatch();
+        lockToolbars(false);
+        refreshCanvas();
+    }
+
+    private void gameLoop() {
+        while (running) {
+            long now = System.currentTimeMillis();
+            if (engine.getGameState() == PongGameState.COUNTDOWN) {
+                tickCountdown(now);
+            } else if (engine.getGameState() == PongGameState.PLAYING) {
+                tickPlaying();
             }
-        });
 
-        // Speed keys 1-5: change ball speed level (takes effect on next ball reset)
-        int[] speedKeys = {
-            KeyEvent.VK_1, KeyEvent.VK_2, KeyEvent.VK_3, KeyEvent.VK_4, KeyEvent.VK_5
-        };
-        for (int i = 0; i < speedKeys.length; i++) {
-            final int level = i;
-            String id = "speed-" + (i + 1);
-            im.put(KeyStroke.getKeyStroke(speedKeys[i], 0, false), id);
-            am.put(id, new AbstractAction() {
-                @Override public void actionPerformed(ActionEvent e) {
-                    ballSpeedLevel = level;
-                    canvas.repaint(); // refresh speed indicator immediately in pause overlay
-                }
-            });
+            updateEventDisplay();
+            refreshCanvas();
+            canvas.repaint();
+
+            try {
+                Thread.sleep(16);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
-    /**
-     * Wires LEFT/RIGHT arrow keys to the currently active HumanPlayer using
-     * WHEN_IN_FOCUSED_WINDOW so toolbar focus does not break human control.
-     */
-    private void wireHumanPlayer() {
-        unbindHumanKeys();
-
-        HumanPlayer<PongState, PongAction> hp = null;
-        if (topPlayer instanceof HumanPlayer<?, ?> h) {
-            @SuppressWarnings("unchecked")
-            HumanPlayer<PongState, PongAction> c = (HumanPlayer<PongState, PongAction>) h;
-            hp = c;
-        } else if (bottomPlayer instanceof HumanPlayer<?, ?> h) {
-            @SuppressWarnings("unchecked")
-            HumanPlayer<PongState, PongAction> c = (HumanPlayer<PongState, PongAction>) h;
-            hp = c;
-        }
-        if (hp == null) return;
-
-        InputMap  im  = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap am  = getActionMap();
-        final HumanPlayer<PongState, PongAction> finalHp = hp;
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, false), "hp-L-dn");
-        am.put("hp-L-dn",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
-            finalHp.keyPressed(fakeKey(KeyEvent.VK_LEFT)); }});
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, true),  "hp-L-up");
-        am.put("hp-L-up",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
-            finalHp.keyReleased(fakeKey(KeyEvent.VK_LEFT)); }});
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, false), "hp-R-dn");
-        am.put("hp-R-dn",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
-            finalHp.keyPressed(fakeKey(KeyEvent.VK_RIGHT)); }});
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, true),  "hp-R-up");
-        am.put("hp-R-up",  new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {
-            finalHp.keyReleased(fakeKey(KeyEvent.VK_RIGHT)); }});
-    }
-
-    private void unbindHumanKeys() {
-        InputMap  im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap am = getActionMap();
-        for (String k : new String[]{"hp-L-dn","hp-L-up","hp-R-dn","hp-R-up"}) am.remove(k);
-        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, false));
-        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  0, true));
-        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, false));
-        im.remove(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0, true));
-    }
-
-    private KeyEvent fakeKey(int code) {
-        return new KeyEvent(this, KeyEvent.KEY_PRESSED,
-                System.currentTimeMillis(), 0, code, KeyEvent.CHAR_UNDEFINED);
-    }
-
-    // =========================================================================
-    // Player factory
-    // =========================================================================
-
-    /**
-     * Instantiates the correct player for the given variant.
-     *
-     * <p>AI presets (parameters here for easy tuning):
-     * <ul>
-     *   <li>Software AI Easy - deadZone=22 px, reactionProb=0.72 (~28% tick skip)</li>
-     *   <li>Software AI Hard - deadZone=8 px,  reactionProb=1.00 (perfect reaction)</li>
-     * </ul>
-     */
     private BasePlayer<PongState, PongAction> createPlayer(PlayerVariant variant) {
-        return switch (variant) {
-            case HUMAN    -> buildHumanPlayer();
-            case HARDWARE -> hardwarePlayer != null
-                    ? hardwarePlayer
-                    : new PongSoftwareAI("Software AI Hard", 8, 1.00);
-            case AI_HARD  -> new PongSoftwareAI("Software AI Hard",  8, 1.00);
-            case AI_EASY  -> new PongSoftwareAI("Software AI Easy", 22, 0.72);
-        };
+        return PongPlayerFactory.createPlayer(variant, hardwarePlayer);
     }
 
-    private HumanPlayer<PongState, PongAction> buildHumanPlayer() {
-        return new HumanPlayer<>("Human",
-                Map.of(KeyEvent.VK_LEFT, PongAction.LEFT,
-                       KeyEvent.VK_RIGHT, PongAction.RIGHT),
-                PongAction.IDLE);
+    private void rebuildPlayers() {
+        topPlayer = createPlayer(topVariant);
+        bottomPlayer = createPlayer(bottomVariant);
+        syncHardwareInjection();
+        wireHumanPlayer();
+    }
+
+    private void wireHumanPlayer() {
+        HumanPlayer<PongState, PongAction> humanPlayer = null;
+        if (topPlayer instanceof HumanPlayer<?, ?> humanTop) {
+            @SuppressWarnings("unchecked")
+            HumanPlayer<PongState, PongAction> cast = (HumanPlayer<PongState, PongAction>) humanTop;
+            humanPlayer = cast;
+        } else if (bottomPlayer instanceof HumanPlayer<?, ?> humanBottom) {
+            @SuppressWarnings("unchecked")
+            HumanPlayer<PongState, PongAction> cast = (HumanPlayer<PongState, PongAction>) humanBottom;
+            humanPlayer = cast;
+        }
+        inputController.wireHumanPlayer(this, humanPlayer);
     }
 
     private void handleHardwareDisconnected(String reason) {
@@ -441,11 +299,9 @@ public class PongGame extends JPanel {
         }
 
         if (fellBack) {
-            topPlayer = createPlayer(topVariant);
-            bottomPlayer = createPlayer(bottomVariant);
-            wireHumanPlayer();
+            rebuildPlayers();
             resetEventCounts();
-            resetBall();
+            engine.resetBall();
         }
 
         pauseForHardwareEvent("Hardware disconnected: " + reason);
@@ -464,270 +320,42 @@ public class PongGame extends JPanel {
 
         if (hardwarePlayer == null) {
             hardwarePlayer = createHardwarePlayer(pongManager);
+            rebuildPlayers();
         }
+
         boolean available = hardwarePlayer != null;
         topToolbar.setHardwareAvailable(available);
         bottomToolbar.setHardwareAvailable(available);
+        refreshCanvas();
     }
 
     private void pauseForHardwareEvent(String message) {
-        if (gameState != GameState.PAUSED) {
+        if (engine.getGameState() != PongGameState.PAUSED) {
             stopHardwareInjection();
-            gameState = GameState.PAUSED;
+            engine.pause();
             lockToolbars(false);
         }
         canvas.setStatusMessage(message + ". Press ESC to resume.");
+        refreshCanvas();
         canvas.repaint();
     }
 
-    private void shutdownHardwareListener() {
-        if (pongManager != null) {
-            pongManager.removeListener(hardwareConnectionListener);
-        }
+    private void toggleConstantSpeed() {
+        engine.toggleConstantSpeed();
+        refreshCanvas();
     }
 
-    // =========================================================================
-    // Toolbar callbacks
-    // =========================================================================
-
-    void onVariantSelected(PongToolbar.Side side, PlayerVariant chosen) {
-        if (side == PongToolbar.Side.TOP) {
-            topVariant = chosen;
-            topToolbar.setHardwareCountsVisible(topVariant == PlayerVariant.HARDWARE);
-        } else {
-            bottomVariant = chosen;
-        }
-
-        topPlayer    = createPlayer(topVariant);
-        bottomPlayer = createPlayer(bottomVariant);
-        syncHardwareInjection();
-        wireHumanPlayer();
-        resetEventCounts();
-        resetBall();
-        // Stay in PAUSED so the user can review before pressing ESC
+    private void setBallSpeedLevel(int level) {
+        engine.setBallSpeedLevel(level);
+        refreshCanvas();
     }
 
-    // =========================================================================
-    // Game loop
-    // =========================================================================
-
-    /** Starts the daemon game-loop thread and requests keyboard focus. */
-    public void start() {
-        running    = true;
-        Thread gameThread = new Thread(this::gameLoop, "pong-loop");
-        gameThread.setDaemon(true);
-        gameThread.start();
-        requestFocusInWindow();
-    }
-
-    public void stop() { running = false; }
-
-    private void gameLoop() {
-        while (running) {
-            long now = System.currentTimeMillis();
-            switch (gameState) {
-                case COUNTDOWN -> tickCountdown(now);
-                case PLAYING   -> tickPlaying();
-                case PAUSED    -> { /* idle */ }
-            }
-            updateEventDisplay();
-            canvas.repaint();
-            try { Thread.sleep(16); } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-
-    void tickCountdown(long now) {
-        if (now - countdownStartMs >= COUNTDOWN_MS) gameState = GameState.PLAYING;
-    }
-
-    void tickPlaying() {
-        // Safety guard: if the ball has somehow lost all velocity, stop injection
-        // so the neurons aren't stimulated while the game is effectively frozen.
-        if (ballVelX == 0 && ballVelY == 0) {
-            stopHardwareInjection();
+    private void syncHardwareInjection() {
+        if (hardwarePlayer == null) {
             return;
         }
-
-        // State snapshots
-        PongState topState    = new PongState(topPaddleX,    ballX, ballY, FIELD_WIDTH, ballVelY);
-        PongState bottomState = new PongState(bottomPaddleX, ballX, ballY, FIELD_WIDTH, ballVelY);
-
-        // Actions
-        PongAction topAct    = topPlayer.getNextMove(topState);
-        PongAction bottomAct = bottomPlayer.getNextMove(bottomState);
-
-        // Move paddles — hardware player uses its own configured speed
-        topPaddleX    = clampPaddle(topPaddleX    + dx(topAct,    topPlayer    instanceof PongHardwareAI));
-        bottomPaddleX = clampPaddle(bottomPaddleX + dx(bottomAct, bottomPlayer instanceof PongHardwareAI));
-
-        // Move ball
-        ballX += ballVelX;
-        ballY += ballVelY;
-
-        // Left / right wall bounce
-        if (ballX <= 0) {
-            ballX = 0; ballVelX = Math.abs(ballVelX);
-        } else if (ballX + BALL_SIZE >= FIELD_WIDTH) {
-            ballX = FIELD_WIDTH - BALL_SIZE; ballVelX = -Math.abs(ballVelX);
-        }
-
-        // Top paddle collision (ball moving up: VelY < 0)
-        if (ballVelY < 0
-                && ballY <= TOP_PADDLE_Y + PADDLE_HEIGHT
-                && ballY + BALL_SIZE >= TOP_PADDLE_Y
-                && ballX + BALL_SIZE >= topPaddleX
-                && ballX <= topPaddleX + PADDLE_WIDTH) {
-            ballVelY = Math.abs(ballVelY);
-            ballVelX += deflect(ballX, topPaddleX);
-            maybeNormalizeSpeed();
-            ballY = TOP_PADDLE_Y + PADDLE_HEIGHT + 1;
-            resetEventCounts();
-        }
-
-        // Bottom paddle collision (ball moving down: VelY > 0)
-        if (ballVelY > 0
-                && ballY + BALL_SIZE >= BOTTOM_PADDLE_Y
-                && ballY <= BOTTOM_PADDLE_Y + PADDLE_HEIGHT
-                && ballX + BALL_SIZE >= bottomPaddleX
-                && ballX <= bottomPaddleX + PADDLE_WIDTH) {
-            ballVelY = -Math.abs(ballVelY);
-            ballVelX += deflect(ballX, bottomPaddleX);
-            maybeNormalizeSpeed();
-            ballY = BOTTOM_PADDLE_Y - BALL_SIZE - 1;
-            resetEventCounts();
-        }
-
-        // Ball exits top -> bottom scores
-        if (ballY + BALL_SIZE < 0) {
-            bottomScore++;
-            scoreboard.recordPoint(bottomVariant, topVariant);
-            resetEventCounts();
-            startCountdown(); return;
-        }
-
-        // Ball exits bottom -> top scores
-        if (ballY > FIELD_HEIGHT) {
-            topScore++;
-            scoreboard.recordPoint(topVariant, bottomVariant);
-            resetEventCounts();
-            startCountdown();
-        }
-    }
-
-    // =========================================================================
-    // State transitions
-    // =========================================================================
-
-    void togglePause() {
-        switch (gameState) {
-            case PAUSED    -> {
-                clearPauseStatusMessage();
-                startCountdown();
-            }
-            case PLAYING,
-                 COUNTDOWN -> {
-                     stopHardwareInjection();
-                     gameState = GameState.PAUSED;
-                     lockToolbars(false);
-                 }
-        }
-    }
-
-    private void resetGame() {
-        stopHardwareInjection();
-        topScore = 0; bottomScore = 0;
-        resetEventCounts();
-        clearPauseStatusMessage();
-        gameState = GameState.PAUSED;
-        lockToolbars(false);
-        resetBall();
-    }
-
-    void startCountdown() {
-        stopHardwareInjection();
-        clearPauseStatusMessage();
-        gameState        = GameState.COUNTDOWN;
-        countdownStartMs = System.currentTimeMillis();
-        lockToolbars(true);
-        resetBall();
-    }
-
-    // =========================================================================
-    // Helpers
-    // =========================================================================
-
-    /**
-     * Stops voltage injection on the hardware player if one is active.
-     * Safe to call from any game state and when {@code hardwarePlayer} is null.
-     */
-    private void stopHardwareInjection() {
-        if (hardwarePlayer != null) hardwarePlayer.stopInjectionOnly();
-    }
-
-    /**
-     * Enables injection when the HARDWARE variant is selected for either paddle;
-     * disables (and immediately stops) injection when neither paddle is HARDWARE.
-     * Called whenever {@link #topVariant} or {@link #bottomVariant} changes.
-     */
-    private void syncHardwareInjection() {
-        if (hardwarePlayer == null) return;
-        boolean selected = (topVariant    == PlayerVariant.HARDWARE)
-                        || (bottomVariant == PlayerVariant.HARDWARE);
+        boolean selected = topVariant == PlayerVariant.HARDWARE || bottomVariant == PlayerVariant.HARDWARE;
         hardwarePlayer.setInjectionEnabled(selected);
-    }
-
-    /**
-     * Returns the signed pixel delta for one paddle tick.
-     * When {@code isHardware} is {@code true}, uses
-     * {@link NeuralHardwareConfig#PONG_HARDWARE_PADDLE_SPEED} so the hardware
-     * response can be tuned independently of the software {@code PADDLE_SPEED}.
-     */
-    private static int dx(PongAction a, boolean isHardware) {
-        int speed = isHardware ? NeuralHardwareConfig.PONG_HARDWARE_PADDLE_SPEED : PADDLE_SPEED;
-        return switch (a) { case LEFT -> -speed; case RIGHT -> speed; case IDLE -> 0; };
-    }
-
-    private static int clampPaddle(int x) {
-        return Math.max(0, Math.min(FIELD_WIDTH - PADDLE_WIDTH, x));
-    }
-
-    /**
-     * Small X deflection based on where the ball hits the paddle center.
-     * Hitting the edge imparts spin; dead center has no effect.
-     */
-    private static int deflect(int bx, int px) {
-        int off = (bx + BALL_SIZE / 2) - (px + PADDLE_WIDTH / 2);
-        return Math.max(-3, Math.min(3, off / 10));
-    }
-
-    /**
-     * If constant-speed mode is on, scales the ball velocity back to exactly the
-     * magnitude corresponding to the current {@code ballSpeedLevel}.  This is
-     * called after every paddle hit so deflect-induced drift cannot accumulate.
-     */
-    private void maybeNormalizeSpeed() {
-        if (!constantSpeed) return;
-        double target  = Math.sqrt(
-                (double) SPEED_VEL_X[ballSpeedLevel] * SPEED_VEL_X[ballSpeedLevel]
-              + (double) SPEED_VEL_Y[ballSpeedLevel] * SPEED_VEL_Y[ballSpeedLevel]);
-        double current = Math.sqrt((double) ballVelX * ballVelX + (double) ballVelY * ballVelY);
-        if (current == 0) return;
-        double scale = target / current;
-        ballVelX = (int) Math.round(ballVelX * scale);
-        ballVelY = (int) Math.round(ballVelY * scale);
-        // Ensure Y always keeps non-zero direction so the ball never gets stuck
-        if (ballVelY == 0) ballVelY = 1;
-    }
-
-    private void resetBall() {
-        ballX    = FIELD_WIDTH  / 2 - BALL_SIZE / 2;
-        ballY    = FIELD_HEIGHT / 2 - BALL_SIZE / 2;
-        ballVelX = (Math.random() > 0.5 ? 1 : -1) * SPEED_VEL_X[ballSpeedLevel];
-        ballVelY = SPEED_VEL_Y[ballSpeedLevel]; // always toward bottom (positive Y)
-        topPaddleX    = FIELD_WIDTH / 2 - PADDLE_WIDTH / 2;
-        bottomPaddleX = FIELD_WIDTH / 2 - PADDLE_WIDTH / 2;
     }
 
     private void lockToolbars(boolean lock) {
@@ -741,24 +369,18 @@ public class PongGame extends JPanel {
         canvas.setStatusMessage(null);
     }
 
-    /**
-     * Resets both the hardware spike counter and the local paddle-event counter
-     * to zero.  Called after every ball hit (paddle collision) and ball miss
-     * (ball exits the field) so the counts always reflect the current rally.
-     */
     private void resetEventCounts() {
-        lastDisplayedCh1 = -1; // force display refresh on next tick
+        lastDisplayedCh1 = -1;
         lastDisplayedCh2 = -1;
-        if (hardwarePlayer != null) hardwarePlayer.resetSpikeCount();
+        if (hardwarePlayer != null) {
+            hardwarePlayer.resetSpikeCount();
+        }
     }
 
-    /**
-     * Pushes the current Ch1 / Ch2 spike counts to the top toolbar label.
-     * Only dispatches to the EDT when the values have actually changed, to
-     * avoid flooding the event queue at 60 fps.
-     */
     private void updateEventDisplay() {
-        if (topVariant != PlayerVariant.HARDWARE || hardwarePlayer == null) return;
+        if (topVariant != PlayerVariant.HARDWARE || hardwarePlayer == null) {
+            return;
+        }
         int ch1 = hardwarePlayer.getCh1SpikeCount();
         int ch2 = hardwarePlayer.getCh2SpikeCount();
         if (ch1 != lastDisplayedCh1 || ch2 != lastDisplayedCh2) {
@@ -768,289 +390,11 @@ public class PongGame extends JPanel {
         }
     }
 
-    // =========================================================================
-    // Game canvas (inner class - all painting)
-    // =========================================================================
-
-    private class GameCanvas extends JPanel {
-
-        // Hit-test rectangles populated during paintPaused; used by the mouse listener.
-        private final Rectangle[] speedReacts = new Rectangle[5];
-        private Rectangle checkboxRect  = null;
-        private Rectangle resumeRect    = null;
-        private Rectangle resetRect     = null;
-
-        // Current mouse position, used for hover highlighting in the pause overlay.
-        private int mouseX = -1, mouseY = -1;
-        private String statusMessage = null;
-
-        void setStatusMessage(String statusMessage) {
-            this.statusMessage = statusMessage;
-        }
-
-        GameCanvas() {
-            // Click handler
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    if (gameState != GameState.PAUSED) return;
-                    int mx = e.getX(), my = e.getY();
-
-                    // Speed buttons 1-5
-                    for (int i = 0; i < speedReacts.length; i++) {
-                        if (speedReacts[i] != null && speedReacts[i].contains(mx, my)) {
-                            ballSpeedLevel = i;
-                            repaint();
-                            return;
-                        }
-                    }
-                    // Constant-speed checkbox (click anywhere on the row)
-                    if (checkboxRect != null && checkboxRect.contains(mx, my)) {
-                        constantSpeed = !constantSpeed;
-                        repaint();
-                        return;
-                    }
-                    // Resume button
-                    if (resumeRect != null && resumeRect.contains(mx, my)) {
-                        togglePause();
-                        return;
-                    }
-                    // Reset button
-                    if (resetRect != null && resetRect.contains(mx, my)) {
-                        resetGame();
-                    }
-                }
-            });
-
-            // Motion handler for hover highlight
-            addMouseMotionListener(new MouseMotionAdapter() {
-                @Override
-                public void mouseMoved(MouseEvent e) {
-                    if (gameState != GameState.PAUSED) return;
-                    mouseX = e.getX();
-                    mouseY = e.getY();
-                    repaint();
-                }
-            });
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                                RenderingHints.VALUE_ANTIALIAS_ON);
-
-            // Horizontal centre-line dashes
-            g.setColor(new Color(55, 55, 55));
-            for (int x = 0; x < FIELD_WIDTH; x += 30) g.fillRect(x, FIELD_HEIGHT / 2 - 2, 18, 4);
-
-            // Paddles
-            g.setColor(Color.WHITE);
-            g2.fillRoundRect(topPaddleX,    TOP_PADDLE_Y,    PADDLE_WIDTH, PADDLE_HEIGHT, 8, 8);
-            g2.fillRoundRect(bottomPaddleX, BOTTOM_PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT, 8, 8);
-
-            // Ball
-            g2.fillOval(ballX, ballY, BALL_SIZE, BALL_SIZE);
-
-            // Scores
-            g.setFont(new Font("Monospaced", Font.BOLD, 28));
-            FontMetrics fm = g.getFontMetrics();
-            String ts = String.valueOf(topScore);
-            String bs = String.valueOf(bottomScore);
-            int cx = FIELD_WIDTH / 2;
-            g.setColor(new Color(200, 200, 200));
-            g.drawString(ts, cx - fm.stringWidth(ts) / 2, FIELD_HEIGHT / 2 - 20);
-            g.drawString(bs, cx - fm.stringWidth(bs) / 2, FIELD_HEIGHT / 2 + fm.getAscent() + 4);
-
-            // Player name labels
-            g.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            g.setColor(new Color(120, 120, 120));
-            g.drawString(topPlayer.getName(),    8, TOP_PADDLE_Y    + PADDLE_HEIGHT + 14);
-            g.drawString(bottomPlayer.getName(), 8, BOTTOM_PADDLE_Y - 4);
-
-            // State overlay
-            switch (gameState) {
-                case COUNTDOWN -> paintCountdown(g);
-                case PAUSED    -> paintPaused(g);
-                case PLAYING   -> { /* no overlay */ }
-            }
-        }
-
-        private void paintCountdown(Graphics g) {
-            long rem  = COUNTDOWN_MS - (System.currentTimeMillis() - countdownStartMs);
-            int  dig  = (int) Math.ceil(rem / 1000.0);
-            String tx = dig >= 1 ? String.valueOf(dig) : "GO!";
-
-            g.setColor(new Color(0, 0, 0, 150));
-            g.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
-
-            g.setFont(new Font("Monospaced", Font.BOLD, 80));
-            g.setColor(Color.WHITE);
-            FontMetrics fm = g.getFontMetrics();
-            g.drawString(tx,
-                    FIELD_WIDTH  / 2 - fm.stringWidth(tx) / 2,
-                    FIELD_HEIGHT / 2 + fm.getAscent() / 2 - 8);
-        }
-
-        /**
-         * Draws the pause overlay.  All clickable element bounds are stored in the
-         * corresponding Rectangle fields so the MouseListener can hit-test them.
-         */
-        private void paintPaused(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g;
-            g.setColor(new Color(0, 0, 0, 160));
-            g.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
-
-            // Title
-            g.setFont(new Font("Monospaced", Font.BOLD, 52));
-            g.setColor(new Color(255, 220, 50));
-            FontMetrics fm = g.getFontMetrics();
-            String title = "PAUSED";
-            g.drawString(title,
-                    FIELD_WIDTH / 2 - fm.stringWidth(title) / 2,
-                    FIELD_HEIGHT / 2 - 46);
-
-            // Ball speed selector
-            g.setFont(new Font("SansSerif", Font.BOLD, 14));
-            fm = g.getFontMetrics();
-            String speedLabel = "BALL SPEED:";
-            int labelW = fm.stringWidth(speedLabel);
-            int cellW  = 30;
-            int gap    = 6;
-            int totalSpeedW = labelW + gap + 5 * cellW + 4 * gap;
-            int sx = FIELD_WIDTH / 2 - totalSpeedW / 2;
-            int sy = FIELD_HEIGHT / 2 - 4;
-
-            g.setColor(new Color(200, 200, 200));
-            g.drawString(speedLabel, sx, sy + fm.getAscent());
-            int bx = sx + labelW + gap;
-            for (int i = 0; i < 5; i++) {
-                boolean active = (i == ballSpeedLevel);
-                int rx = bx + i * (cellW + gap);
-                speedReacts[i] = new Rectangle(rx, sy, cellW, cellW);
-                boolean hovered = speedReacts[i].contains(mouseX, mouseY);
-
-                if (active) {
-                    g.setColor(new Color(255, 200, 0));
-                    g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
-                    g.setColor(Color.BLACK);
-                } else if (hovered) {
-                    g.setColor(new Color(120, 100, 0));
-                    g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
-                    g.setColor(new Color(255, 220, 100));
-                } else {
-                    g.setColor(new Color(80, 80, 80));
-                    g2.fillRoundRect(rx, sy, cellW, cellW, 6, 6);
-                    g.setColor(new Color(180, 180, 180));
-                }
-                String num = String.valueOf(i + 1);
-                g.setFont(new Font("Monospaced", Font.BOLD, 14));
-                fm = g.getFontMetrics();
-                g.drawString(num,
-                        rx + cellW / 2 - fm.stringWidth(num) / 2,
-                        sy + cellW / 2 + fm.getAscent() / 2 - 2);
-            }
-
-            // Constant-speed checkbox
-            int cby  = FIELD_HEIGHT / 2 + 36;
-            int cbSz = 16;
-            int cbX  = FIELD_WIDTH / 2 - 84;
-
-            // Extend the hit area to include the label text
-            g.setFont(new Font("SansSerif", Font.PLAIN, 13));
-            fm = g.getFontMetrics();
-            String cbLabel = "Constant Speed  (C)";
-            int cbRowW = cbSz + 8 + fm.stringWidth(cbLabel);
-            checkboxRect = new Rectangle(cbX, cby, cbRowW, cbSz + 4);
-            boolean cbHovered = checkboxRect.contains(mouseX, mouseY);
-
-            g2.setStroke(new BasicStroke(2f));
-            g.setColor(constantSpeed
-                    ? new Color(255, 200, 0)
-                    : (cbHovered ? new Color(160, 140, 60) : new Color(100, 100, 100)));
-            g2.drawRoundRect(cbX, cby, cbSz, cbSz, 4, 4);
-            if (constantSpeed) {
-                g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g.setColor(new Color(255, 200, 0));
-                g2.drawLine(cbX + 3, cby + 8,  cbX + 6,  cby + 12);
-                g2.drawLine(cbX + 6, cby + 12, cbX + 13, cby + 4);
-            }
-            g2.setStroke(new BasicStroke(1f));
-            g.setColor(cbHovered ? new Color(255, 240, 160) : new Color(210, 210, 210));
-            g.drawString(cbLabel, cbX + cbSz + 8, cby + fm.getAscent() - 1);
-
-            // ---- Resume / Reset buttons --------------------------------------
-            int btnY  = FIELD_HEIGHT / 2 + 64;
-            int btnH  = 26;
-            int btnW  = 110;
-            int btnGap = 16;
-            int resumeX = FIELD_WIDTH / 2 - btnW - btnGap / 2;
-            int resetX  = FIELD_WIDTH / 2 + btnGap / 2;
-
-            resumeRect = new Rectangle(resumeX, btnY, btnW, btnH);
-            resetRect  = new Rectangle(resetX,  btnY, btnW, btnH);
-
-            paintButton(g2, resumeRect, "Resume  (ESC)", resumeRect.contains(mouseX, mouseY),
-                        new Color(40, 130, 60), new Color(60, 180, 80));
-            paintButton(g2, resetRect,  "Reset  (R)",   resetRect.contains(mouseX, mouseY),
-                        new Color(130, 50, 40), new Color(190, 70, 55));
-
-            // ---- Keyboard hint (small, dim) ----------------------------------
-            g.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            g.setColor(new Color(90, 90, 90));
-            fm = g.getFontMetrics();
-            String hint = "1-5 speed  •  C constant speed  •  ESC resume  •  R reset";
-            g.drawString(hint,
-                    FIELD_WIDTH / 2 - fm.stringWidth(hint) / 2,
-                    FIELD_HEIGHT / 2 + 106);
-
-            if (statusMessage != null && !statusMessage.isBlank()) {
-                g.setFont(new Font("SansSerif", Font.BOLD, 12));
-                g.setColor(new Color(255, 220, 160));
-                fm = g.getFontMetrics();
-                g.drawString(statusMessage,
-                        FIELD_WIDTH / 2 - fm.stringWidth(statusMessage) / 2,
-                        FIELD_HEIGHT / 2 + 126);
-            }
-        }
-
-        /** Draws a labeled button rectangle with hover tinting. */
-        private void paintButton(Graphics2D g2, Rectangle r,
-                                 String label, boolean hovered,
-                                 Color baseColor, Color hoverColor) {
-            g2.setColor(hovered ? hoverColor : baseColor);
-            g2.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
-
-            g2.setStroke(new BasicStroke(1.5f));
-            g2.setColor(hovered ? new Color(220, 255, 220) : new Color(160, 200, 160));
-            g2.drawRoundRect(r.x, r.y, r.width, r.height, 8, 8);
-            g2.setStroke(new BasicStroke(1f));
-
-            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
-            FontMetrics fm = g2.getFontMetrics();
-            g2.setColor(Color.WHITE);
-            g2.drawString(label,
-                    r.x + r.width  / 2 - fm.stringWidth(label) / 2,
-                    r.y + r.height / 2 + fm.getAscent() / 2 - 2);
-        }
+    private void refreshCanvas() {
+        canvas.setSnapshot(engine.snapshot(), topPlayer.getName(), bottomPlayer.getName());
     }
 
-    // =========================================================================
-    // Standalone entry point (software-only, no hardware)
-    // =========================================================================
-
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            PongGame game = new PongGame(null, null);
-            JFrame frame = new JFrame("Pong");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setResizable(false);
-            frame.add(game);
-            frame.pack();
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
-            game.start();
-        });
+        SwingUtilities.invokeLater(() -> PongFrame.launchStandalone());
     }
 }

@@ -7,7 +7,7 @@ import edu.sjsu.spring2026.group32.hardware.signal.VoltageInjector;
 import edu.sjsu.spring2026.group32.player.model.BasePlayer;
 import edu.sjsu.spring2026.group32.player.model.PlayerType;
 import edu.sjsu.spring2026.group32.pong.model.PongAction;
-import edu.sjsu.spring2026.group32.pong.PongGame;
+import edu.sjsu.spring2026.group32.pong.core.PongEngine;
 import edu.sjsu.spring2026.group32.pong.model.PongState;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,7 +61,7 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
      * the ball is already close enough that no correction is needed.
      * {@code PADDLE_WIDTH / 4} = 20 px at the default 80 px paddle width.
      */
-    private static final int DEAD_ZONE = PongGame.PADDLE_WIDTH / 4;
+    private static final int DEAD_ZONE = PongEngine.PADDLE_WIDTH / 4;
 
     /** Tracks which channel is currently being injected to avoid redundant serial commands. */
     private enum InjectState { NONE, LEFT, RIGHT }
@@ -241,7 +241,7 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
             return;
         }
 
-        int paddleCenter = state.paddleX() + PongGame.PADDLE_WIDTH / 2;
+        int paddleCenter = state.paddleX() + PongEngine.PADDLE_WIDTH / 2;
         int diff         = state.ballX() - paddleCenter;
 
         if (diff < -DEAD_ZONE) {

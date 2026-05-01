@@ -1,7 +1,6 @@
 package edu.sjsu.spring2026.group32.pong.model;
 
 import edu.sjsu.spring2026.group32.player.model.PlayerType;
-import edu.sjsu.spring2026.group32.pong.PongGame;
 import edu.sjsu.spring2026.group32.pong.ai.PongHardwareAI;
 
 /**
@@ -10,11 +9,11 @@ import edu.sjsu.spring2026.group32.pong.ai.PongHardwareAI;
  * <p>Rules enforced by the UI:
  * <ul>
  *   <li>{@link #HARDWARE} is grayed out when no {@link PongHardwareAI} was
- *       provided to {@link PongGame} (i.e., no device is connected).</li>
+ *       provided to the active Pong session (i.e., no device is connected).</li>
  *   <li>Software AI variants may be selected on both sides at the same time.</li>
  * </ul>
  *
- * <p>AI presets are parameterized inside {@link PongGame\#createPlayer}:
+ * <p>AI presets are parameterized in Pong's player factory:
  * <ul>
  *   <li>{@link #AI_EASY} — deadZone=40 px, reactionProb=0.55</li>
  *   <li>{@link #AI_HARD} — deadZone=8 px,  reactionProb=1.00</li>
