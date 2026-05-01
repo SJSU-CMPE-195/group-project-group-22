@@ -12,5 +12,7 @@ import edu.sjsu.spring2026.group32.player.GameState;
  * @param ballX      ball centre X (pixels)
  * @param ballY      ball centre Y (pixels)
  * @param fieldWidth total field width in pixels, useful for AI boundary clamping
+ * @param ballVelY   current Y velocity of the ball (negative = moving toward top,
+ *                   positive = moving toward bottom)
  */
-public record PongState(int paddleX, int ballX, int ballY, int fieldWidth) implements GameState {}
+public record PongState(int paddleX, int ballX, int ballY, int fieldWidth, int ballVelY) implements GameState {}

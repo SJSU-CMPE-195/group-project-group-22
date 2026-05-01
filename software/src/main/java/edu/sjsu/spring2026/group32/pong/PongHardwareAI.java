@@ -17,14 +17,17 @@ import edu.sjsu.spring2026.group32.player.PlayerType;
  * </ul>
  *
  * <h3>Injection strategy</h3>
- * <p>On every game tick {@link #getNextMove} computes the offset between the
- * ball's X position and the paddle centre.  If the ball is more than
- * {@link #DEAD_ZONE} pixels to the left, a constant voltage is injected on
- * CH1 to drive the left neurons; if it is to the right, CH2 is driven.
- * When crossing sides, the previous channel is explicitly stopped before the
- * new one is started (per the firmware's {@code STOP_INJECT_CHn} /
- * {@code INJECT_V_CHn} protocol).  Within the dead zone both channels are
- * stopped so the paddle coasts.
+ * <p>On every game tick {@link #getNextMove} first checks whether the ball is
+ * moving <em>toward</em> the hardware player (negative {@code ballVelY}).
+ * Injection is suppressed entirely while the ball travels away; any active
+ * channel is stopped at that transition.  When the ball is incoming, the
+ * offset between the ball's X position and the paddle center determines which
+ * channel to drive: more than {@link #DEAD_ZONE} pixels to the left → CH1
+ * (left neurons); to the right → CH2 (right neurons).  When crossing sides
+ * the previous channel is explicitly stopped before the new one is started
+ * (per the firmware's {@code STOP_INJECT_CHn} / {@code INJECT_V_CHn}
+ * protocol).  Within the dead zone both channels are stopped so the paddle
+ * coasts.
  *
  * <h3>Action mapping</h3>
  * <p>After updating injection, the ADC readings are sampled:
@@ -48,7 +51,7 @@ import edu.sjsu.spring2026.group32.player.PlayerType;
 public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
 
     /**
-     * Half-width dead zone around the paddle centre (pixels).
+     * Half-width dead zone around the paddle center (pixels).
      * Derived from paddle width so the hardware player stops injecting when
      * the ball is already close enough that no correction is needed.
      * {@code PADDLE_WIDTH / 4} = 20 px at the default 80 px paddle width.
@@ -156,9 +159,10 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
      *
      * <p>Injection state transitions:
      * <ul>
-     *   <li>Ball > DEAD_ZONE left of centre  → stop CH2 (if active), inject CH1</li>
-     *   <li>Ball > DEAD_ZONE right of centre → stop CH1 (if active), inject CH2</li>
-     *   <li>Ball within DEAD_ZONE            → stop all injection</li>
+     *   <li>Ball moving away (ballVelY &ge; 0) → stop all injection, skip stimulation</li>
+     *   <li>Ball incoming, &gt; DEAD_ZONE left of center → stop CH2 (if active), inject CH1</li>
+     *   <li>Ball incoming, &gt; DEAD_ZONE right of center → stop CH1 (if active), inject CH2</li>
+     *   <li>Ball incoming, within DEAD_ZONE              → stop all injection</li>
      * </ul>
      */
     @Override
@@ -195,9 +199,25 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
      * stop commands.  Only sends serial commands on state <em>transitions</em>
      * to avoid saturating the serial port with redundant messages.
      * No-op when {@link #injectionEnabled} is {@code false}.
+     *
+     * <p>Injection is suppressed when the ball is moving <em>away</em> from the
+     * hardware player (i.e. {@code ballVelY >= 0}, ball heading toward the bottom).
+     * Any active injection is stopped at that transition so the neurons are not
+     * stimulated unnecessarily while the ball is out of play for this player.
      */
     private void updateInjection(PongState state) {
         if (!injectionEnabled) return;
+
+        // Hardware player is always at the top; ball coming toward it has ballVelY < 0.
+        // When the ball is moving away, stop any active injection and return.
+        if (state.ballVelY() >= 0) {
+            if (lastInject != InjectState.NONE) {
+                injector.stopInjection(0);
+                lastInject = InjectState.NONE;
+            }
+            return;
+        }
+
         int paddleCenter = state.paddleX() + PongGame.PADDLE_WIDTH / 2;
         int diff         = state.ballX() - paddleCenter;
 

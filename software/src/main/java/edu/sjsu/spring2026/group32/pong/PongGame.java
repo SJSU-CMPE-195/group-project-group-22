@@ -449,8 +449,8 @@ public class PongGame extends JPanel {
         }
 
         // State snapshots
-        PongState topState    = new PongState(topPaddleX,    ballX, ballY, FIELD_WIDTH);
-        PongState bottomState = new PongState(bottomPaddleX, ballX, ballY, FIELD_WIDTH);
+        PongState topState    = new PongState(topPaddleX,    ballX, ballY, FIELD_WIDTH, ballVelY);
+        PongState bottomState = new PongState(bottomPaddleX, ballX, ballY, FIELD_WIDTH, ballVelY);
 
         // Actions
         PongAction topAct    = topPlayer.getNextMove(topState);
