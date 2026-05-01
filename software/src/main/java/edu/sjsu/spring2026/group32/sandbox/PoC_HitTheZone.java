@@ -386,6 +386,17 @@ public class PoC_HitTheZone extends JFrame {
         humanScoreButtons.forEach(b -> b.setEnabled(!isPaused));
         if (isPaused) {
             infoLabel.setText("--- PAUSED  (Esc to resume · R to reset) ---");
+            // Stop voltage injection while paused. If the ball was in the zone
+            // when the game paused, injection would otherwise continue
+            // indefinitely because the zone-exit edge is never detected while
+            // onTick() is frozen. stopInjectionOnly() also resets wasInZone so
+            // that on resume the first tick correctly re-arms injection if the
+            // ball is still in the zone.
+            for (BasePlayer<HitTheZoneState, HitTheZoneAction> player : players) {
+                if (player instanceof HitTheZoneHardwareAI hardwarePlayer) {
+                    hardwarePlayer.stopInjectionOnly();
+                }
+            }
         } else {
             updateHud();
         }
