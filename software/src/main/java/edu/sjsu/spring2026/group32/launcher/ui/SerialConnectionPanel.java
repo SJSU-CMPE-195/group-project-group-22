@@ -40,6 +40,7 @@ public class SerialConnectionPanel extends JPanel {
     }
 
     private final JComboBox<PortItem> portSelector;
+    private final LauncherHardwareSettingsButton hardwareSettingsButton;
     private final JButton refreshBtn;
     private final JButton connectBtn;
     private final JButton disconnectBtn;
@@ -92,6 +93,7 @@ public class SerialConnectionPanel extends JPanel {
         portSelector.setPreferredSize(new Dimension(PORT_SELECTOR_WIDTH, 26));
         portSelector.setMinimumSize(new Dimension(PORT_SELECTOR_WIDTH, 26));
 
+        hardwareSettingsButton = new LauncherHardwareSettingsButton();
         refreshBtn = new JButton("Refresh");
         connectBtn = new JButton("Connect");
         disconnectBtn = new JButton("Disconnect");
@@ -123,6 +125,7 @@ public class SerialConnectionPanel extends JPanel {
         controlsRow.add(new JLabel("COM Port:"));
         controlsRow.add(portSelector);
         controlsRow.add(autoFilterCheck);
+        controlsRow.add(hardwareSettingsButton);
         controlsRow.add(refreshBtn);
         controlsRow.add(connectBtn);
         controlsRow.add(disconnectBtn);
@@ -171,6 +174,11 @@ public class SerialConnectionPanel extends JPanel {
      */
     public void setExpectedChannelCount(int n) {
         this.expectedChannelCount = n;
+        hardwareSettingsButton.setChannelCount(n);
+    }
+
+    public void setGameplaySettingsLocked(boolean locked) {
+        hardwareSettingsButton.setSettingsLocked(locked);
     }
 
     /** Register an optional sink for log/status messages. */

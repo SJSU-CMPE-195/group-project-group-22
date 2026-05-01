@@ -27,6 +27,9 @@ public final class PongHardwareFactory {
                 leftSource,
                 rightSource,
                 leftSource,
-                NeuralHardwareConfig.PONG_FIRING_THRESHOLD_VOLTS);
+                NeuralHardwareConfig.getPongLeftInjectionVoltage(),
+                NeuralHardwareConfig.getPongRightInjectionVoltage(),
+                NeuralHardwareConfig.getPongLeftThresholdVoltage(),
+                NeuralHardwareConfig.getPongRightThresholdVoltage());
     }
 }

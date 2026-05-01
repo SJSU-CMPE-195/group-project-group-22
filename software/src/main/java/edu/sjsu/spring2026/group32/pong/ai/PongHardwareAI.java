@@ -70,7 +70,10 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     private final BaseSignalSource leftSource;
     private final BaseSignalSource rightSource;
     private final VoltageInjector  injector;
-    private final double           threshold;
+    private final double           leftThreshold;
+    private final double           rightThreshold;
+    private final double           leftInjectionVoltage;
+    private final double           rightInjectionVoltage;
 
     private InjectState lastInject       = InjectState.NONE;
 
@@ -113,13 +116,19 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     public PongHardwareAI(String name,
                           BaseSignalSource leftSource,
                           BaseSignalSource rightSource,
-                          VoltageInjector  injector,
-                          double           threshold) {
-        this.name        = name;
-        this.leftSource  = leftSource;
+                          VoltageInjector injector,
+                          double leftInjectionVoltage,
+                          double rightInjectionVoltage,
+                          double leftThreshold,
+                          double rightThreshold) {
+        this.name = name;
+        this.leftSource = leftSource;
         this.rightSource = rightSource;
-        this.injector    = injector;
-        this.threshold   = threshold;
+        this.injector = injector;
+        this.leftInjectionVoltage = leftInjectionVoltage;
+        this.rightInjectionVoltage = rightInjectionVoltage;
+        this.leftThreshold = leftThreshold;
+        this.rightThreshold = rightThreshold;
     }
 
     /**
@@ -131,6 +140,42 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
      * @param rightSource ADC signal source for RIGHT movement (CH2 / GPIO35)
      * @param threshold   voltage at or above which a direction fires (0.0–3.3 V)
      */
+    public PongHardwareAI(String name,
+                          BaseSignalSource leftSource,
+                          BaseSignalSource rightSource,
+                          VoltageInjector injector,
+                          double threshold) {
+        this(name, leftSource, rightSource, injector, threshold, threshold, threshold, threshold);
+    }
+
+    public PongHardwareAI(String name,
+                          BaseSignalSource leftSource,
+                          BaseSignalSource rightSource,
+                          VoltageInjector injector,
+                          double leftInjectionVoltage,
+                          double rightInjectionVoltage,
+                          double threshold) {
+        this(name, leftSource, rightSource, injector, leftInjectionVoltage, rightInjectionVoltage, threshold, threshold);
+    }
+
+    public PongHardwareAI(String name,
+                          BaseSignalSource leftSource,
+                          BaseSignalSource rightSource,
+                          double leftInjectionVoltage,
+                          double rightInjectionVoltage,
+                          double leftThreshold,
+                          double rightThreshold) {
+        this(
+                name,
+                leftSource,
+                rightSource,
+                VoltageInjector.NONE,
+                leftInjectionVoltage,
+                rightInjectionVoltage,
+                leftThreshold,
+                rightThreshold);
+    }
+
     public PongHardwareAI(String name,
                           BaseSignalSource leftSource,
                           BaseSignalSource rightSource,
@@ -175,8 +220,8 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
     @Override
     public PongAction getNextMove(PongState state) {
         updateInjection(state);
-        if (leftSource.hasSpike(threshold))  { spikeCount.incrementAndGet(); ch1SpikeCount.incrementAndGet(); return PongAction.LEFT;  }
-        if (rightSource.hasSpike(threshold)) { spikeCount.incrementAndGet(); ch2SpikeCount.incrementAndGet(); return PongAction.RIGHT; }
+        if (leftSource.hasSpike(leftThreshold))  { spikeCount.incrementAndGet(); ch1SpikeCount.incrementAndGet(); return PongAction.LEFT;  }
+        if (rightSource.hasSpike(rightThreshold)) { spikeCount.incrementAndGet(); ch2SpikeCount.incrementAndGet(); return PongAction.RIGHT; }
         return PongAction.IDLE;
     }
 
@@ -248,14 +293,14 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
             // Ball is to the LEFT — drive CH1 (left neurons)
             if (lastInject != InjectState.LEFT) {
                 if (lastInject == InjectState.RIGHT) injector.stopInjection(2);
-                injector.injectVoltage(1, NeuralHardwareConfig.PONG_CONSTANT_INJECT_VOLTAGE);
+                injector.injectVoltage(1, leftInjectionVoltage);
                 lastInject = InjectState.LEFT;
             }
         } else if (diff > DEAD_ZONE) {
             // Ball is to the RIGHT — drive CH2 (right neurons)
             if (lastInject != InjectState.RIGHT) {
                 if (lastInject == InjectState.LEFT) injector.stopInjection(1);
-                injector.injectVoltage(2, NeuralHardwareConfig.PONG_CONSTANT_INJECT_VOLTAGE);
+                injector.injectVoltage(2, rightInjectionVoltage);
                 lastInject = InjectState.RIGHT;
             }
         } else {

@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.hitthezone.core;
 
+import edu.sjsu.spring2026.group32.hardware.NeuralHardwareConfig;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.hardware.signal.HardwareSignalSource;
 import edu.sjsu.spring2026.group32.hardware.signal.NeuralSignalParser;
@@ -17,6 +18,11 @@ public final class HitTheZoneHardwareFactory {
     public static HitTheZoneHardwareAI createHardwarePlayer(SerialConnectionManager htzManager) {
         NeuralSignalParser parser = new NeuralSignalParser(0);
         HardwareSignalSource source = new HardwareSignalSource(htzManager, parser);
-        return new HitTheZoneHardwareAI(HARDWARE_PLAYER_NAME, source, source);
+        return new HitTheZoneHardwareAI(
+                HARDWARE_PLAYER_NAME,
+                source,
+                source,
+                NeuralHardwareConfig.getHitTheZoneInjectionVoltage(),
+                NeuralHardwareConfig.getHitTheZoneThresholdVoltage());
     }
 }

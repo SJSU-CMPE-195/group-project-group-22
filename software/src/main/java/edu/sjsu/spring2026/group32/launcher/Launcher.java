@@ -176,10 +176,12 @@ public class Launcher extends JFrame {
         }
 
         log("Launching Hit The Zone...");
+        htzPanel.setGameplaySettingsLocked(true);
         HitTheZoneGame frame = HitTheZoneGame.launchFromLauncher(htzManager);
         launchHitTheZoneButton.setEnabled(false);
         programRegistry.register(LauncherProgram.HIT_THE_ZONE, frame, () -> {
             launchHitTheZoneButton.setEnabled(true);
+            htzPanel.setGameplaySettingsLocked(false);
             log("Hit The Zone closed.");
         });
         log(LauncherHardwareMessages.describeHitTheZoneLaunch(htzManager));
@@ -191,10 +193,12 @@ public class Launcher extends JFrame {
         }
 
         log("Launching Pong...");
+        pongPanel.setGameplaySettingsLocked(true);
         JFrame frame = PongGame.launchFromLauncher(pongManager);
         launchPongButton.setEnabled(false);
         programRegistry.register(LauncherProgram.PONG, frame, () -> {
             launchPongButton.setEnabled(true);
+            pongPanel.setGameplaySettingsLocked(false);
             log("Pong closed.");
         });
         log(LauncherHardwareMessages.describePongLaunch(pongManager));
