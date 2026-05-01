@@ -43,6 +43,13 @@ public class Launcher extends JFrame {
     private final JButton launchPong;
     private final JTextArea logArea;
 
+    /** Non-null while a Bidirectional Test window is open (only one allowed at a time). */
+    private BidirectionalTest bidirectionalInstance = null;
+    /** Non-null while a Hit The Zone window is open (only one allowed at a time). */
+    private PoC_HitTheZone htzInstance = null;
+    /** Non-null while a Pong window is open (only one allowed at a time). */
+    private JFrame pongInstance = null;
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new Launcher().setVisible(true));
     }
@@ -205,16 +212,40 @@ public class Launcher extends JFrame {
     }
 
     private void openBidirectionalTest() {
+        if (bidirectionalInstance != null) {
+            return;
+        }
         log("Launching Bidirectional Test...");
         BidirectionalTest frame = new BidirectionalTest(htzManager, pongManager);
-        trackLaunchedWindow(frame, "Bidirectional Test");
+        bidirectionalInstance = frame;
+        launchBidirectional.setEnabled(false);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                bidirectionalInstance = null;
+                launchBidirectional.setEnabled(true);
+                log("Bidirectional Test closed.");
+            }
+        });
         frame.setVisible(true);
     }
 
     private void openHitTheZone() {
+        if (htzInstance != null) {
+            return;
+        }
         log("Launching Hit The Zone...");
         PoC_HitTheZone frame = PoC_HitTheZone.launchFromLauncher(htzManager);
-        trackLaunchedWindow(frame, "Hit The Zone");
+        htzInstance = frame;
+        launchHitTheZone.setEnabled(false);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                htzInstance = null;
+                launchHitTheZone.setEnabled(true);
+                log("Hit The Zone closed.");
+            }
+        });
 
         if (htzManager != null && htzManager.isConnected()) {
             log("  -> HTZ hardware passed to Hit The Zone.");
@@ -224,9 +255,21 @@ public class Launcher extends JFrame {
     }
 
     private void openPong() {
+        if (pongInstance != null) {
+            return;
+        }
         log("Launching Pong...");
         JFrame frame = PongGame.launchFromLauncher(pongManager);
-        trackLaunchedWindow(frame, "Pong");
+        pongInstance = frame;
+        launchPong.setEnabled(false);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                pongInstance = null;
+                launchPong.setEnabled(true);
+                log("Pong closed.");
+            }
+        });
 
         if (pongManager != null && pongManager.isConnected() && pongManager.getDeviceChannelCount() >= 2) {
             log("  -> Pong hardware passed to Pong.");
@@ -236,15 +279,6 @@ public class Launcher extends JFrame {
         } else {
             log("  -> Pong device not connected. Launching without neural player.");
         }
-    }
-
-    private void trackLaunchedWindow(JFrame frame, String name) {
-        frame.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                log(name + " closed.");
-            }
-        });
     }
 
     private void log(String message) {
