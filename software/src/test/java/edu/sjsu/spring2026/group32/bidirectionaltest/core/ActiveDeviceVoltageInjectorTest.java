@@ -64,9 +64,7 @@ class ActiveDeviceVoltageInjectorTest {
         verifyNoMoreInteractions(mockA);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Connection State Logic (Critical for Coverage)
-    // ──────────────────────────────────────────────────────────────────────────
+    // Connection State Logic
 
     @Test
     @DisplayName("injectVoltage() is a no-op when manager is disconnected")
