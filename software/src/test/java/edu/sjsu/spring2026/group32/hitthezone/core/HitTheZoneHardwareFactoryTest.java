@@ -1,17 +1,35 @@
 package edu.sjsu.spring2026.group32.hitthezone.core;
 
-import edu.sjsu.spring2026.group32.testsupport.TODO;
-import edu.sjsu.spring2026.group32.testsupport.TodoTestSupport;
+import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
+import edu.sjsu.spring2026.group32.hitthezone.ai.HitTheZoneHardwareAI;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("HitTheZoneHardwareFactory Suite")
 class HitTheZoneHardwareFactoryTest {
+
     @Test
-    @TODO("Implement hardware player factory coverage for connected and disconnected manager inputs.")
-    void createHardwarePlayer_coversPositiveAndNegativeFactoryCases() {
-        // TODO: verify the factory wires the expected hardware-backed player dependencies.
-        // TODO: include null or disconnected manager negative cases.
-        TodoTestSupport.todo("createHardwarePlayer_coversPositiveAndNegativeFactoryCases");
+    @DisplayName("createHardwarePlayer: builds expected player with valid manager")
+    void createHardwarePlayer_successPath() {
+        SerialConnectionManager mockManager = mock(SerialConnectionManager.class);
+        
+        HitTheZoneHardwareAI player = HitTheZoneHardwareFactory.createHardwarePlayer(mockManager);
+
+        assertNotNull(player, "Factory should return a valid player instance");
+        assertEquals("Neural", player.getName());
+        
+        verify(mockManager, atLeastOnce()).addListener(any());
+    }
+
+    @Test
+    @DisplayName("createHardwarePlayer: handles null manager by throwing or failing gracefully")
+    void createHardwarePlayer_nullManager_throwsException() {
+        assertThrows(NullPointerException.class, () -> {
+            HitTheZoneHardwareFactory.createHardwarePlayer(null);
+        }, "The AI constructor requires a manager and should throw NPE if given null");
+        
     }
 }
