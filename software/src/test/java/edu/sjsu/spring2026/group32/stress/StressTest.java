@@ -124,13 +124,13 @@ class StressTest {
 
         // Warm-up
         for (int i = 0; i < WARMUP; i++) {
-            ai.getNextMove(new PongState(paddleX, i % fieldWidth, 400, fieldWidth));
+            ai.getNextMove(new PongState(paddleX, i % fieldWidth, 400, fieldWidth, 0));
         }
 
         // Timed benchmark — pre-allocate state objects to avoid GC noise
         PongState[] states = new PongState[ITERATIONS];
         for (int i = 0; i < ITERATIONS; i++) {
-            states[i] = new PongState(paddleX, i % fieldWidth, 300 + (i % 200), fieldWidth);
+            states[i] = new PongState(paddleX, i % fieldWidth, 300 + (i % 200), fieldWidth, 0);
         }
 
         long start = System.nanoTime();
