@@ -226,6 +226,18 @@ public final class FakeSerialDevice implements SerialDevice {
             return bytes.get(readIndex++) & 0xFF;
         }
 
+        @Override
+        public synchronized int read(byte[] b, int off, int len) throws IOException {
+            int first = read();
+            if (first == -1) return -1;
+            b[off] = (byte) first;
+            int i = 1;
+            while (i < len && readIndex < bytes.size()) {
+                b[off + i++] = (byte) (bytes.get(readIndex++) & 0xFF);
+            }
+            return i;
+        }
+
         synchronized void appendLine(String line) {
             byte[] content = (line + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
             for (byte b : content) {
