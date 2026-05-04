@@ -1,8 +1,6 @@
 package edu.sjsu.spring2026.group32.hardware.serial;
 
 import edu.sjsu.spring2026.group32.testsupport.SerialTestRig;
-import edu.sjsu.spring2026.group32.testsupport.TODO;
-import edu.sjsu.spring2026.group32.testsupport.TodoTestSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
