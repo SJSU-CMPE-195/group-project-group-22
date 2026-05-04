@@ -1,23 +1,15 @@
 package edu.sjsu.spring2026.group32.launcher.core;
 
 import edu.sjsu.spring2026.group32.launcher.model.LauncherProgram;
-import edu.sjsu.spring2026.group32.testsupport.TODO;
-import edu.sjsu.spring2026.group32.testsupport.TodoTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Window;
-import java.awt.event.WindowEvent;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 
 @DisplayName("LauncherProgramRegistry Suite")
 class LauncherProgramRegistryTest {

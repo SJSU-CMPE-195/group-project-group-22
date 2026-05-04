@@ -1,9 +1,6 @@
 package edu.sjsu.spring2026.group32.bidirectionaltest.core;
 
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
-import edu.sjsu.spring2026.group32.testsupport.TODO;
-import edu.sjsu.spring2026.group32.testsupport.TodoTestSupport;
-
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
