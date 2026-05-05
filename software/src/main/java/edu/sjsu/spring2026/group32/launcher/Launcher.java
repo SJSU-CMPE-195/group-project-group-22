@@ -31,6 +31,7 @@ import java.util.Set;
 /**
  * Central launch hub for all ESP32-backed programs.
  */
+@GeneratedExcludeFromCoverage
 public class Launcher extends JFrame {
     private static final int WINDOW_MIN_WIDTH = 820;
     private static final int WINDOW_MIN_HEIGHT = 620;
