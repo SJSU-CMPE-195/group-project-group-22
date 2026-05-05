@@ -26,6 +26,7 @@ import java.awt.BorderLayout;
 import java.util.ArrayList;
 import java.util.List;
 
+@GeneratedExcludeFromCoverage
 public class HitTheZoneGame extends JFrame {
     private final List<BasePlayer<HitTheZoneState, HitTheZoneAction>> players;
     private final SerialConnectionManager htzManager;
