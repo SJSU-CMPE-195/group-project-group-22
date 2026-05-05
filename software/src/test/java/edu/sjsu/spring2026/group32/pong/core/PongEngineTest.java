@@ -89,7 +89,7 @@ class PongEngineTest {
     }
 
     @Test
-    void collisionsAndScoring_coverPositiveAndNegativePaths() {
+    void collisionsAndScoring_Paths() {
         PongEngine engine = new PongEngine();
 
         setBall(engine, 300,PongEngine.TOP_PADDLE_Y + 5, 0, -5);

@@ -55,7 +55,7 @@ class PongScoreboardServiceTest {
 
     @Test
     @DisplayName("persistenceAndReset: covers save/load and malformed data paths")
-    void persistenceAndReset_coverPositiveAndNegativePaths() throws IOException {
+    void persistenceAndReset_Paths() throws IOException {
 
         service.recordPoint(PlayerVariant.HUMAN, PlayerVariant.AI_EASY);
         assertTrue(Files.exists(scoreFile), "File should be created on save");

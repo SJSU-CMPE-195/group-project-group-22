@@ -36,7 +36,7 @@ class HitTheZoneGameTest {
 
     @Test
     @DisplayName("tick advances elapsed time and moves ball when unpaused")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_tickAdvancesState() {
+    void gameplayLoop_RuntimeCases_tickAdvancesState() {
         HitTheZoneSnapshot before = engine.snapshot();
         assertFalse(before.paused(), "engine should start unpaused");
 
@@ -49,7 +49,7 @@ class HitTheZoneGameTest {
 
     @Test
     @DisplayName("tick does nothing when paused")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_tickNoOpWhenPaused() {
+    void gameplayLoop_RuntimeCases_tickNoOpWhenPaused() {
         engine.togglePause(); // pause it
         assertTrue(engine.isPaused());
 
@@ -63,7 +63,7 @@ class HitTheZoneGameTest {
 
     @Test
     @DisplayName("processScore() increments attempts when ball is in zone")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_processScore() {
+    void gameplayLoop_RuntimeCases_processScore() {
         for (int i = 0; i < 1000; i++) {
             engine.tickMotion(HitTheZoneEngine.WIDTH);
             if (engine.snapshot().inZone()) break;
@@ -78,7 +78,7 @@ class HitTheZoneGameTest {
 
     @Test
     @DisplayName("processScore() while paused has no effect")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_processScoreWhilePaused() {
+    void gameplayLoop_RuntimeCases_processScoreWhilePaused() {
         engine.togglePause(); // pause it
         int attemptsBefore = engine.snapshot().attempts()[0];
 
@@ -89,7 +89,7 @@ class HitTheZoneGameTest {
 
     @Test
     @DisplayName("resetGame() clears elapsed time, total passes, and ball position")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_resetGame() {
+    void gameplayLoop_RuntimeCases_resetGame() {
         for (int i = 0; i < 10; i++) engine.tickMotion(HitTheZoneEngine.WIDTH);
 
         engine.resetMatch();
@@ -107,7 +107,7 @@ class HitTheZoneGameTest {
 
     @Test
     @DisplayName("resetMatch() preserves pause state — game calls togglePause separately")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_resetUnpauses() {
+    void gameplayLoop_RuntimeCases_resetUnpauses() {
         engine.togglePause(); // pause it
         assertTrue(engine.isPaused());
 
@@ -125,14 +125,14 @@ class HitTheZoneGameTest {
 
     @Test
     @DisplayName("PAUSE action from player triggers pause effect")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_pauseAction() {
+    void gameplayLoop_RuntimeCases_pauseAction() {
         HitTheZoneActionEffect effect = engine.handleAction( 0, HitTheZoneAction.PAUSE, PlayerType.SOFTWARE, false);
         assertEquals(HitTheZoneActionEffect.PAUSE_REQUESTED, effect, "PAUSE action should return PAUSE_REQUESTED effect");
     }
 
     @Test
     @DisplayName("RESET action from player triggers reset effect")
-    void gameplayLoop_coversPositiveAndNegativeRuntimeCases_resetAction() {
+    void gameplayLoop_RuntimeCases_resetAction() {
         HitTheZoneActionEffect effect = engine.handleAction(0, HitTheZoneAction.RESET, PlayerType.SOFTWARE, false);
         assertEquals(HitTheZoneActionEffect.RESET_REQUESTED, effect, "RESET action should return RESET_REQUESTED effect");
     }

@@ -46,10 +46,10 @@ public class PongToolbar extends JPanel {
     final JComboBox<PlayerVariant> dropdown;
     private PlayerVariant lastValidSelection;
     private Consumer<PlayerVariant> onVariantChanged;
-    private final JButton hardwareSettingsButton;
+    final JButton hardwareSettingsButton;
 
     /** Label shown in the toolbar when the HARDWARE variant is active. */
-    private final JLabel channelSpikeLabel;
+    final JLabel channelSpikeLabel;
 
     // ─── Constructor ──────────────────────────────────────────────────────────
 

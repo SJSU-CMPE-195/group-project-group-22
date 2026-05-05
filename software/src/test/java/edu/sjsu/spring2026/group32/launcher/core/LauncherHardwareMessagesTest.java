@@ -13,7 +13,7 @@ class LauncherHardwareMessagesTest {
 
     @Test
     @DisplayName("HTZ: connected manager produces hardware-passed message")
-    void describeLaunchMessages_coverPositiveAndNegativeStates_htzConnected() {
+    void describeLaunchMessages_States_htzConnected() {
         SerialTestRig rig = SerialTestRig.createSingleChannelRig();
         rig.connectManagerToFakeDevice();
         awaitConnected(rig);
@@ -25,7 +25,7 @@ class LauncherHardwareMessagesTest {
 
     @Test
     @DisplayName("HTZ: disconnected manager produces not-connected message")
-    void describeLaunchMessages_coverPositiveAndNegativeStates_htzDisconnected() {
+    void describeLaunchMessages_States_htzDisconnected() {
         SerialTestRig rig = SerialTestRig.createSingleChannelRig();
 
         assertEquals("  -> HTZ device not connected. Launching without neural player.", LauncherHardwareMessages.describeHitTheZoneLaunch(rig.manager()), "disconnected manager should produce not-connected message");
@@ -33,7 +33,7 @@ class LauncherHardwareMessagesTest {
 
     @Test
     @DisplayName("HTZ: null manager produces not-connected message")
-    void describeLaunchMessages_coverPositiveAndNegativeStates_htzNull() {
+    void describeLaunchMessages_States_htzNull() {
         assertEquals("  -> HTZ device not connected. Launching without neural player.", LauncherHardwareMessages.describeHitTheZoneLaunch(null), "null manager should produce not-connected message");
     }
 
@@ -41,7 +41,7 @@ class LauncherHardwareMessagesTest {
 
     @Test
     @DisplayName("Pong: dual-channel connected manager produces hardware-passed message")
-    void describeLaunchMessages_coverPositiveAndNegativeStates_pongDualChannel() {
+    void describeLaunchMessages_States_pongDualChannel() {
         SerialTestRig rig = SerialTestRig.createDualChannelRig();
         rig.connectManagerToFakeDevice();
         awaitConnected(rig);
@@ -53,7 +53,7 @@ class LauncherHardwareMessagesTest {
 
     @Test
     @DisplayName("Pong: single-channel connected manager produces wrong-channel message")
-    void describeLaunchMessages_coverPositiveAndNegativeStates_pongSingleChannel() {
+    void describeLaunchMessages_States_pongSingleChannel() {
         SerialTestRig rig = SerialTestRig.createSingleChannelRig();
         rig.connectManagerToFakeDevice();
         awaitConnected(rig);
@@ -65,7 +65,7 @@ class LauncherHardwareMessagesTest {
 
     @Test
     @DisplayName("Pong: disconnected manager produces not-connected message")
-    void describeLaunchMessages_coverPositiveAndNegativeStates_pongDisconnected() {
+    void describeLaunchMessages_States_pongDisconnected() {
         SerialTestRig rig = SerialTestRig.createSingleChannelRig();
 
         assertEquals("  -> Pong device not connected. Launching without neural player.", LauncherHardwareMessages.describePongLaunch(rig.manager()), "disconnected manager should produce not-connected message");
@@ -73,7 +73,7 @@ class LauncherHardwareMessagesTest {
 
     @Test
     @DisplayName("Pong: null manager produces not-connected message")
-    void describeLaunchMessages_coverPositiveAndNegativeStates_pongNull() {
+    void describeLaunchMessages_States_pongNull() {
         assertEquals( "  -> Pong device not connected. Launching without neural player.", LauncherHardwareMessages.describePongLaunch(null), "null manager should produce not-connected message");
     }
 

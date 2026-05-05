@@ -22,7 +22,7 @@ class HitTheZoneEngineTest {
 
     @Test
     @DisplayName("lifecycleTransitions: verifies pause, resume, append-player, and reset")
-    void lifecycleTransitions_coverPositiveAndNegativeCases() {
+    void lifecycleTransitions_Cases() {
 
         assertFalse(engine.isPaused());
         engine.togglePause();

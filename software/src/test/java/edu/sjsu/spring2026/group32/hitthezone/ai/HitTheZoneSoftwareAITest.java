@@ -18,7 +18,7 @@ class HitTheZoneSoftwareAITest {
 
     @Test
     @DisplayName("scoringDecisions: zero jitter scores on first in-zone tick")
-    void scoringDecisions_coverPositiveAndNegativeCases_zeroJitter() {
+    void scoringDecisions_Cases_zeroJitter() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("Perfect", 0);
 
         assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE), "zero jitter should score on the very first in-zone tick");
@@ -28,7 +28,7 @@ class HitTheZoneSoftwareAITest {
 
     @Test
     @DisplayName("scoringDecisions: zero jitter scores repeatedly on each new zone entry")
-    void scoringDecisions_coverPositiveAndNegativeCases_zeroJitter_multipleEntries() {
+    void scoringDecisions_Cases_zeroJitter_multipleEntries() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("Perfect", 0);
 
         // first entry
@@ -45,7 +45,7 @@ class HitTheZoneSoftwareAITest {
 
     @Test
     @DisplayName("scoringDecisions: returns null when out of zone")
-    void scoringDecisions_coverPositiveAndNegativeCases_outOfZone() {
+    void scoringDecisions_Cases_outOfZone() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("Perfect", 0);
 
         assertNull(ai.getNextMove(OUT_ZONE), "out of zone before any entry → null");
@@ -61,7 +61,7 @@ class HitTheZoneSoftwareAITest {
 
     @Test
     @DisplayName("scoringDecisions: jitter=1 scores on tick 1 or 2, never on tick 0")
-    void scoringDecisions_coverPositiveAndNegativeCases_jitterCountdown() {
+    void scoringDecisions_Cases_jitterCountdown() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("Jittery", 1);
 
         for (int entry = 0; entry < 20; entry++) {
@@ -80,7 +80,7 @@ class HitTheZoneSoftwareAITest {
 
     @Test
     @DisplayName("scoringDecisions: ball exits before countdown expires — opportunity missed")
-    void scoringDecisions_coverPositiveAndNegativeCases_missedOpportunity() {
+    void scoringDecisions_Cases_missedOpportunity() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("SlowReact", 10);
 
         int missCount = 0;
@@ -100,7 +100,7 @@ class HitTheZoneSoftwareAITest {
 
     @Test
     @DisplayName("scoringDecisions: negative maxJitterTicks is clamped to 0")
-    void scoringDecisions_coverPositiveAndNegativeCases_negativeJitterClamped() {
+    void scoringDecisions_Cases_negativeJitterClamped() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("Clamped", -5);
 
         assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE), "negative jitter should be clamped to 0 and score immediately");
@@ -108,7 +108,7 @@ class HitTheZoneSoftwareAITest {
 
     @Test
     @DisplayName("scoringDecisions: countdown resets cleanly on each new entry")
-    void scoringDecisions_coverPositiveAndNegativeCases_countdownResetOnReentry() {
+    void scoringDecisions_Cases_countdownResetOnReentry() {
         HitTheZoneSoftwareAI ai = new HitTheZoneSoftwareAI("Reset", 0);
 
         assertEquals(HitTheZoneAction.SCORE, ai.getNextMove(IN_ZONE));

@@ -14,19 +14,19 @@ class ConnectionStatusPanelTest {
 
     @Test
     @DisplayName("labelText() produces connected string when connected=true")
-    void indicatorRefresh_coversPositiveAndNegativeConnectionStates_labelConnected() {
+    void indicatorRefresh_ConnectionStates_labelConnected() {
         assertEquals("● HTZ: Connected", ConnectionStatusPanel.labelText("HTZ", true), "connected label should include device name and 'Connected'");
     }
 
     @Test
     @DisplayName("labelText() produces disconnected string when connected=false")
-    void indicatorRefresh_coversPositiveAndNegativeConnectionStates_labelDisconnected() {
+    void indicatorRefresh_ConnectionStates_labelDisconnected() {
         assertEquals("● HTZ: Not connected", ConnectionStatusPanel.labelText("HTZ", false), "disconnected label should include device name and 'Not connected'");
     }
 
     @Test
     @DisplayName("labelText() uses the name supplied, not a hardcoded string")
-    void indicatorRefresh_coversPositiveAndNegativeConnectionStates_labelUsesName() {
+    void indicatorRefresh_ConnectionStates_labelUsesName() {
         assertEquals("● Pong: Connected", ConnectionStatusPanel.labelText("Pong", true));
         assertEquals("● Pong: Not connected", ConnectionStatusPanel.labelText("Pong", false));
     }
@@ -35,13 +35,13 @@ class ConnectionStatusPanelTest {
 
     @Test
     @DisplayName("isAlive() returns false for null manager")
-    void indicatorRefresh_coversPositiveAndNegativeConnectionStates_nullManager() {
+    void indicatorRefresh_ConnectionStates_nullManager() {
         assertFalse(ConnectionStatusPanel.isAlive(null), "null manager should always report not alive");
     }
 
     @Test
     @DisplayName("isAlive() returns true for a connected manager")
-    void indicatorRefresh_coversPositiveAndNegativeConnectionStates_connectedManager() {
+    void indicatorRefresh_ConnectionStates_connectedManager() {
         SerialTestRig rig = SerialTestRig.createSingleChannelRig();
         rig.connectManagerToFakeDevice();
         awaitCondition(() -> rig.manager().isConnected(), "manager to connect");
@@ -53,7 +53,7 @@ class ConnectionStatusPanelTest {
 
     @Test
     @DisplayName("isAlive() returns false for a disconnected manager")
-    void indicatorRefresh_coversPositiveAndNegativeConnectionStates_disconnectedManager() {
+    void indicatorRefresh_ConnectionStates_disconnectedManager() {
         SerialTestRig rig = SerialTestRig.createSingleChannelRig();
         // never connected
         assertFalse(ConnectionStatusPanel.isAlive(rig.manager()), "disconnected manager should report not alive");

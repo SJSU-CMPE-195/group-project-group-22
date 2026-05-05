@@ -25,13 +25,13 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("program is not open before registration")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_notOpenBeforeRegister() {
+    void registerAndWindowClose_Paths_notOpenBeforeRegister() {
         assertFalse(registry.isOpen(LauncherProgram.HIT_THE_ZONE), "program should not be open before registration");
     }
 
     @Test
     @DisplayName("program is open immediately after registration")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_openAfterRegister() {
+    void registerAndWindowClose_Paths_openAfterRegister() {
         registry.register(LauncherProgram.HIT_THE_ZONE, new Window(null), null);
 
         assertTrue(registry.isOpen(LauncherProgram.HIT_THE_ZONE), "program should be open after registration");
@@ -39,7 +39,7 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("register() returns the same window instance it was given")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_returnsWindow() {
+    void registerAndWindowClose_Paths_returnsWindow() {
         Window window   = new Window(null);
         Window returned = registry.register(LauncherProgram.HIT_THE_ZONE, window, null);
 
@@ -48,7 +48,7 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("multiple programs can be open independently")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_multiplePrograms() {
+    void registerAndWindowClose_Paths_multiplePrograms() {
         registry.register(LauncherProgram.HIT_THE_ZONE, new Window(null), null);
         registry.register(LauncherProgram.PONG, new Window(null), null);
 
@@ -60,7 +60,7 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("program is removed from registry when window closes")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_removedOnClose() {
+    void registerAndWindowClose_Paths_removedOnClose() {
         Window window = new Window(null);
         registry.register(LauncherProgram.HIT_THE_ZONE, window, null);
 
@@ -71,7 +71,7 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("onClosed callback is invoked when window closes")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_callbackInvoked() {
+    void registerAndWindowClose_Paths_callbackInvoked() {
         AtomicInteger callCount = new AtomicInteger(0);
         Window window = new Window(null);
 
@@ -83,7 +83,7 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("null onClosed callback does not throw when window closes")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_nullCallbackSafe() {
+    void registerAndWindowClose_Paths_nullCallbackSafe() {
         Window window = new Window(null);
         registry.register(LauncherProgram.HIT_THE_ZONE, window, null);
 
@@ -94,7 +94,7 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("closing one program does not affect another")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_closingOneDoesNotAffectOther() {
+    void registerAndWindowClose_Paths_closingOneDoesNotAffectOther() {
         Window htzWindow  = new Window(null);
         Window pongWindow = new Window(null);
 
@@ -109,7 +109,7 @@ class LauncherProgramRegistryTest {
 
     @Test
     @DisplayName("re-registering a program after close makes it open again")
-    void registerAndWindowClose_coverPositiveAndNegativePaths_reregisterAfterClose() {
+    void registerAndWindowClose_Paths_reregisterAfterClose() {
         Window first = new Window(null);
         registry.register(LauncherProgram.HIT_THE_ZONE, first, null);
         fireWindowClosed(first);

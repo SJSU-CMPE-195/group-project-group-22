@@ -20,7 +20,7 @@ class HitTheZonePlayerFactoryTest {
 
     @Test
     @DisplayName("createDefaultPlayers: verifies roster size based on hardware connection")
-    void defaultPlayerCreation_coversPositiveAndNegativeCases() {
+    void defaultPlayerCreation_Cases() {
         List<BasePlayer<HitTheZoneState, HitTheZoneAction>> offlineRoster = HitTheZonePlayerFactory.createDefaultPlayers(null);
         
         assertEquals(3, offlineRoster.size(), "Offline roster should contain 3 players");

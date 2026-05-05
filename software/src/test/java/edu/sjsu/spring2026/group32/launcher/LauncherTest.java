@@ -14,7 +14,7 @@ class LauncherTest {
 
     @Test
     @DisplayName("launcherProgramLifecycle: excluded Launcher is a Swing shell with no injection seams delegate logic is covered by registry and hardware message tests")
-    void launcherProgramLifecycle_coversPositiveAndNegativeOpenCases() {
+    void launcherProgramLifecycle_OpenCases() {
         assertTrue(true, "documented exclusion delegate logic tested at lower levels");
     }
 

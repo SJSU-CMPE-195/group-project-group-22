@@ -41,7 +41,7 @@ class HitTheZoneHardwareAITest {
 
     @Test
     @DisplayName("returns SCORE on first in-zone tick above threshold, null on sustained high")
-    void scoringSignals_coverPositiveAndNegativeSpikeCases_risingEdge() {
+    void scoringSignals_SpikeCases_risingEdge() {
         source.setVoltage(BELOW);
         assertNull(ai.getNextMove(IN_ZONE), "voltage below threshold in zone should return null");
 
@@ -54,7 +54,7 @@ class HitTheZoneHardwareAITest {
 
     @Test
     @DisplayName("returns null when out of zone and no spike, SCORE on late-fire rising edge")
-    void scoringSignals_coverPositiveAndNegativeSpikeCases_outOfZone() {
+    void scoringSignals_SpikeCases_outOfZone() {
         source.setVoltage(BELOW);
         assertNull(ai.getNextMove(OUT_ZONE), "below threshold out of zone should return null");
 
@@ -64,7 +64,7 @@ class HitTheZoneHardwareAITest {
 
     @Test
     @DisplayName("returns null every tick when voltage is always below threshold")
-    void scoringSignals_coverPositiveAndNegativeSpikeCases_noSpike() {
+    void scoringSignals_SpikeCases_noSpike() {
         source.setVoltage(BELOW);
 
         assertNull(ai.getNextMove(IN_ZONE), "below threshold in zone --> null");
@@ -74,7 +74,7 @@ class HitTheZoneHardwareAITest {
 
     @Test
     @DisplayName("returns null at exactly zero voltage")
-    void scoringSignals_coverPositiveAndNegativeSpikeCases_zeroVoltage() {
+    void scoringSignals_SpikeCases_zeroVoltage() {
         source.setVoltage(0.0);
         assertNull(ai.getNextMove(IN_ZONE), "zero voltage should never score");
     }

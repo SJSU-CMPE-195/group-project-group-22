@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 class HitTheZoneInputControllerTest {
     @Test
     @TODO("Implement key binding coverage for pause, reset, and human player controls.")
-    void keyBindings_coverPositiveAndNegativeCases() {
+    void keyBindings_Cases() {
         // TODO: verify pause/reset bindings and human-player key registration behavior.
         // TODO: include unregister, duplicate registration, and unsupported-key negative cases.
-        TodoTestSupport.todo("keyBindings_coverPositiveAndNegativeCases");
+        TodoTestSupport.todo("keyBindings_Cases");
     }
 }
