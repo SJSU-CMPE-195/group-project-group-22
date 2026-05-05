@@ -1,0 +1,55 @@
+name: Generate Class Diagrams
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  generate-diagrams:
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11.9"
+
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Generate PlantUML files
+        run: python scripts/generate-class-diagram.py
+
+      - name: Render UML diagrams
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz=2.42.2-9ubuntu0.1
+          mkdir -p docs/class-diagrams
+          curl -fsSL \
+            -o plantuml.jar \
+            https://github.com/plantuml/plantuml/releases/download/v1.2026.2/plantuml.jar
+          echo "3cdce52133c424dea22425b947ae9d47f2167b0866dfcf99e714d4ea1689975c  plantuml.jar" | sha256sum -c
+          for file in docs/class-diagrams/plantuml-diagrams/*.puml; do
+            java -jar plantuml.jar -tpng "$file"
+            mv "${file%.puml}.png" docs/class-diagrams/
+          done
+
+      - name: Commit generated diagrams
+        if: github.event_name == 'push'
+        uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403 # v5.2.0
+        with:
+          commit_message: "docs: update generated class diagrams"
+          file_pattern: docs/class-diagrams/plantuml-diagrams/*.puml docs/class-diagrams/*.png
