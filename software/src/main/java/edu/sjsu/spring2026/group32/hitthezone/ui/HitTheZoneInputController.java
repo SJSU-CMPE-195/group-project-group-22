@@ -19,7 +19,7 @@ import java.util.List;
  * Owns key bindings and global human-player dispatch for Hit The Zone.
  */
 public class HitTheZoneInputController {
-    private final List<KeyEventDispatcher> dispatchers = new ArrayList<>();
+    final List<KeyEventDispatcher> dispatchers = new ArrayList<>();
 
     public void bindKeys(JComponent component, Runnable onPause, Runnable onReset) {
         InputMap inputMap = component.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);

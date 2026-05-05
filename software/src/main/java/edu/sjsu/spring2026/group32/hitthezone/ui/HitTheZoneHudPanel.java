@@ -19,8 +19,8 @@ import java.util.List;
  */
 public class HitTheZoneHudPanel extends JPanel {
     private final JPanel playerRow;
-    private final JLabel infoLabel;
-    private JLabel[] playerLabels = new JLabel[0];
+    final JLabel infoLabel;
+    JLabel[] playerLabels = new JLabel[0];
 
     public HitTheZoneHudPanel(SerialConnectionManager htzManager) {
         super(new BorderLayout());

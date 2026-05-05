@@ -15,9 +15,9 @@ import java.util.function.IntConsumer;
  * Bottom control strip for Hit The Zone.
  */
 public class HitTheZoneControlPanel extends JPanel {
-    private final JButton pauseButton;
-    private final JButton resetButton;
-    private final List<JButton> humanScoreButtons = new ArrayList<>();
+    final JButton pauseButton;
+    final JButton resetButton;
+    final List<JButton> humanScoreButtons = new ArrayList<>();
     private final Runnable onPause;
     private final Runnable onReset;
     private final IntConsumer onScore;
