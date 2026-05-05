@@ -4,40 +4,38 @@ All tests for this project are written in Java using **JUnit 5 + Mockito** and l
 
 ```
 software/src/test/java/edu/sjsu/spring2026/group32/
-├── hardware/               # Unit tests — NeuralSignalParser, SerialConnectionManager, HardwareSignalSource
-├── launcher/               # Unit tests — Launcher UI bootstrap
+├── bidirectionaltest/
+│   └── core/               # Unit tests — ActiveDeviceVoltageInjector
+├── hardware/
+│   ├── serial/             # Unit tests — SerialConnectionManager
+│   └── signal/             # Unit tests — NeuralSignalParser, HardwareSignalSource
+├── hitthezone/             # Integration tests — HitTheZoneGame
+│   ├── ai/                 # Unit tests — HitTheZoneSoftwareAI, HitTheZoneHardwareAI
+│   ├── core/               # Unit tests — HitTheZoneEngine, HitTheZonePlayerFactory, HitTheZoneHardwareFactory
+│   └── ui/                 # Unit tests — HitTheZoneControlPanel, HitTheZoneHudPanel, HitTheZoneInputController
+├── launcher/               # Unit tests — Launcher bootstrap
+│   ├── core/               # Unit tests — LauncherHardwareMessages, LauncherProgramRegistry
+│   └── ui/                 # Unit tests — ConnectionStatusPanel, SerialConnectionPanel
 ├── player/                 # Unit tests — HumanPlayer, HardwareAIPlayer, PlayerType
-├── pong/                   # Unit tests — PongSoftwareAI, PongHardwareAI, PongGame, PongState, UI components
-│   └── ui/
-├── sandbox/                # Unit + integration tests — HitTheZone AI, PoC game loop
-└── stress/                 # Throughput / stress tests — AI decisions/sec, parser parses/sec
+├── pong/                   # Unit tests — PongAction, PlayerVariant, PongGame
+│   ├── ai/                 # Unit tests — PongSoftwareAI, PongHardwareAI
+│   ├── core/               # Unit tests — PongEngine, PongPlayerFactory, PongHardwareFactory, PongScoreboardService
+│   └── ui/                 # Unit tests — PongInputController, PongPauseOverlay, PongToolbar, Scoreboard
+├── stress/                 # Stress tests — SerialConnectionManager, HardwareSignalSource, NeuralSignalParser, NeuralHardwareConfig
+└── testsupport/            # Shared test helpers — FakeSerialDevice, FakeSerialFirmware, SerialTestRig, MockitoHardwareSupport, TestSerialLines
 ```
 
 **→ [Go to test source directory](../software/src/test/java/edu/sjsu/spring2026/group32)**
 
-## Running the Tests
-
-```bash
-# All tests (unit + integration) with JaCoCo coverage report
-cd software
-mvn verify
-
-# Stress / throughput benchmarks only (no Swing required)
-mvn test -Dgroups=stress
-
-# A single test class
-mvn test -Dtest=NeuralSignalParserTest
-```
-
-> Tests that instantiate Swing components (e.g. `PoCTest`, `PongGameTest`) require a virtual display on Linux.
-> Prefix the command with `xvfb-run --auto-servernum` or run them via CI, which sets up Xvfb automatically.
 
 ## Test Coverage
 
 JaCoCo generates an HTML report at `software/target/site/jacoco/index.html` after `mvn verify`.
 The latest report is also available as the **`jacoco-coverage-report`** artifact on every CI run.
 
-See [`docs/evaluation/coverage-report/README.md`](../docs/evaluation/coverage-report/README.md) for details on exclusions and coverage targets.
+**Current results:** 267 tests — 267 passed, 0 failed. Overall instruction coverage is **87%** and branch coverage is **76%**, both exceeding the 80% instruction target.
+
+See [`docs/evaluation/coverage-report/README.md`](../docs/evaluation/coverage-report/README.md) for the full per-package breakdown, screenshots, and coverage target details.
 
 ## Stress Test Results
 

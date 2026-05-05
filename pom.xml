@@ -132,8 +132,6 @@
 
                         <!--
                           (3) check: enforces a minimum instruction coverage ratio.
-                          Currently 0.00 so the build does not fail before tests exist.
-                          TODO: raise to 0.80 once 80%+ coverage is achieved.
                         -->
                         <execution>
                             <id>jacoco-check</id>
@@ -149,7 +147,7 @@
                                             <limit>
                                                 <counter>INSTRUCTION</counter>
                                                 <value>COVEREDRATIO</value>
-                                                <minimum>0.00</minimum>
+                                                <minimum>0.80</minimum>
                                             </limit>
                                         </limits>
                                     </rule>

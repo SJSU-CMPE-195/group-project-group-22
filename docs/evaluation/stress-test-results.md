@@ -36,7 +36,7 @@
 ### Observations
 - The stress suite is designed around firmware-style load rather than HTTP request load, so traditional response-time metrics are replaced by recovery, stability, and throughput-of-processing checks inside the Java runtime.
 - The highest-value paths under stress are `hardware.serial` and `hardware.signal`, because those packages must tolerate malformed data, command churn, and connection instability without corrupting game state.
-- The new suite specifically checks that disconnects clear `latestSampleFrame`, `latestDataLine`, device metadata, and signal state before reconnecting and resuming normal processing.
+- The new suite specifically checks that disconnects clear `latestSampleFrame`, the next-line buffer (`getNextLine()`), device metadata, and signal state before reconnecting and resuming normal processing.
 - The `hardware` package is also exercised through repeated boundary and invalid-value sweeps in `NeuralHardwareConfig`, which helps close a known low-coverage area.
 - This measured run completed with 4 passing scenarios and 0 failures, so the simulated firmware path handled the current stress workload without instability.
 - `hardwareSignalSource_burstAndRecoveryStress` was the slowest scenario at 503 ms, which makes sense because it includes asynchronous voltage propagation, spike detection, disconnect resets, and reconnect recovery in one loop.
