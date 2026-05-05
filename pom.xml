@@ -81,6 +81,19 @@
                             <exclude>edu/sjsu/spring2026/group32/hitthezone/model/HitTheZoneActionEffect*.class</exclude>
                             <exclude>edu/sjsu/spring2026/group32/hitthezone/model/HitTheZoneSnapshot*.class</exclude>
                             <exclude>edu/sjsu/spring2026/group32/hitthezone/model/HitTheZoneState*.class</exclude>
+
+                            <!-- Swing JFrame / JPanel shells with @GeneratedExcludeFromCoverage -->
+                            <exclude>edu/sjsu/spring2026/group32/launcher/ui/**</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/launcher/Launcher.class</exclude>
+
+
+                            <!-- Swing UI panels excluded per @GeneratedExcludeFromCoverage -->
+                            <exclude>edu/sjsu/spring2026/group32/pong/ui/PongGame*.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hitthezone/ui/HitTheZoneHudPanel.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hitthezone/ui/HitTheZoneTrackPanel.class</exclude>
+                            <exclude>edu/sjsu/spring2026/group32/hitthezone/ui/HitTheZoneControlPanel.class</exclude>
+
+
                         </excludes>
                     </configuration>
 

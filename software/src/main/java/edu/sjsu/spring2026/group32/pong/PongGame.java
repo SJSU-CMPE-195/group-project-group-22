@@ -37,19 +37,19 @@ public class PongGame extends JPanel {
     private static final PlayerVariant HARDWARE_FALLBACK_VARIANT = PlayerVariant.AI_HARD;
     private static final String HUMAN_CONTROLS_HINT = "Human controls: use Left and Right arrow keys to move the paddle.";
 
-    private final PongEngine engine = new PongEngine();
-    private final Scoreboard scoreboard = new Scoreboard();
+    final PongEngine engine = new PongEngine();
+    final Scoreboard scoreboard = new Scoreboard();
     private final PongInputController inputController = new PongInputController();
     private final SerialConnectionManager pongManager;
-    private final PongToolbar topToolbar;
-    private final PongToolbar bottomToolbar;
+    final PongToolbar topToolbar;
+    final PongToolbar bottomToolbar;
     private final PongCanvas canvas;
     private final SerialConnectionManager.SerialListener hardwareConnectionListener;
 
-    private PlayerVariant topVariant;
-    private PlayerVariant bottomVariant;
-    private BasePlayer<PongState, PongAction> topPlayer;
-    private BasePlayer<PongState, PongAction> bottomPlayer;
+    PlayerVariant topVariant;
+    PlayerVariant bottomVariant;
+    BasePlayer<PongState, PongAction> topPlayer;
+    BasePlayer<PongState, PongAction> bottomPlayer;
     private PongHardwareAI hardwarePlayer;
 
     private int lastDisplayedCh1 = -1;
@@ -238,7 +238,7 @@ public class PongGame extends JPanel {
         refreshCanvas();
     }
 
-    private void requestReset() {
+    void requestReset() {
         if (engine.getGameState() != PongGameState.PAUSED) {
             return;
         }
@@ -292,7 +292,7 @@ public class PongGame extends JPanel {
         canvas.setBottomHintMessage(humanPlayer != null ? HUMAN_CONTROLS_HINT : null);
     }
 
-    private void handleHardwareDisconnected(String reason) {
+    void handleHardwareDisconnected(String reason) {
         stopHardwareInjection();
         topToolbar.setHardwareAvailable(false);
         bottomToolbar.setHardwareAvailable(false);
@@ -323,7 +323,7 @@ public class PongGame extends JPanel {
         pauseForHardwareEvent("Hardware reconnected on " + portName);
     }
 
-    private void handleHardwareInfoUpdated(int channelCount) {
+    void handleHardwareInfoUpdated(int channelCount) {
         if (channelCount < 2) {
             topToolbar.setHardwareAvailable(false);
             bottomToolbar.setHardwareAvailable(false);

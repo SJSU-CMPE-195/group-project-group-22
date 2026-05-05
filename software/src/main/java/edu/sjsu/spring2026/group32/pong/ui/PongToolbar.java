@@ -41,7 +41,7 @@ public class PongToolbar extends JPanel {
     // ─── Fields ───────────────────────────────────────────────────────────────
 
     private final Scoreboard scoreboard;
-    private boolean          hardwareAvailable;
+    public boolean          hardwareAvailable;
 
     final JComboBox<PlayerVariant> dropdown;
     private PlayerVariant lastValidSelection;

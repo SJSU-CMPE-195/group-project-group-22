@@ -82,7 +82,7 @@ public class PongHardwareAI implements BasePlayer<PongState, PongAction> {
      * starts once the HARDWARE variant is explicitly selected in the game UI.
      * Set via {@link #setInjectionEnabled(boolean)}.
      */
-    private volatile boolean injectionEnabled = false;
+    public volatile boolean injectionEnabled = false;
 
     /**
      * Total spike events detected since the last reset (both channels combined).
