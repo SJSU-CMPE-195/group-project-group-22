@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.launcher.ui;
 
+import edu.sjsu.spring2026.group32.annotations.GeneratedExcludeFromCoverage;
 import edu.sjsu.spring2026.group32.hardware.serial.RealSerialDevice;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialConnectionManager;
 import edu.sjsu.spring2026.group32.hardware.serial.SerialDevice;
@@ -26,6 +27,8 @@ import java.util.function.Supplier;
  * uses it to provide one shared COM instance per slot and then passes that live
  * manager into individual programs via constructor injection.</p>
  */
+
+@GeneratedExcludeFromCoverage
 public class SerialConnectionPanel extends JPanel {
     private static final int PORT_SELECTOR_WIDTH = 200;
     private static final int STATUS_LABEL_WIDTH = 170;

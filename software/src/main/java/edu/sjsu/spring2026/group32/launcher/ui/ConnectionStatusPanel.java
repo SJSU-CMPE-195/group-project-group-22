@@ -138,11 +138,11 @@ public class ConnectionStatusPanel extends JPanel {
     //  Helpers
     // =========================================================================
 
-    private static boolean isAlive(SerialConnectionManager mgr) {
+    static boolean isAlive(SerialConnectionManager mgr) {
         return mgr != null && mgr.isConnected();
     }
 
-    private static String labelText(String name, boolean connected) {
+    static String labelText(String name, boolean connected) {
         return "● " + name + ": " + (connected ? "Connected" : "Not connected");
     }
 
