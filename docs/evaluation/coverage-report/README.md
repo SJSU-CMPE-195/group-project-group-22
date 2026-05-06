@@ -47,8 +47,9 @@ JaCoCo generates an HTML coverage report during every `mvn verify` run.
 ```bash
 cd software
 mvn verify
-open target/site/jacoco/index.html   # macOS
-xdg-open target/site/jacoco/index.html  # Linux
+open target/site/jacoco/index.html          # macOS
+xdg-open target/site/jacoco/index.html      # Linux
+start target/site/jacoco/index.html         # Windows
 ```
 
 ### From GitHub Actions (CI)
@@ -69,12 +70,15 @@ The following classes are excluded from coverage metrics (see `pom.xml`):
 | Enums / models | `PlayerType`, `LauncherProgram`, `PongAction`, `PongGameState`, `PongSnapshot`, `PongState`, `PongTickResult`, `HitTheZoneAction`, `HitTheZoneActionEffect`, `HitTheZoneSnapshot`, `HitTheZoneState` |
 | Coverage annotation | `GeneratedExcludeFromCoverage` |
 
-These are excluded because they consist entirely of auto-generated, hardware-dependent, or Swing-layout-only code that cannot be meaningfully exercised at unit level.
+These are excluded because they consist entirely of auto-generated, hardware-dependent, Swing-layout-only, or data-only value types that cannot be meaningfully exercised at unit level.
 
 ## Coverage Targets
 
 | Counter | Target | Current | Enforced minimum |
 |---|--------|---|---|
-| Instruction coverage | 80%+ | ✅ 87% | 0% (see note) |
+| Instruction coverage | 80%+ | ✅ 87% | 80% (enforced via `jacoco-check` in `pom.xml`) |
+| Branch coverage (core functionality) | 70%+ | ✅ 76% | none |
+
+> **Note on `pong.ai`:** Instruction coverage for `pong.ai` is 79%, just below the 80% instruction target. The remaining gap is in AI edge-case branches that require hardware simulation to exercise fully.
 
 

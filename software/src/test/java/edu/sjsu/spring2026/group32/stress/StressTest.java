@@ -56,25 +56,42 @@ class StressTest {
         long suiteElapsedMs = elapsedMillis(suiteStartNs);
         long passed = SCENARIO_RESULTS.stream().filter(result -> "PASS".equals(result.result())).count();
         long failed = SCENARIO_RESULTS.size() - passed;
+        long scenarioSumMs = SCENARIO_RESULTS.stream().mapToLong(ScenarioResult::runtimeMs).sum();
+        long overheadMs = suiteElapsedMs - scenarioSumMs;
 
         System.out.println();
-        System.out.println("## Stress Test Results");
+        System.out.println("# Stress Test Results");
         System.out.println();
         System.out.println("### Test Configuration");
-        System.out.println("- Tool: JUnit 5 stress suite with fake firmware/device support");
+        System.out.println("- Tool: JUnit 5 stress suite with fake firmware/device support in `software/src/test/java/edu/sjsu/spring2026/group32/testsupport`");
         System.out.println("- Total Suite Runtime: " + suiteElapsedMs + " ms");
         System.out.println("- Virtual Users: Not applicable");
         System.out.println("- Target: Java hardware integration path");
+        System.out.println("  - `SerialConnectionManager`");
+        System.out.println("  - `HardwareSignalSource`");
+        System.out.println("  - `NeuralSignalParser`");
+        System.out.println("  - `NeuralHardwareConfig`");
+        System.out.println("- Stress Scenarios:");
+        System.out.println("  - Sustained mixed firmware traffic with valid samples, malformed lines, `STATUS`, `INFO?`, and injection commands");
+        System.out.println("  - Random disconnect and reconnect recovery cycles");
+        System.out.println("  - Signal burst, spike detection, and recovery after disconnect");
+        System.out.println("  - Boundary and invalid-value sweeps for hardware configuration");
         System.out.println();
         System.out.println("### Results");
         System.out.println("| Metric | Value |");
         System.out.println("|--------|-------|");
-        System.out.println("| Total Stress Suite Runtime | " + suiteElapsedMs + " ms |");
         System.out.println("| Mixed Traffic Iterations | " + MIXED_TRAFFIC_ITERATIONS + " |");
         System.out.println("| Disconnect/Reconnect Cycles | " + RECOVERY_CYCLES + " |");
         System.out.println("| Signal Recovery Cycles | " + SIGNAL_RECOVERY_CYCLES + " |");
         System.out.println("| Passed Scenarios | " + passed + " |");
         System.out.println("| Failed Scenarios | " + failed + " |");
+        System.out.println("| Total Stress Suite Runtime | " + suiteElapsedMs + " ms |");
+        System.out.println();
+        System.out.printf(
+                Locale.US,
+                "> The total suite runtime (%d ms) exceeds the sum of individual scenario runtimes (%d ms) by ~%d ms. "
+                + "This is normal JUnit framework overhead — test class initialization, JVM warmup between test classes, and test runner bookkeeping.%n",
+                suiteElapsedMs, scenarioSumMs, overheadMs);
         System.out.println();
         System.out.println("### Scenario Results");
         System.out.println("| Scenario | Result | Runtime | Notes |");

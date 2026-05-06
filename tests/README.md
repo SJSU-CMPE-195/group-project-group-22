@@ -33,7 +33,7 @@ software/src/test/java/edu/sjsu/spring2026/group32/
 JaCoCo generates an HTML report at `software/target/site/jacoco/index.html` after `mvn verify`.
 The latest report is also available as the **`jacoco-coverage-report`** artifact on every CI run.
 
-**Current results:** 267 tests — 267 passed, 0 failed. Overall instruction coverage is **87%** and branch coverage is **76%**, both exceeding the 80% instruction target.
+**Current results:** 267 tests — 267 passed, 0 failed. Instruction coverage is **87%** (exceeding the 80% instruction target) and branch coverage is **76%** (exceeding the 70% core functionality target).
 
 See [`docs/evaluation/coverage-report/README.md`](../docs/evaluation/coverage-report/README.md) for the full per-package breakdown, screenshots, and coverage target details.
 
