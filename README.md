@@ -11,7 +11,7 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
 
 ## Table of Contents
 
-- [Team](#project-team---u32)
+- [Team](#team)
 - [Deliverables](#deliverables)
 - [Prerequisites](#prerequisites)
 - [Hardware](#hardware)
@@ -37,17 +37,22 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
 
 ---
 
-## Project Team - U32
+## Team
+
+**Project Number:** U32
+
+**Project Title:** Hardware Neural Network
+
+**Advisor:** Eric Vanuska — eric.vanuska@sjsu.edu
 
 [Spring 2026 CMPE 195B Project Roster](https://docs.google.com/spreadsheets/d/1CWvXRMa2uYdF89KqGeZLIvugnG1znIKHWkJCl6HlvxU/edit?gid=0#gid=0)
 
-| Name             | GitHub                                              | Email |
-|------------------|-----------------------------------------------------|---|
-| Jonathon Fleming | [@JellyF02](https://github.com/JellyF02)            | jonathon.fleming@sjsu.edu |
-| Raymund Mercader | [@ray-sjsu](https://github.com/ray-sjsu)            | raymund.mercader@sjsu.edu |
-| Andrew Neidhart  | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
-| Katrina Weers    | [@Trina-W](https://github.com/Trina-W)              | katrina.weers@sjsu.edu |
-| Eric Vanuska (Advisor) | — | eric.vanuska@sjsu.edu |
+| Name             | Degree  | GitHub                                              | Email |
+|------------------|---------|-----------------------------------------------------|---|
+| Jonathon Fleming | BSCMPE  | [@JellyF02](https://github.com/JellyF02)            | jonathon.fleming@sjsu.edu |
+| Raymund Mercader | BSSE    | [@ray-sjsu](https://github.com/ray-sjsu)            | raymund.mercader@sjsu.edu |
+| Andrew Neidhart  | BSCMPE  | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
+| Katrina Weers    | BSSE    | [@Trina-W](https://github.com/Trina-W)              | katrina.weers@sjsu.edu |
 
 ---
 
