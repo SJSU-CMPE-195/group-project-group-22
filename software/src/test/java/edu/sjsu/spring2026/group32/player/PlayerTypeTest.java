@@ -1,5 +1,6 @@
 package edu.sjsu.spring2026.group32.player;
 
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
 import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -57,16 +58,5 @@ class PlayerTypeTest {
         assertThrows(IllegalArgumentException.class, () -> PlayerType.valueOf("ROBOT"));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Ordinals (disabled, not used atm)
-    // ──────────────────────────────────────────────────────────────────────────
 
-    @Disabled("Ordinals are not used in production code at the moment so reordering would fail without breaking functionality")
-    @Test
-    @DisplayName("Ordinals match declaration order: HUMAN=0, SOFTWARE=1, HARDWARE=2")
-    void ordinalsMatchDeclarationOrder() {
-        assertEquals(0, PlayerType.HUMAN.ordinal());
-        assertEquals(1, PlayerType.SOFTWARE.ordinal());
-        assertEquals(2, PlayerType.HARDWARE.ordinal());
-    }
 }

@@ -1,161 +1,153 @@
 package edu.sjsu.spring2026.group32.player;
 
-import edu.sjsu.spring2026.group32.pong.PongAction;
-import edu.sjsu.spring2026.group32.pong.PongState;
-import org.junit.jupiter.api.*;
+import edu.sjsu.spring2026.group32.player.model.Action;
+import edu.sjsu.spring2026.group32.player.model.GameState;
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.awt.Component;
 import java.awt.event.KeyEvent;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
-/**
- * Unit tests for {@link HumanPlayer}.
- *
- * <p>Uses Mockito to provide a {@link Component} stub as the KeyEvent source —
- * no AWT display is required.
- */
 @DisplayName("HumanPlayer Suite")
 class HumanPlayerTest {
 
-    // Dummy game state — HumanPlayer ignores it. 
-    private static final PongState DUMMY_STATE = new PongState(0, 0, 0, 600);
+    // stand-in state + action types
+    private record TestState() implements GameState {}
+    private enum TestAction implements Action { LEFT, RIGHT, IDLE }
 
-    // Key bindings used across most tests.
-    private static final Map<Integer, PongAction> BINDINGS = Map.of(
-        KeyEvent.VK_LEFT,  PongAction.LEFT,
-        KeyEvent.VK_RIGHT, PongAction.RIGHT
-    );
+    private static final int LEFT_KEY  = KeyEvent.VK_LEFT;
+    private static final int RIGHT_KEY = KeyEvent.VK_RIGHT;
+    private static final int OTHER_KEY = KeyEvent.VK_SPACE;
 
-    /** Non-null component required by KeyEvent constructor. */
-    private final Component src = mock(Component.class);
-
-    private HumanPlayer<PongState, PongAction> player;
+    private HumanPlayer<TestState, TestAction> player;
+    private TestState state;
 
     @BeforeEach
     void setUp() {
-        player = new HumanPlayer<>("P1", BINDINGS, PongAction.IDLE);
+        player = new HumanPlayer<>(
+            "TestHuman",
+            Map.of(LEFT_KEY, TestAction.LEFT, RIGHT_KEY, TestAction.RIGHT),
+            TestAction.IDLE);
+
+        state = new TestState();
+        
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Default state
-    // ──────────────────────────────────────────────────────────────────────────
+    // initial state
 
     @Test
-    @DisplayName("getNextMove() returns the default action before any key event")
-    void defaultActionBeforeKeyEvent() {
-        assertEquals(PongAction.IDLE, player.getNextMove(DUMMY_STATE));
+    @DisplayName("getNextMove() returns default action before any key event")
+    void keyboardInput_updatesPlayerState_defaultAction() {
+        assertEquals(TestAction.IDLE, player.getNextMove(state), "player should return default action before any key is pressed");
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // keyPressed — sets action
-    // ──────────────────────────────────────────────────────────────────────────
+    // key press
 
     @Test
-    @DisplayName("keyPressed with bound key changes current action")
-    void keyPressedBoundKeyChangesAction() {
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
-        assertEquals(PongAction.LEFT, player.getNextMove(DUMMY_STATE));
-    }
+    @DisplayName("pressing LEFT key produces LEFT action")
+    void keyboardInput_updatesPlayerState_pressLeft() {
+        player.keyPressed(keyEvent(LEFT_KEY));
 
-    @Test
-    @DisplayName("keyPressed with second bound key changes action to new key's action")
-    void keyPressedSecondBoundKey() {
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_RIGHT));
-        assertEquals(PongAction.RIGHT, player.getNextMove(DUMMY_STATE));
+        assertEquals(TestAction.LEFT, player.getNextMove(state), "LEFT key press should produce LEFT action");
     }
 
     @Test
-    @DisplayName("keyPressed with unbound key does NOT change current action")
-    void keyPressedUnboundKeyIgnored() {
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_UP)); // not bound
-        assertEquals(PongAction.LEFT, player.getNextMove(DUMMY_STATE));
+    @DisplayName("pressing RIGHT key produces RIGHT action")
+    void keyboardInput_updatesPlayerState_pressRight() {
+        player.keyPressed(keyEvent(RIGHT_KEY));
+
+        assertEquals(TestAction.RIGHT, player.getNextMove(state), "RIGHT key press should produce RIGHT action");
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // keyReleased — resets to default
-    // ──────────────────────────────────────────────────────────────────────────
+    // Key release
 
     @Test
-    @DisplayName("keyReleased with bound key resets action to default")
-    void keyReleasedResetsToDefault() {
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED,  KeyEvent.VK_LEFT));
-        player.keyReleased(keyEvent(KeyEvent.KEY_RELEASED, KeyEvent.VK_LEFT));
-        assertEquals(PongAction.IDLE, player.getNextMove(DUMMY_STATE));
+    @DisplayName("releasing LEFT key reverts to default action")
+    void keyboardInput_updatesPlayerState_releaseLeft() {
+        player.keyPressed(keyEvent(LEFT_KEY));
+        player.keyReleased(keyEvent(LEFT_KEY));
+
+        assertEquals(TestAction.IDLE, player.getNextMove(state), "releasing LEFT key should revert to default action");
     }
 
     @Test
-    @DisplayName("keyReleased with unbound key does NOT reset the current action")
-    void keyReleasedUnboundKeyIgnored() {
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED,   KeyEvent.VK_RIGHT));
-        player.keyReleased(keyEvent(KeyEvent.KEY_RELEASED, KeyEvent.VK_UP)); // not bound
-        assertEquals(PongAction.RIGHT, player.getNextMove(DUMMY_STATE));
+    @DisplayName("releasing RIGHT key reverts to default action")
+    void keyboardInput_updatesPlayerState_releaseRight() {
+        player.keyPressed(keyEvent(RIGHT_KEY));
+        player.keyReleased(keyEvent(RIGHT_KEY));
+
+        assertEquals(TestAction.IDLE, player.getNextMove(state), "releasing RIGHT key should revert to default action");
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // keyTyped — always a no-op
-    // ──────────────────────────────────────────────────────────────────────────
-  
+    // Unsupported keys
+
     @Test
-    @DisplayName("keyTyped does not affect the current action")
-    void keyTypedIsNoOp() {
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
-        // KeyEvent.KEY_TYPED can't be an undefined char
-        player.keyTyped(keyEvent(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED, 'a'));
-        assertEquals(PongAction.LEFT, player.getNextMove(DUMMY_STATE));
+    @DisplayName("pressing an unbound key does not change action")
+    void keyboardInput_updatesPlayerState_unboundKeyIgnored() {
+        player.keyPressed(keyEvent(OTHER_KEY));
+
+        assertEquals(TestAction.IDLE, player.getNextMove(state), "unbound key press should not change current action");
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Metadata
-    // ──────────────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("releasing an unbound key does not change action")
+    void keyboardInput_updatesPlayerState_unboundKeyReleaseIgnored() {
+        player.keyPressed(keyEvent(LEFT_KEY));
+        player.keyReleased(keyEvent(OTHER_KEY)); // release a different key
+
+        assertEquals(TestAction.LEFT, player.getNextMove(state), "unbound key release should not affect current action");
+    }
+
+    // sequence (press, switch, release)
 
     @Test
-    @DisplayName("getName() returns the name passed to the constructor")
-    void getNameReturnsConstructorValue() {
-        assertEquals("P1", player.getName());
+    @DisplayName("switching from LEFT to RIGHT without releasing produces RIGHT")
+    void keyboardInput_updatesPlayerState_switchDirection() {
+        player.keyPressed(keyEvent(LEFT_KEY));
+        player.keyPressed(keyEvent(RIGHT_KEY)); // switch without releasing LEFT
+
+        assertEquals(TestAction.RIGHT, player.getNextMove(state), "pressing RIGHT while LEFT is held should switch to RIGHT");
+    }
+
+    @Test
+    @DisplayName("press LEFT, release LEFT, press RIGHT produces RIGHT then IDLE sequence")
+    void keyboardInput_updatesPlayerState_fullSequence() {
+        player.keyPressed(keyEvent(LEFT_KEY));
+        assertEquals(TestAction.LEFT, player.getNextMove(state), "LEFT after press");
+
+        player.keyReleased(keyEvent(LEFT_KEY));
+        assertEquals(TestAction.IDLE, player.getNextMove(state), "IDLE after release");
+
+        player.keyPressed(keyEvent(RIGHT_KEY));
+        assertEquals(TestAction.RIGHT, player.getNextMove(state), "RIGHT after second press");
+
+        player.keyReleased(keyEvent(RIGHT_KEY));
+        assertEquals(TestAction.IDLE, player.getNextMove(state), "IDLE after second release");
+    }
+
+    // metadata
+
+    @Test
+    @DisplayName("getName() returns the name supplied to the constructor")
+    void keyboardInput_updatesPlayerState_getName() {
+        assertEquals("TestHuman", player.getName());
     }
 
     @Test
     @DisplayName("getType() returns PlayerType.HUMAN")
-    void getTypeReturnsHuman() {
+    void keyboardInput_updatesPlayerState_getType() {
         assertEquals(PlayerType.HUMAN, player.getType());
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Edge cases
-    // ──────────────────────────────────────────────────────────────────────────
+    // helper
 
-    @Test
-    @DisplayName("Player with empty bindings always returns the default action")
-    void emptyBindingsAlwaysDefault() {
-        HumanPlayer<PongState, PongAction> p = new HumanPlayer<>("P2", Map.of(), PongAction.IDLE);
-        p.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
-        assertEquals(PongAction.IDLE, p.getNextMove(DUMMY_STATE));
-    }
-
-    @Test
-    @DisplayName("getNextMove() ignores the state argument and returns current action")
-    void getNextMoveIgnoresState() {
-        player.keyPressed(keyEvent(KeyEvent.KEY_PRESSED, KeyEvent.VK_RIGHT));
-        PongState state1 = new PongState(0,   0, 0, 600);
-        PongState state2 = new PongState(500, 0, 0, 600);
-        assertEquals(PongAction.RIGHT, player.getNextMove(state1));
-        assertEquals(PongAction.RIGHT, player.getNextMove(state2));
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────────
-
-    private KeyEvent keyEvent(int id, int keyCode) {
-        return new KeyEvent(src, id, System.currentTimeMillis(), 0, keyCode, KeyEvent.CHAR_UNDEFINED);
-    }
-
-    private KeyEvent keyEvent(int id, int keyCode, char c) {
-        return new KeyEvent(src, id, System.currentTimeMillis(), 0, keyCode, c);
+    private static KeyEvent keyEvent(int keyCode) {
+        return new KeyEvent(new Component() {}, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, keyCode, KeyEvent.CHAR_UNDEFINED);
     }
 }

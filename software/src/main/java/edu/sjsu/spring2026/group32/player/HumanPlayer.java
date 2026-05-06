@@ -1,5 +1,10 @@
 package edu.sjsu.spring2026.group32.player;
 
+import edu.sjsu.spring2026.group32.player.model.Action;
+import edu.sjsu.spring2026.group32.player.model.BasePlayer;
+import edu.sjsu.spring2026.group32.player.model.GameState;
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
+
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.Map;

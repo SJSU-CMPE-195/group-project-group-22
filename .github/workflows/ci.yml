@@ -1,41 +1,45 @@
-name: CI — Build & Test
+name: CI - Build & Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
     name: Build & Test (Java 17, Maven)
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      checks: write
-      pull-requests: write
+    outputs:
+      has_jacoco_xml: ${{ steps.artifact-presence.outputs.has_jacoco_xml }}
+      has_surefire_reports: ${{ steps.artifact-presence.outputs.has_surefire_reports }}
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      # -- 1. Checkout -----------------------------------------------------------
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # ── 2. Set up JDK 17 ────────────────────────────────────────────────────
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven          # caches ~/.m2/repository between runs
+          persist-credentials: false
 
-      # ── 3. Pre-resolve Mockito agent so the surefire argLine path exists ─────
+      # -- 2. Set up JDK 17 ------------------------------------------------------
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      # -- 3. Pre-resolve Mockito agent so the surefire argLine path exists -----
       #    The parent pom references ${settings.localRepository}/...mockito-core.jar
       #    in the surefire <argLine>. Resolving dependencies first guarantees the
       #    jar is present before the test phase tries to reference it.
       - name: Resolve dependencies (pre-warm Mockito agent)
         run: mvn --batch-mode dependency:resolve -q
 
-      # ── 4. Install Xvfb (virtual framebuffer) ────────────────────────────────
+      # -- 4. Install Xvfb (virtual framebuffer) ---------------------------------
       #    PoCTest instantiates PoC_HitTheZone (a JFrame subclass). JFrame cannot
       #    be constructed when java.awt.headless=true, so we provide a virtual
       #    display instead. xvfb-run sets DISPLAY automatically for the child
@@ -43,53 +47,122 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get install -y xvfb
 
-      # ── 5. Build & run all tests under virtual display ───────────────────────
+      # -- 5. Build & run all tests under virtual display ------------------------
       #    xvfb-run launches an in-memory X server for the duration of mvn verify,
       #    allowing Swing/AWT components (JFrame, Timer, etc.) to be instantiated
       #    without a physical screen. java.awt.headless is intentionally NOT set
-      #    to true here — doing so would re-enable HeadlessException for PoCTest.
+      #    to true here - doing so would re-enable HeadlessException for PoCTest.
       - name: Build and test
         run: |
           xvfb-run --auto-servernum \
             mvn --batch-mode verify
 
-      # ── 6. Upload the runnable JAR as a build artifact ───────────────────────
+      # -- 6. Upload the runnable JAR as a build artifact ------------------------
       #    The JAR includes all compiled classes for Launcher, BidirectionalTest,
       #    HitTheZone, and Pong. Download it from the Actions "Artifacts" panel.
-      - name: Upload JAR artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload runnable JAR
+        if: ${{ hashFiles('software/target/hardware-neural-network-*.jar') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hardware-neural-network-jar
           path: software/target/hardware-neural-network-*.jar
           if-no-files-found: warn
 
-      # -- 7. Upload JaCoCo coverage report ---------------------------------------
+      # -- 7. Upload JaCoCo coverage report --------------------------------------
       #    JaCoCo writes HTML, XML, and CSV to target/site/jacoco/ during verify.
       #    Uploading it lets reviewers browse line-by-line coverage from Actions.
-      - name: Upload JaCoCo coverage report
-        uses: actions/upload-artifact@v4
+      - name: Upload JaCoCo coverage site
         if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jacoco-coverage-report
           path: software/target/site/jacoco/
           if-no-files-found: warn
 
-      # -- 8. Publish test results ------------------------------------------------
+      # -- 8. Upload JaCoCo XML for downstream reporting -------------------------
+      - name: Upload JaCoCo XML
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jacoco-xml
+          path: software/target/site/jacoco/jacoco.xml
+          if-no-files-found: warn
+
+      # -- 9. Upload Surefire XML for downstream JUnit publishing ----------------
+      - name: Upload Surefire test reports
+        if: ${{ always() && hashFiles('**/target/surefire-reports/TEST-*.xml') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: surefire-test-reports
+          path: "**/target/surefire-reports/TEST-*.xml"
+          if-no-files-found: warn
+
+      - name: Record available artifacts
+        if: always()
+        id: artifact-presence
+        shell: bash
+        run: |
+          if compgen -G "software/target/site/jacoco/jacoco.xml" > /dev/null; then
+            echo "has_jacoco_xml=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_jacoco_xml=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if find . -path "*/target/surefire-reports/TEST-*.xml" -print -quit | grep -q .; then
+            echo "has_surefire_reports=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_surefire_reports=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish-test-report:
+    name: Publish JUnit report
+    needs: build-and-test
+    if: always() && needs.build-and-test.outputs.has_surefire_reports == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+
+    steps:
+      # -- 10. Download test results for the reporting-only job ------------------
+      - name: Download Surefire test reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: surefire-test-reports
+          path: surefire-reports
+
+      # -- 11. Publish test results ----------------------------------------------
       - name: Publish test report
         uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386 # v6.4.0
-        if: always()            # run even when tests fail so you still see the report
+        if: always()
         with:
-          report_paths: '**/target/surefire-reports/TEST-*.xml'
+          report_paths: "surefire-reports/**/*.xml"
           check_name: JUnit Test Results
 
-      # -- 9. Post PR coverage summary --------------------------------------------
+  post-coverage-summary:
+    name: Post JaCoCo coverage report
+    needs: build-and-test
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+
+    steps:
+      # -- 12. Download coverage XML for the PR-comment job ----------------------
+      - name: Download JaCoCo XML
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: jacoco-xml
+          path: jacoco-xml
+
+      # -- 13. Post PR coverage summary ------------------------------------------
       - name: Post JaCoCo coverage report
-        if: always() && github.event_name == 'pull_request'
         uses: madrapps/jacoco-report@50d3aff4548aa991e6753342d9ba291084e63848 # v1.7.2
         with:
-          paths: software/target/site/jacoco/jacoco.xml
+          paths: jacoco-xml/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           title: "JaCoCo Coverage Report"
           update-comment: true
-          # min-coverage-overall: 80
-          # min-coverage-changed-files: 80

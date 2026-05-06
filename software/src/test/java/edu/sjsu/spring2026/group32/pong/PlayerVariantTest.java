@@ -1,9 +1,16 @@
 package edu.sjsu.spring2026.group32.pong;
 
-import edu.sjsu.spring2026.group32.player.PlayerType;
+import edu.sjsu.spring2026.group32.player.model.PlayerType;
+import edu.sjsu.spring2026.group32.pong.model.PlayerVariant;
 import org.junit.jupiter.api.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link PlayerVariant}.
@@ -11,9 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("PlayerVariant Suite")
 class PlayerVariantTest {
 
-    // ──────────────────────────────────────────────────────────────────────────
     // getDisplayName()
-    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("HUMAN display name is 'Human'")
@@ -22,26 +27,24 @@ class PlayerVariantTest {
     }
 
     @Test
-    @DisplayName("HARDWARE display name is 'Hardware'")
+    @DisplayName("HARDWARE display name is 'Hardware AI'")
     void hardwareDisplayName() {
-        assertEquals("Hardware", PlayerVariant.HARDWARE.getDisplayName());
+        assertEquals("Hardware AI", PlayerVariant.HARDWARE.getDisplayName());
     }
 
     @Test
-    @DisplayName("AI_EASY display name is 'AI Easy'")
+    @DisplayName("AI_EASY display name is 'Software AI Easy'")
     void aiEasyDisplayName() {
-        assertEquals("AI Easy", PlayerVariant.AI_EASY.getDisplayName());
+        assertEquals("Software AI Easy", PlayerVariant.AI_EASY.getDisplayName());
     }
 
     @Test
-    @DisplayName("AI_HARD display name is 'AI Hard'")
+    @DisplayName("AI_HARD display name is 'Software AI Hard'")
     void aiHardDisplayName() {
-        assertEquals("AI Hard", PlayerVariant.AI_HARD.getDisplayName());
+        assertEquals("Software AI Hard", PlayerVariant.AI_HARD.getDisplayName());
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
     // getPlayerType()
-    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("HUMAN variant maps to PlayerType.HUMAN")
@@ -67,21 +70,18 @@ class PlayerVariantTest {
         assertEquals(PlayerType.SOFTWARE, PlayerVariant.AI_HARD.getPlayerType());
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
     // toString()
-    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("toString() returns the display name (used by JComboBox renderer)")
     void toStringReturnsDisplayName() {
         for (PlayerVariant v : PlayerVariant.values()) {
-            assertEquals(v.getDisplayName(), v.toString(), v.name() + ".toString() should equal getDisplayName()");
+            assertEquals(v.getDisplayName(), v.toString(),
+                    v.name() + ".toString() should equal getDisplayName()");
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Completeness
-    // ──────────────────────────────────────────────────────────────────────────
+    // completeness
 
     @Test
     @DisplayName("Exactly four variants are defined")
@@ -102,4 +102,5 @@ class PlayerVariantTest {
     void valueOfUnknownThrows() {
         assertThrows(IllegalArgumentException.class, () -> PlayerVariant.valueOf("ROBOT"));
     }
+    
 }
