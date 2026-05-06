@@ -172,11 +172,19 @@ The firmware lives in `hardware/firmware/`. Two `.ino` files are provided — th
 
 ## Running the Application
 
-You will be provided a pre-built JAR file. Run it with:
+Download the latest release from the [Releases page](https://github.com/SJSU-CMPE-195/group-project-group-22/releases). The release includes the Java application and the ESP32 firmware.
+
+### Java Application
+
+Two distribution formats are available:
+
+**Standalone JAR** — a single `hardware-neural-network.jar` file. Requires Java 17+ already installed on your system.
 
 ```bash
 java -jar hardware-neural-network.jar
 ```
+
+**Bundled runtime** — a folder called `hardware-neural-network/` containing a `.exe` alongside `app/` and `runtime/` directories. Java is included — no separate installation needed. Run the `.exe` inside the folder.
 
 This opens the **Launcher**, which is the home page for all programs.
 
@@ -188,6 +196,10 @@ cd group-project-group-22/software
 mvn install
 java -jar target/hardware-neural-network.jar
 ```
+
+### Firmware
+
+The release also includes the `.ino` firmware files for the ESP32. See [Flashing the ESP32](#flashing-the-esp32) for installation instructions.
 
 ---
 
