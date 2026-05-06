@@ -12,7 +12,7 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
 
 ## Table of Contents
 
-- [Team](#team---group-32)
+- [Team](#project-team---u32)
 - [Deliverables](#deliverables)
 - [Prerequisites](#prerequisites)
 - [Hardware](#hardware)
@@ -37,7 +37,9 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
 
 ---
 
-## Team - (Group 32)
+## Project Team - U32
+
+[Spring 2026 CMPE 195B Project Roster](https://docs.google.com/spreadsheets/d/1CWvXRMa2uYdF89KqGeZLIvugnG1znIKHWkJCl6HlvxU/edit?gid=0#gid=0)
 
 | Name             | GitHub                                              | Email |
 |------------------|-----------------------------------------------------|---|
@@ -45,7 +47,7 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
 | Raymund Mercader | [@ray-sjsu](https://github.com/ray-sjsu)            | raymund.mercader@sjsu.edu |
 | Andrew Neidhart  | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
 | Katrina Weers    | [@Trina-W](https://github.com/Trina-W)              | katrina.weers@sjsu.edu |
-| Eric Vanuska     | - | eric.vanuska@sjsu.edu                           |
+| Eric Vanuska (Advisor) | — | eric.vanuska@sjsu.edu |
 
 ---
 
