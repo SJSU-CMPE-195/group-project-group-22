@@ -3,11 +3,13 @@
 [![CI](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml/badge.svg)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-80%25%2B-brightgreen)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
 
-A physical, transistor-level spiking neural network (SNN) built from discrete components on a breadboard or PCB. The circuit produces real voltage spikes that drive game decisions — the SNN is the AI player.
+Neuromorphic computing replicates brain structure and function directly in hardware. Unlike conventional processors, it uses parallel, event-driven processing for greater efficiency. Software-based spiking neural networks (SNNs) appear in autonomous control systems but carry high energy and resource costs. This project implements the SNN as a real analog circuit — a physical, transistor-level network built from discrete components on a breadboard or PCB — so the hardware itself is the AI player.
 
-An ESP32 microcontroller acts as the analog bridge: it reads the neuron output voltage via ADC and drives the neuron input via DAC, streaming 12-bit samples to a Java application over USB serial at 115200 baud. The Java application closes the loop — it injects stimulus voltages into the circuit in response to game state (e.g., ball entering a zone), detects neural spikes via rising-edge analysis, and translates those spikes into player actions in real time.
+The fundamental building block is a **3-neuron control unit** implementing the integrate-and-fire model: an excitatory neuron and an inhibitory neuron both feed into a control (output) neuron. The excitatory neuron drives the control neuron to fire; the inhibitory neuron suppresses overfiring and improves signal stability. Each control unit produces one discrete game action. This scheme is scalable — Hit The Zone uses one 3-neuron control unit (one game input), and Pong uses two control units (six neurons total, one per direction).
 
-Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configuration, and **Pong** uses a 6-neuron dual-channel configuration (three neurons per direction). A **Launcher** manages serial connections and serves as the home page for all programs.
+An ESP32 microcontroller acts as the analog bridge between the neuron circuit and the game software: it injects stimulus voltage into the excitatory neuron in response to game state, reads the control neuron's output voltage via ADC, and streams real-time voltage data to a Java application over USB serial at 115200 baud. The Java application detects neural spikes via rising-edge analysis and translates each spike one-to-one into a discrete game action.
+
+A **Launcher** manages serial connections and serves as the home page for all programs. Two games are supported: **Hit The Zone** (3-neuron, single-channel) and **Pong** (6-neuron, dual-channel — Ch1 controls left, Ch2 controls right). A **Bidirectional Test** diagnostic tool is also included for verifying serial communication and signal integrity.
 
 ## Table of Contents
 
@@ -24,13 +26,13 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
   - [PCB Assembly](#pcb-assembly)
   - [Flashing the ESP32](#flashing-the-esp32)
 - [Running the Application](#running-the-application)
+- [Configuration](#configuration)
 - [Programs](#programs)
   - [Launcher](#launcher)
   - [Hit The Zone](#hit-the-zone)
   - [Pong](#pong)
   - [Bidirectional Test](#bidirectional-test)
   - [Shared Components](#shared-components)
-- [Configuration](#configuration)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
 - [License](#license)
@@ -45,14 +47,14 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
 
 **Advisor:** Eric Vanuska — eric.vanuska@sjsu.edu
 
-[Spring 2026 CMPE 195B Project Roster](https://docs.google.com/spreadsheets/d/1CWvXRMa2uYdF89KqGeZLIvugnG1znIKHWkJCl6HlvxU/edit?gid=0#gid=0)
-
 | Name             | Degree  | GitHub                                              | Email |
 |------------------|---------|-----------------------------------------------------|---|
 | Jonathon Fleming | BSCMPE  | [@JellyF02](https://github.com/JellyF02)            | jonathon.fleming@sjsu.edu |
 | Raymund Mercader | BSSE    | [@ray-sjsu](https://github.com/ray-sjsu)            | raymund.mercader@sjsu.edu |
 | Andrew Neidhart  | BSCMPE  | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
 | Katrina Weers    | BSSE    | [@Trina-W](https://github.com/Trina-W)              | katrina.weers@sjsu.edu |
+
+[Spring 2026 CMPE 195B Project Roster](https://docs.google.com/spreadsheets/d/1CWvXRMa2uYdF89KqGeZLIvugnG1znIKHWkJCl6HlvxU/edit?gid=0#gid=0)
 
 ---
 
@@ -103,7 +105,19 @@ Three physical builds were produced over the course of the project. The Breadboa
 
 ### Schematic
 
-The **NeuronSynapseVersion7** schematic is the final design used across all builds.
+Each neuron in the circuit is built around a **Schmitt trigger** — a comparator with hysteresis. Input voltage charges up slowly (integration), and when it crosses the upper threshold V_UT the output snaps sharply to saturation (the spike). It won't reset until voltage falls below the lower threshold V_LT. The dead band between the two thresholds prevents noise from causing false re-triggers, giving each neuron a clean, stable firing response — directly analogous to a biological action potential.
+
+![Schmitt Trigger Diagram](docs/images/schmitt-trigger-diagram.png)
+
+**Single Neuron V1** — the initial single-neuron proof-of-concept schematic.
+
+![Single Neuron V1 Schematic](hardware/schematics/Single-Neuron-V1-Schematic.png)
+
+Source file: [`hardware/schematics/Single-Neuron-V1-Schematic.asc`](hardware/schematics/Single-Neuron-V1-Schematic.asc) (LTspice)
+
+---
+
+**NeuronSynapseVersion7** — the final 3-neuron design used across all builds.
 
 ![Neuron Synapse Version 7 Schematic](hardware/schematics/Neuron-Synapse-Version7-Schematic.png)
 
@@ -208,6 +222,12 @@ The release also includes the `.ino` firmware files for the ESP32. See [Flashing
 
 ---
 
+## Configuration
+
+No API keys or environment variables are required. The only configuration is the `CHANNEL_COUNT` firmware parameter described in [Flashing the ESP32](#flashing-the-esp32).
+
+---
+
 ## Programs
 
 **Summary Class Diagram**
@@ -265,6 +285,14 @@ A game where four players take turns hitting a ball as it passes through a targe
 
 A Pong game where the hardware SNN competes as an AI paddle controller. The ESP32 (6-neuron, dual-channel config) reads two ADC channels — GPIO34 for LEFT and GPIO35 for RIGHT — and drives a single hardware AI player. Player types (Human / Hardware AI / Software AI Easy / Software AI Hard) are selected from the in-game toolbar.
 
+**SNN Architecture**
+
+Pong uses two 3-neuron control units (6 neurons total). Each control unit consists of an excitatory neuron, an inhibitory neuron, and a control (output) neuron — both the excitatory and inhibitory neurons feed into the control neuron, which fires when its membrane voltage V reaches threshold θ. One control unit drives LEFT, the other drives RIGHT.
+
+The architecture diagram below shows the logical view: Ball X Position feeds a Directional Split Layer (Ball Left / Ball Right excitatory neurons), which drive an Output Layer (Paddle Left / Paddle Right control neurons). The red cross-inhibition connections — Ball Left inhibiting Paddle Right and vice versa — represent the inhibitory neurons in each control unit, ensuring only one direction fires at a time. One spike equals one paddle movement event.
+
+![Pong SNN Architecture Diagram](docs/images/pong-game-snn-architecture-diagram.png)
+
 ![Pong](docs/images/java-program/bidirectionaltest-and-pong-game-screenshot.png)
 
 **Hardware Setup**
@@ -310,12 +338,6 @@ The `hardware` and `player` packages are shared across all programs. `hardware` 
 **Player Class Diagram**
 
 ![Player Class Diagram](docs/class-diagrams/class-diagram-player.png)
-
----
-
-## Configuration
-
-No API keys or environment variables are required. The only configuration is the `CHANNEL_COUNT` firmware parameter described in [Flashing the ESP32](#flashing-the-esp32).
 
 ---
 
@@ -365,14 +387,32 @@ group-project-group-22/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                       # Build, test, and coverage reporting
+├── docs/
+│   ├── class-diagrams/                  # PNG class diagrams
+│   │   ├── plantuml-diagrams/           # PlantUML source (.puml)
+│   │   ├── class-diagram-bidirectionaltest.png
+│   │   ├── class-diagram-hardware.png
+│   │   ├── class-diagram-hitthezone.png
+│   │   ├── class-diagram-launcher.png
+│   │   ├── class-diagram-player.png
+│   │   ├── class-diagram-pong.png
+│   │   └── class-diagram-summary.png
+│   ├── deliverables/                    # Project poster (SVG + PDF)
+│   ├── evaluation/                      # coverage-report/ + stress-test-results.md
+│   └── images/
+│       ├── java-program/                # Application screenshots
+│       ├── neural-network-game-setups/  # Hardware + game configuration photos
+│       ├── physical-hardware-builds/    # Build photos (breadboard, PCB)
+│       ├── pong-game-snn-architecture-diagram.png
+│       └── schmitt-trigger-diagram.png
+├── hardware/
+│   ├── bom/                             # Bill of materials (CSV)
+│   ├── datasheets-and-diagrams/         # ESP32 datasheet and pinout diagram
+│   ├── firmware/                        # ESP32 Arduino firmware (single- and dual-channel) + archive/
+│   ├── pcb/                             # KiCad PCB V2 project + archive/
+│   └── schematics/                      # KiCad + LTspice schematics, PNGs + archive/
 ├── scripts/
 │   └── generate-class-diagram.py        # Generates PlantUML source from Java source
-├── hardware/
-│   ├── firmware/                        # ESP32 Arduino firmware (single- and dual-channel) + archive/
-│   ├── schematics/                      # KiCad + LTspice schematics, PNGs + archive/
-│   ├── pcb/                             # KiCad PCB V2 project + archive/
-│   ├── bom/                             # Bill of materials (CSV)
-│   └── datasheets-and-diagrams/         # ESP32 datasheet and pinout diagram
 ├── software/
 │   └── src/
 │       ├── main/java/.../
@@ -383,24 +423,14 @@ group-project-group-22/
 │       │   ├── player/                  # Shared player abstractions — model/
 │       │   └── pong/                    # Pong game — ai/ + core/ + model/ + ui/
 │       └── test/java/.../               # JUnit 5 + Mockito test suite + stress/ + testsupport/
-├── docs/
-│   ├── class-diagrams/                  # PNG class diagrams
-│   │   ├── class-diagram-summary.png
-│   │   ├── class-diagram-launcher.png
-│   │   ├── class-diagram-hardware.png
-│   │   ├── class-diagram-player.png
-│   │   ├── class-diagram-hitthezone.png
-│   │   ├── class-diagram-pong.png
-│   │   ├── class-diagram-bidirectionaltest.png
-│   │   └── plantuml-diagrams/           # PlantUML source (.puml)
-│   ├── deliverables/                    # Project poster (SVG + PDF)
-│   ├── evaluation/                      # coverage-report/ + stress-test-results.md
-│   └── images/
-│       ├── java-program/                # Application screenshots
-│       ├── neural-network-game-setups/  # Hardware + game configuration photos
-│       └── physical-hardware-builds/    # Build photos (breadboard, PCB)
-└── tests/
-    └── README.md                        # Test structure and instructions
+├── tests/
+│   └── README.md                        # Test structure and instructions
+├── .gitignore
+├── LICENSE
+├── README.md
+├── SCHEDULE-195.md
+├── icon.ico
+└── pom.xml
 ```
 
 ---
