@@ -1,242 +1,384 @@
-# Hardware Spiking Neural Network (SNN)
+# (Neuromorphic) Hardware Neural Network
 
 [![CI](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml/badge.svg)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-80%25%2B-brightgreen)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)
+[![Class Diagrams](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/class-diagram.yml/badge.svg)](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/class-diagram.yml)
 
-This project is a custom, transistor-level spiking neural network (SNN) that will be used to compete against a human player to play the games HitTheZone and Pong. There is a launcher with two software games. Each game has their own Java software AI model(s) and a hardware neural network AI model.
+A physical, transistor-level spiking neural network (SNN) built from discrete components on a breadboard or PCB. The circuit produces real voltage spikes that drive game decisions — the SNN is the AI player.
+
+An ESP32 microcontroller acts as the analog bridge: it reads the neuron output voltage via ADC and drives the neuron input via DAC, streaming 12-bit samples to a Java application over USB serial at 115200 baud. The Java application closes the loop — it injects stimulus voltages into the circuit in response to game state (e.g., ball entering a zone), detects neural spikes via rising-edge analysis, and translates those spikes into player actions in real time.
+
+Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configuration, and **Pong** uses a 6-neuron dual-channel configuration (three neurons per direction). A **Launcher** manages serial connections and serves as the home page for all programs.
 
 ## Table of Contents
 
-- [Deployed Application](#deployed-application)
 - [Team](#team---group-32)
+- [Deliverables](#deliverables)
 - [Prerequisites](#prerequisites)
-- [Hardware Setup](#hardware-setup)
-- [Software Setup](#software-setup)
+- [Hardware](#hardware)
+  - [Hardware Revisions](#hardware-revisions)
+  - [Schematic](#schematic)
+  - [PCB Design](#pcb-design)
+  - [Bill of Materials](#bill-of-materials)
+  - [Datasheets](#datasheets)
+  - [Breadboard Assembly](#breadboard-assembly-neuronsynapseversion7)
+  - [PCB Assembly](#pcb-assembly)
+  - [Flashing the ESP32](#flashing-the-esp32)
+- [Running the Application](#running-the-application)
+- [Programs](#programs)
+  - [Launcher](#launcher)
+  - [Hit The Zone](#hit-the-zone)
+  - [Pong](#pong)
+  - [Bidirectional Test](#bidirectional-test)
 - [Configuration](#configuration)
 - [Testing](#testing)
-- [Usage](#usage)
 - [Project Structure](#project-structure)
-
----
-
-## Deployed Application
-
-The latest runnable JAR is published as a GitHub Actions artifact on every successful push to `main`.
-
-**[View latest CI run & download artifacts →](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml)**
-
-From the most recent successful run, download `hardware-neural-network-jar` from the **Artifacts** panel, then follow the [Software Setup](#software-setup) instructions below.
+- [License](#license)
 
 ---
 
 ## Team - (Group 32)
 
-| Name | GitHub | Email |
-|---|---|---|
-| Jonathon Fleming | [@JellyF02](https://github.com/JellyF02) | jonathon.fleming@sjsu.edu |
-| Andrew Neidhart | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
-| Raymund Mercader | [@ray-sjsu](https://github.com/ray-sjsu) | raymund.mercader@sjsu.edu |
-| Katrina Weers | [@Trina-W](https://github.com/Trina-W) | katrina.weers@sjsu.edu |
+| Name             | GitHub                                              | Email |
+|------------------|-----------------------------------------------------|---|
+| Jonathon Fleming | [@JellyF02](https://github.com/JellyF02)            | jonathon.fleming@sjsu.edu |
+| Raymund Mercader | [@ray-sjsu](https://github.com/ray-sjsu)            | raymund.mercader@sjsu.edu |
+| Andrew Neidhart  | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
+| Katrina Weers    | [@Trina-W](https://github.com/Trina-W)              | katrina.weers@sjsu.edu |
+| Eric Vanuska     | - | eric.vanuska@sjsu.edu                           |
+
+---
+
+## Deliverables
+
+The project poster provides a full overview of the hardware design, circuit theory, system architecture, and game demonstrations.
+
+![U32 Hardware Neural Network Poster](docs/deliverables/U32%20Hardware%20Neural%20Network.svg)
+
+[Download PDF version](docs/deliverables/U32%20Hardware%20Neural%20Network.pdf)
 
 ---
 
 ## Prerequisites
 
-Software, tools, accounts, etc. needed before setup.
-
 **Software:**
-- IDE of choice
-- [Git](https://git-scm.com/install/)
-- [Java JDK 17](https://docs.oracle.com/en/java/javase/21/install/overview-jdk-installation.html)
-- [Apache Maven 3.6](https://maven.apache.org/install.html)
-- [Arduino IDE](https://www.arduino.cc/en/software) (for flashing the ESP32)
+- [Java JDK 17](https://docs.oracle.com/en/java/javase/17/install/overview-jdk-installation.html)
+- [Arduino IDE](https://www.arduino.cc/en/software) (only needed to flash the ESP32)
+- [Apache Maven 3.6+](https://maven.apache.org/install.html) and [Git](https://git-scm.com/install/) (only needed to build from source)
 
 **Hardware:**
 - ESP32 microcontroller connected via USB/Serial
-- Neural network circuit assembled on breadboard or PCB (see [Hardware Setup](#hardware-setup))
+- Neural network circuit assembled on breadboard or PCB (see [Hardware](#hardware))
 
 ---
 
-## Hardware Setup
+## Hardware
+
+### Hardware Revisions
+
+Three physical builds were produced over the course of the project. The Breadboard Small and PCB are functionally identical. See the [project poster](#deliverables) for full hardware design details.
+
+| Revision | Form Factor | Neurons | Notes |
+|---|---|---|---|
+| Breadboard Big | Full-size breadboard | Up to 6 | Initial large-scale prototype |
+| Breadboard Small | Half-size breadboard | Up to 6 | Compact verification build |
+| PCB (V2) | Custom KiCad PCB | Up to 6 | Production form factor; functionally identical to Breadboard Small |
+
+| Breadboard Big | Breadboard Small vs. PCB |
+|---|---|
+| ![Breadboard Big](docs/images/physical-hardware-builds/breadboard-big-neuron-prototype.png) | ![Breadboard Small vs PCB](docs/images/physical-hardware-builds/breadboard-small-neuron-vs-pcb-neuron-comparison.jpg) |
+
+| PCB Board | PCB 3D Render |
+|---|---|
+| ![PCB Board](docs/images/physical-hardware-builds/pcb-neuron-board.png) | ![PCB 3D Render](docs/images/physical-hardware-builds/pcb-neuron-3D-render.png) |
+
+---
+
+### Schematic
+
+The **NeuronSynapseVersion7** schematic is the final design used across all builds.
+
+![Neuron Synapse Version 7 Schematic](hardware/schematics/Neuron-Synapse-Version7-Schematic.png)
+
+Source files: [`hardware/schematics/Neuron-Synapse-Version7-Schematic.asc`](hardware/schematics/Neuron-Synapse-Version7-Schematic.asc) (LTspice) and [`hardware/schematics/Neuron-Synapse-Version7-Kicad-Schematic.kicad_sch`](hardware/schematics/Neuron-Synapse-Version7-Kicad-Schematic.kicad_sch) (KiCad)
+
+---
+
+### PCB Design
+
+![PCB V2](hardware/pcb/PCB-Neuron-V2.png)
+
+KiCad project: [`hardware/pcb/PCB-Neuron-V2-Kicad-Project.kicad_pro`](hardware/pcb/PCB-Neuron-V2-Kicad-Project.kicad_pro)
+
+---
+
+### Bill of Materials
+
+[`hardware/bom/PCB BOM.csv`](hardware/bom/PCB%20BOM.csv)
+
+---
+
+### Datasheets
+
+- [Espressif ESP32 Datasheet](hardware/datasheets-and-diagrams/Espressif-ESP32-Datasheet.pdf)
+- [ESP32 DevKitC Pinout Diagram](hardware/datasheets-and-diagrams/Espressif-ESP32-DevkitC-PinOut-Diagram.png)
+
+---
 
 ### Breadboard Assembly (NeuronSynapseVersion7)
 
-The breadboard build uses the **NeuronSynapseVersion7** schematic, found in `hardware/Schematics/`. Follow these general steps:
+The breadboard build uses the **NeuronSynapseVersion7** schematic found in `hardware/schematics/`.
 
-1. Gather all required components per the schematic's bill of materials.
-2. Place the ESP32 module on the breadboard and orient it so both rows of pins are accessible on each side.
-3. Wire the neuron circuit section by section, following the schematic from left to right. Work one subcircuit (e.g., input stage, threshold comparator, output stage) at a time and verify each before proceeding.
-4. Connect the neuron output node to **GPIO34 (ADC6)** on the ESP32.
-5. Connect the neuron input/stimulation node to **GPIO25 (DAC1)**.
-6. Optionally wire a status LED to **GPIO2**.
-7. For the dual-channel (Pong) configuration, wire a second neuron output to **GPIO35 (ADC7)** and its input to **GPIO26 (DAC2)**.
-8. Double-check all power rails (3.3 V and GND) before applying power.
+1. Gather all components per the schematic's bill of materials.
+2. Place the ESP32 on the breadboard so both rows of pins are accessible.
+3. Wire the neuron circuit section by section, verifying each subcircuit before moving on.
+4. Connect the neuron output node to **GPIO34 (ADC6)** and the stimulation node to **GPIO25 (DAC1)**.
+5. Optionally wire a status LED to **GPIO2**.
+6. For the dual-channel (Pong) configuration, add a second neuron output to **GPIO35 (ADC7)** and its input to **GPIO26 (DAC2)**.
+7. Double-check all power rails (3.3 V and GND) before applying power.
+
+---
 
 ### PCB Assembly
 
-The PCB design is electrically identical to the breadboard build — all connections, pin assignments, and component values are the same. The PCB is simply a much smaller, more compact form factor. Assemble it following the same schematic and the same verification steps above.
+The PCB is functionally identical to the breadboard build — same connections, pin assignments, and component values in a more compact form factor. Assemble it using the same schematic and verification steps above.
+
+---
 
 ### Flashing the ESP32
 
-The firmware lives in `hardware/firmware/`. There are two pre-configured `.ino` files, but they are functionally identical — the only difference is a single compile-time parameter, `CHANNEL_COUNT`, that selects the hardware configuration:
+The firmware lives in `hardware/firmware/`. Two `.ino` files are provided — they are functionally identical except for the `CHANNEL_COUNT` parameter:
 
 | `CHANNEL_COUNT` | Configuration | Used by |
 |---|---|---|
 | `1` | 3-neuron, single ADC channel (GPIO34) | Hit The Zone |
 | `2` | 6-neuron, dual ADC channels (GPIO34 + GPIO35) | Pong |
 
-**Steps:**
-
 1. Open the desired `.ino` file in **Arduino IDE**:
-    - `NeuralSerial_SingleChannel_3Neuron.ino`
-    - — or —
-    - `NeuralSerial_DualChannel_6Neuron.ino`
-2. Near the top of the file, locate the configuration block and confirm or change `CHANNEL_COUNT`:
+   - `NeuralSerial_SingleChannel_3Neuron.ino`
+   - `NeuralSerial_DualChannel_6Neuron.ino`
+2. Confirm or set `CHANNEL_COUNT` near the top of the file:
    ```cpp
    // Set CHANNEL_COUNT to 1 for 3-neuron HitTheZone config.
    // Set CHANNEL_COUNT to 2 for 6-neuron Pong config.
    #define CHANNEL_COUNT 1
    ```
-3. In Arduino IDE, select **Tools → Board → ESP32 Dev Module** (or your specific ESP32 variant).
-4. Select the correct port under **Tools → Port**.
-5. Click **Upload**. The IDE will compile and flash the firmware to the ESP32.
-6. Open the **Serial Monitor** (115200 baud) to confirm the board is sending data.
+3. Select **Tools → Board → ESP32 Dev Module** and the correct **Tools → Port**.
+4. Click **Upload**, then open the **Serial Monitor** at 115200 baud to confirm the board is sending data.
 
 ---
 
-## Software Setup
+## Running the Application
 
-### Running the Launcher
+You will be provided a pre-built JAR file. Run it with:
 
-The **Launcher** is the central hub for all programs.
+```bash
+java -jar hardware-neural-network.jar
+```
 
-**Recommended — download the latest JAR from CI:**
+This opens the **Launcher**, which is the home page for all programs.
 
-1. Go to the [latest CI run](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml) and download the `hardware-neural-network-jar` artifact.
-2. Run it:
-   ```bash
-   java -jar hardware-neural-network.jar
-   ```
+**Building from source** (optional):
 
-**Alternative — build from source:**
+```bash
+git clone https://github.com/SJSU-CMPE-195/group-project-group-22.git
+cd group-project-group-22/software
+mvn install
+java -jar target/hardware-neural-network.jar
+```
 
-1. Clone the repository and navigate to the software directory:
-   ```bash
-   git clone https://github.com/SJSU-CMPE-195/group-project-group-22.git
-   cd group-project-group-22/software
-   ```
-2. Build with Maven:
-   ```bash
-   mvn install
-   ```
-3. Run the produced JAR:
-   ```bash
-   java -jar target/hardware-neural-network.jar
-   ```
+---
 
-The Launcher window provides two serial connection panels (one for Hit The Zone, one for Pong) and three buttons to open programs. Connect your ESP32 device(s) in the Launcher before launching a program to enable hardware AI players. Programs can also be launched without hardware — the neural player will simply be skipped.
+## Programs
 
-### Bidirectional Test
+**Summary Class Diagram**
 
-A serial communication tester. It receives both Launcher-managed connections (Hit The Zone and Pong) and lets you switch between them to verify bidirectional data flow between the ESP32 and Java.
+![Summary Class Diagram](docs/class-diagrams/class-diagram-summary.png)
+
+> Class diagrams are auto-generated by CI — see [`docs/class-diagrams/plantuml-diagrams/`](docs/class-diagrams/plantuml-diagrams/) for the PlantUML source.
+
+---
+
+### Launcher
+
+The Launcher is the home page of the application. It provides two serial connection panels — one for Hit The Zone (single-channel) and one for Pong (dual-channel) — and buttons to open each program.
+
+Connect your ESP32 device(s) in the Launcher before opening a program to enable the hardware neural network AI player. Programs can also be launched without hardware — the neural player will simply be unavailable.
+
+![Launcher](docs/images/java-program/launcher-program-screenshot.png)
+
+**Class Diagram**
+
+![Launcher Class Diagram](docs/class-diagrams/class-diagram-launcher.png)
+
+> Class diagrams are auto-generated by CI — see [`docs/class-diagrams/plantuml-diagrams/`](docs/class-diagrams/plantuml-diagrams/) for the PlantUML source.
+
+---
 
 ### Hit The Zone
 
-A small game demo that pits the hardware neural network against software AI bots and a human player. The ESP32 (3-neuron, single-channel config) reads from **GPIO34** and plays as the "Neural" player. See the [Usage](#usage) section for controls and rules.
+A game where four players take turns hitting a ball as it passes through a target zone. The hardware SNN (using the 3-neuron, single-channel ESP32 firmware config) competes alongside two software AI bots and a human player.
 
-### Pong Game
+![Hit The Zone](docs/images/java-program/hit-the-zone-game-screenshot.png)
 
-The full Pong game where the hardware SNN competes as an AI paddle controller. The ESP32 (6-neuron, dual-channel config) reads two ADC channels — **GPIO34** for LEFT movement and **GPIO35** for RIGHT — feeding a single `PongHardwareAI` player. Player selection (Human / Hardware / AI Easy / AI Hard) is handled from the in-game toolbar.
+**Hardware Setup**
+
+![Hit The Zone — 3-Neuron Setup (Breadboard Small)](docs/images/neural-network-game-setups/hit-the-zone-game-three-neuron-setup-breadboard-small.png)
+
+**Players:**
+- **Bot Alpha / Beta** — software AI players
+- **Human** — press Space when the ball is inside the yellow zone to score a hit
+- **Neural** — the ESP32 hardware neural network player
+
+**Controls:**
+
+| Key | Action |
+|---|---|
+| Space | Hit the ball (when inside zone) |
+| Esc | Pause / unpause |
+| R | Reset the game |
+
+**Stats tracked:** Hits (successful / total attempts), Accuracy (%), Hits/Pass (average hits per ball pass)
+
+**Class Diagram**
+
+![Hit The Zone Class Diagram](docs/class-diagrams/class-diagram-hitthezone.png)
+
+> Class diagrams are auto-generated by CI — see [`docs/class-diagrams/plantuml-diagrams/`](docs/class-diagrams/plantuml-diagrams/) for the PlantUML source.
+
+---
+
+### Pong
+
+A Pong game where the hardware SNN competes as an AI paddle controller. The ESP32 (6-neuron, dual-channel config) reads two ADC channels — GPIO34 for LEFT and GPIO35 for RIGHT — and drives a single hardware AI player. Player types (Human / Hardware AI / Software AI Easy / Software AI Hard) are selected from the in-game toolbar.
+
+![Pong](docs/images/java-program/bidirectionaltest-and-pong-game-screenshot.png)
+
+**Hardware Setup**
+
+![Pong 6-Neuron Setup (Breadboard Big)](docs/images/neural-network-game-setups/pong-game-six-neuron-setup-breadboard-big.png)
+
+**Controls (Human player):**
+
+| Key | Action |
+|---|---|
+| ← / → | Move paddle left / right |
+| Esc | Pause / unpause |
+| R | Reset the game (from pause menu) |
+| C | Toggle constant ball speed (from pause menu) |
+| 1 / 2 / 3 | Select ball speed level (from pause menu) |
+
+**Class Diagram**
+
+![Pong Class Diagram](docs/class-diagrams/class-diagram-pong.png)
+
+> Class diagrams are auto-generated by CI — see [`docs/class-diagrams/plantuml-diagrams/`](docs/class-diagrams/plantuml-diagrams/) for the PlantUML source.
+
+---
+
+### Bidirectional Test
+
+A diagnostic tool for verifying serial communication between the ESP32 and the Java application. It receives both Launcher-managed connections (Hit The Zone and Pong) and lets you switch between them to inspect bidirectional data flow — useful for debugging firmware behavior or confirming signal integrity before running a game.
+
+![Bidirectional Test](docs/images/java-program/bidirectionaltest-diagnostic-test-screenshot.png)
 
 ---
 
 ## Configuration
 
-**No API keys or environment variables are required.**
-
-The only configuration is the firmware `CHANNEL_COUNT` parameter described in [Flashing the ESP32](#flashing-the-esp32).
+No API keys or environment variables are required. The only configuration is the `CHANNEL_COUNT` firmware parameter described in [Flashing the ESP32](#flashing-the-esp32).
 
 ---
 
 ## Testing
 
-### Unit & Integration Tests
-
-Navigate to the `software` directory and run the full test suite with JaCoCo coverage:
+### Running the Test Suite
 
 ```bash
-cd group-project-group-22/software
+cd software
 mvn verify
 ```
 
-> **Note:** Tests that instantiate Swing components require a display. On Linux/CI, prefix the command with `xvfb-run --auto-servernum`.
+This runs all unit, integration, and stress tests and generates a JaCoCo HTML coverage report at `software/target/site/jacoco/index.html`.
 
-### Test Coverage Report
+> Tests that instantiate Swing components require a display. On Linux, prefix with `xvfb-run --auto-servernum`.
 
-JaCoCo generates an HTML report at `software/target/site/jacoco/index.html` after `mvn verify`. Open it in a browser to browse line-by-line coverage.
-
-The latest coverage report is also uploaded as the **`jacoco-coverage-report`** artifact on every CI run — see [Actions](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml).
-
-### Stress / Performance Tests
-
-To run only the throughput benchmarks (no Swing required):
+**Useful variants:**
 
 ```bash
-cd group-project-group-22/software
+# Stress tests only (no display required)
 mvn test -Dgroups=stress
-```
 
-Results are printed to the console and documented in [`docs/evaluation/stress-test-results.md`](docs/evaluation/stress-test-results.md).
-
-### Run a Specific Test Class
-
-```bash
+# A single test class
 mvn test -Dtest=NeuralSignalParserTest
 ```
 
----
+### Coverage
 
-## Usage
+The latest coverage report is uploaded as the **`jacoco-coverage-report`** artifact on every CI run — see [Actions](https://github.com/SJSU-CMPE-195/group-project-group-22/actions/workflows/ci.yml).
 
-The Hit The Zone game demo showcases the hardware neural network against software bots, hardware AI, and a human player.
+![JUnit Test Results](docs/evaluation/coverage-report/junit-test-results-screenshot.png)
 
-Players:
-- **Bot Alpha / Beta:** software AI players
-- **Human (user):** presses Space when the ball is inside the yellow zone to score
-- **Hardware:** ESP32 neural network player (neuron)
+![JaCoCo Coverage Report](docs/evaluation/coverage-report/jacoco-coverage-report-screenshot.png)
 
-![hitthezonegamedemo](hit-the-zone-game-demo.png)*Game - Hit The Zone Screen*
+Full coverage details, per-package breakdown, and exclusion rationale are in [`docs/evaluation/coverage-report/README.md`](docs/evaluation/coverage-report/README.md).
 
-Controls:
-- **Space:** Hits the ball when inside zone
-- **Esc:** Pauses the game
-- **R:** Resets the game
+### Stress Test Results
 
-Recorded Stats:
-- **Hits:** successful hits out of total attempts
-- **Accuracy:** hit percentage
-- **Hits/Pass:** average hits per pass of the ball
+Documented in [`docs/evaluation/stress-test-results.md`](docs/evaluation/stress-test-results.md).
 
 ---
 
 ## Project Structure
 
-Brief overview of folder/file organization.
+```
+group-project-group-22/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                       # Build, test, and coverage reporting
+│       └── class-diagram.yml            # Auto-generate and commit class diagrams
+├── scripts/
+│   └── generate-class-diagram.py        # Generates PlantUML source from Java source
+├── hardware/
+│   ├── firmware/                        # ESP32 Arduino firmware (single- and dual-channel) + archive/
+│   ├── schematics/                      # KiCad + LTspice schematics, PNGs + archive/
+│   ├── pcb/                             # KiCad PCB V2 project + archive/
+│   ├── bom/                             # Bill of materials (CSV)
+│   └── datasheets-and-diagrams/         # ESP32 datasheet and pinout diagram
+├── software/
+│   └── src/
+│       ├── main/java/.../
+│       │   ├── bidirectionaltest/       # Diagnostic tool — core/ + ui/
+│       │   ├── hardware/                # Serial + signal processing — serial/ + signal/
+│       │   ├── hitthezone/              # Hit The Zone game — ai/ + core/ + model/ + ui/
+│       │   ├── launcher/                # Launcher home page — core/ + model/ + ui/
+│       │   ├── player/                  # Shared player abstractions — model/
+│       │   └── pong/                    # Pong game — ai/ + core/ + model/ + ui/
+│       └── test/java/.../               # JUnit 5 + Mockito test suite + stress/ + testsupport/
+├── docs/
+│   ├── class-diagrams/                  # CI-generated PNG class diagrams
+│   │   ├── class-diagram-summary.png
+│   │   ├── class-diagram-launcher.png
+│   │   ├── class-diagram-hardware.png
+│   │   ├── class-diagram-player.png
+│   │   ├── class-diagram-hitthezone.png
+│   │   ├── class-diagram-pong.png
+│   │   ├── class-diagram-bidirectionaltest.png
+│   │   └── plantuml-diagrams/           # CI-generated PlantUML source (.puml)
+│   ├── deliverables/                    # Project poster (SVG + PDF)
+│   ├── evaluation/                      # coverage-report/ + stress-test-results.md
+│   └── images/
+│       ├── java-program/                # Application screenshots
+│       ├── neural-network-game-setups/  # Hardware + game configuration photos
+│       └── physical-hardware-builds/    # Build photos (breadboard, PCB)
+└── tests/
+    └── README.md                        # Test structure and instructions
+```
 
-### Hardware
-- `Schematics/` — LTspice schematic files with version history of neuron circuit diagrams
-- `firmware/` — ESP32 Arduino firmware (NeuralSerial, single- and dual-channel)
+---
 
-### Software
-- `src/`
-    - `main/`
-        - `hardware/` — Java program for connecting to ESP32
-        - `launcher/` — Launcher hub and serial connection panels
-        - `player/` — core player abstractions and implementations
-        - `pong/` — fully developed Pong game
-        - `sandbox/` — Hit The Zone game demo
-    - `test/` — JUnit and Mockito test cases
-        - `hardware/` — hardware test cases
-        - `sandbox/` — Hit The Zone game demo test cases
-        - `launcher/` — Launcher test cases
-- `pom.xml` — Maven dependencies
+## License
+
+This project is licensed under the MIT License — see the [`LICENSE`](LICENSE) file for details.
+
+> Distribution is subject to applicable San Jose State University intellectual property policies.
