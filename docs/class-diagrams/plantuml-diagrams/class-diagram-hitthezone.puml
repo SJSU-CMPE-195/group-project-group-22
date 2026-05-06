@@ -1,0 +1,40 @@
+@startuml
+title hitthezone Class Diagram
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
+
+package "hitthezone" as pkg_edu_sjsu_spring2026_group32_hitthezone {
+  class "HitTheZoneGame" as edu_sjsu_spring2026_group32_hitthezone_HitTheZoneGame
+  package "ai" as pkg_edu_sjsu_spring2026_group32_hitthezone_ai {
+    class "HitTheZoneHardwareAI" as edu_sjsu_spring2026_group32_hitthezone_ai_HitTheZoneHardwareAI
+    class "HitTheZoneSoftwareAI" as edu_sjsu_spring2026_group32_hitthezone_ai_HitTheZoneSoftwareAI
+  }
+  package "core" as pkg_edu_sjsu_spring2026_group32_hitthezone_core {
+    class "HitTheZoneEngine" as edu_sjsu_spring2026_group32_hitthezone_core_HitTheZoneEngine
+    class "HitTheZoneHardwareFactory" as edu_sjsu_spring2026_group32_hitthezone_core_HitTheZoneHardwareFactory
+    class "HitTheZonePlayerFactory" as edu_sjsu_spring2026_group32_hitthezone_core_HitTheZonePlayerFactory
+  }
+  package "model" as pkg_edu_sjsu_spring2026_group32_hitthezone_model {
+    enum "HitTheZoneAction" as edu_sjsu_spring2026_group32_hitthezone_model_HitTheZoneAction
+    enum "HitTheZoneActionEffect" as edu_sjsu_spring2026_group32_hitthezone_model_HitTheZoneActionEffect
+    class "HitTheZoneSnapshot" as edu_sjsu_spring2026_group32_hitthezone_model_HitTheZoneSnapshot <<record>>
+    class "HitTheZoneState" as edu_sjsu_spring2026_group32_hitthezone_model_HitTheZoneState <<record>>
+  }
+  package "ui" as pkg_edu_sjsu_spring2026_group32_hitthezone_ui {
+    class "HitTheZoneControlPanel" as edu_sjsu_spring2026_group32_hitthezone_ui_HitTheZoneControlPanel
+    class "HitTheZoneHudPanel" as edu_sjsu_spring2026_group32_hitthezone_ui_HitTheZoneHudPanel
+    class "HitTheZoneInputController" as edu_sjsu_spring2026_group32_hitthezone_ui_HitTheZoneInputController
+    class "HitTheZoneTrackPanel" as edu_sjsu_spring2026_group32_hitthezone_ui_HitTheZoneTrackPanel
+    class "HitTheZoneUiTheme" as edu_sjsu_spring2026_group32_hitthezone_ui_HitTheZoneUiTheme
+  }
+}
+
+edu_sjsu_spring2026_group32_hitthezone_HitTheZoneGame ..> pkg_edu_sjsu_spring2026_group32_hitthezone_ai
+edu_sjsu_spring2026_group32_hitthezone_HitTheZoneGame ..> pkg_edu_sjsu_spring2026_group32_hitthezone_core
+edu_sjsu_spring2026_group32_hitthezone_HitTheZoneGame ..> pkg_edu_sjsu_spring2026_group32_hitthezone_model
+edu_sjsu_spring2026_group32_hitthezone_HitTheZoneGame ..> pkg_edu_sjsu_spring2026_group32_hitthezone_ui
+
+@enduml

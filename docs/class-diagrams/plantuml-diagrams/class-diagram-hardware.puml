@@ -1,0 +1,28 @@
+@startuml
+title hardware Class Diagram
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
+
+package "hardware" as pkg_edu_sjsu_spring2026_group32_hardware {
+  class "NeuralHardwareConfig" as edu_sjsu_spring2026_group32_hardware_NeuralHardwareConfig
+  package "serial" as pkg_edu_sjsu_spring2026_group32_hardware_serial {
+    class "RealSerialDevice" as edu_sjsu_spring2026_group32_hardware_serial_RealSerialDevice
+    class "SerialConnectionManager" as edu_sjsu_spring2026_group32_hardware_serial_SerialConnectionManager
+    interface "SerialDevice" as edu_sjsu_spring2026_group32_hardware_serial_SerialDevice
+  }
+  package "signal" as pkg_edu_sjsu_spring2026_group32_hardware_signal {
+    interface "BaseSignalSource" as edu_sjsu_spring2026_group32_hardware_signal_BaseSignalSource
+    class "HardwareSignalSource" as edu_sjsu_spring2026_group32_hardware_signal_HardwareSignalSource
+    class "NeuralSignalParser" as edu_sjsu_spring2026_group32_hardware_signal_NeuralSignalParser
+    interface "VoltageInjector" as edu_sjsu_spring2026_group32_hardware_signal_VoltageInjector
+  }
+}
+
+edu_sjsu_spring2026_group32_hardware_serial_SerialDevice <|.. edu_sjsu_spring2026_group32_hardware_serial_RealSerialDevice
+edu_sjsu_spring2026_group32_hardware_signal_BaseSignalSource <|.. edu_sjsu_spring2026_group32_hardware_signal_HardwareSignalSource
+edu_sjsu_spring2026_group32_hardware_signal_VoltageInjector <|.. edu_sjsu_spring2026_group32_hardware_signal_HardwareSignalSource
+
+@enduml

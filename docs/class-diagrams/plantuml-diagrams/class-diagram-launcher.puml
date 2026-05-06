@@ -1,0 +1,35 @@
+@startuml
+title launcher Class Diagram
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
+
+package "launcher" as pkg_edu_sjsu_spring2026_group32_launcher {
+  class "Launcher" as edu_sjsu_spring2026_group32_launcher_Launcher
+  package "core" as pkg_edu_sjsu_spring2026_group32_launcher_core {
+    class "LauncherHardwareMessages" as edu_sjsu_spring2026_group32_launcher_core_LauncherHardwareMessages
+    class "LauncherProgramRegistry" as edu_sjsu_spring2026_group32_launcher_core_LauncherProgramRegistry
+  }
+  package "model" as pkg_edu_sjsu_spring2026_group32_launcher_model {
+    enum "LauncherProgram" as edu_sjsu_spring2026_group32_launcher_model_LauncherProgram
+  }
+  package "ui" as pkg_edu_sjsu_spring2026_group32_launcher_ui {
+    class "ConnectionSlotsPanel" as edu_sjsu_spring2026_group32_launcher_ui_ConnectionSlotsPanel
+    class "ConnectionStatusPanel" as edu_sjsu_spring2026_group32_launcher_ui_ConnectionStatusPanel
+    class "LaunchCardPanel" as edu_sjsu_spring2026_group32_launcher_ui_LaunchCardPanel
+    class "LaunchProgramsPanel" as edu_sjsu_spring2026_group32_launcher_ui_LaunchProgramsPanel
+    class "LauncherHardwareSettingsButton" as edu_sjsu_spring2026_group32_launcher_ui_LauncherHardwareSettingsButton
+    class "LauncherLogPanel" as edu_sjsu_spring2026_group32_launcher_ui_LauncherLogPanel
+    class "SerialConnectionPanel" as edu_sjsu_spring2026_group32_launcher_ui_SerialConnectionPanel
+  }
+}
+
+edu_sjsu_spring2026_group32_launcher_ui_LaunchProgramsPanel ..> edu_sjsu_spring2026_group32_launcher_ui_LaunchCardPanel
+edu_sjsu_spring2026_group32_launcher_ui_SerialConnectionPanel ..> edu_sjsu_spring2026_group32_launcher_ui_LauncherHardwareSettingsButton
+edu_sjsu_spring2026_group32_launcher_Launcher ..> pkg_edu_sjsu_spring2026_group32_launcher_core
+edu_sjsu_spring2026_group32_launcher_Launcher ..> pkg_edu_sjsu_spring2026_group32_launcher_model
+edu_sjsu_spring2026_group32_launcher_Launcher ..> pkg_edu_sjsu_spring2026_group32_launcher_ui
+
+@enduml

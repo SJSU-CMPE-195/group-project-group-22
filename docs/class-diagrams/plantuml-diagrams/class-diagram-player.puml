@@ -1,0 +1,23 @@
+@startuml
+title player Class Diagram
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
+
+package "player" as pkg_edu_sjsu_spring2026_group32_player {
+  class "HardwareAIPlayer" as edu_sjsu_spring2026_group32_player_HardwareAIPlayer
+  class "HumanPlayer" as edu_sjsu_spring2026_group32_player_HumanPlayer
+  package "model" as pkg_edu_sjsu_spring2026_group32_player_model {
+    interface "Action" as edu_sjsu_spring2026_group32_player_model_Action
+    interface "BasePlayer" as edu_sjsu_spring2026_group32_player_model_BasePlayer
+    interface "GameState" as edu_sjsu_spring2026_group32_player_model_GameState
+    enum "PlayerType" as edu_sjsu_spring2026_group32_player_model_PlayerType
+  }
+}
+
+edu_sjsu_spring2026_group32_player_HardwareAIPlayer ..> pkg_edu_sjsu_spring2026_group32_player_model
+edu_sjsu_spring2026_group32_player_HumanPlayer ..> pkg_edu_sjsu_spring2026_group32_player_model
+
+@enduml

@@ -1,0 +1,45 @@
+@startuml
+title pong Class Diagram
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
+
+package "pong" as pkg_edu_sjsu_spring2026_group32_pong {
+  class "PongGame" as edu_sjsu_spring2026_group32_pong_PongGame
+  package "ai" as pkg_edu_sjsu_spring2026_group32_pong_ai {
+    class "PongHardwareAI" as edu_sjsu_spring2026_group32_pong_ai_PongHardwareAI
+    class "PongSoftwareAI" as edu_sjsu_spring2026_group32_pong_ai_PongSoftwareAI
+  }
+  package "core" as pkg_edu_sjsu_spring2026_group32_pong_core {
+    class "PongEngine" as edu_sjsu_spring2026_group32_pong_core_PongEngine
+    class "PongHardwareFactory" as edu_sjsu_spring2026_group32_pong_core_PongHardwareFactory
+    class "PongPlayerFactory" as edu_sjsu_spring2026_group32_pong_core_PongPlayerFactory
+    class "PongScoreboardService" as edu_sjsu_spring2026_group32_pong_core_PongScoreboardService
+  }
+  package "model" as pkg_edu_sjsu_spring2026_group32_pong_model {
+    enum "PlayerVariant" as edu_sjsu_spring2026_group32_pong_model_PlayerVariant
+    enum "PongAction" as edu_sjsu_spring2026_group32_pong_model_PongAction
+    enum "PongGameState" as edu_sjsu_spring2026_group32_pong_model_PongGameState
+    class "PongSnapshot" as edu_sjsu_spring2026_group32_pong_model_PongSnapshot <<record>>
+    class "PongState" as edu_sjsu_spring2026_group32_pong_model_PongState <<record>>
+    enum "PongTickResult" as edu_sjsu_spring2026_group32_pong_model_PongTickResult
+  }
+  package "ui" as pkg_edu_sjsu_spring2026_group32_pong_ui {
+    class "PongCanvas" as edu_sjsu_spring2026_group32_pong_ui_PongCanvas
+    class "PongFrame" as edu_sjsu_spring2026_group32_pong_ui_PongFrame
+    class "PongInputController" as edu_sjsu_spring2026_group32_pong_ui_PongInputController
+    class "PongPauseOverlay" as edu_sjsu_spring2026_group32_pong_ui_PongPauseOverlay
+    class "PongToolbar" as edu_sjsu_spring2026_group32_pong_ui_PongToolbar
+    class "Scoreboard" as edu_sjsu_spring2026_group32_pong_ui_Scoreboard
+  }
+}
+
+edu_sjsu_spring2026_group32_pong_ui_PongCanvas ..> edu_sjsu_spring2026_group32_pong_ui_PongPauseOverlay
+edu_sjsu_spring2026_group32_pong_PongGame ..> pkg_edu_sjsu_spring2026_group32_pong_ai
+edu_sjsu_spring2026_group32_pong_PongGame ..> pkg_edu_sjsu_spring2026_group32_pong_core
+edu_sjsu_spring2026_group32_pong_PongGame ..> pkg_edu_sjsu_spring2026_group32_pong_model
+edu_sjsu_spring2026_group32_pong_PongGame ..> pkg_edu_sjsu_spring2026_group32_pong_ui
+
+@enduml

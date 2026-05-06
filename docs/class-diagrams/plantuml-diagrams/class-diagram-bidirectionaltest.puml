@@ -1,0 +1,25 @@
+@startuml
+title bidirectionaltest Class Diagram
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
+
+package "bidirectionaltest" as pkg_edu_sjsu_spring2026_group32_bidirectionaltest {
+  class "BidirectionalTest" as edu_sjsu_spring2026_group32_bidirectionaltest_BidirectionalTest
+  package "core" as pkg_edu_sjsu_spring2026_group32_bidirectionaltest_core {
+    class "ActiveDeviceVoltageInjector" as edu_sjsu_spring2026_group32_bidirectionaltest_core_ActiveDeviceVoltageInjector
+  }
+  package "ui" as pkg_edu_sjsu_spring2026_group32_bidirectionaltest_ui {
+    class "DeviceSelectorPanel" as edu_sjsu_spring2026_group32_bidirectionaltest_ui_DeviceSelectorPanel
+    class "InjectionChannelPanel" as edu_sjsu_spring2026_group32_bidirectionaltest_ui_InjectionChannelPanel
+    class "LiveDataPanel" as edu_sjsu_spring2026_group32_bidirectionaltest_ui_LiveDataPanel
+    class "VoltageGraphPanel" as edu_sjsu_spring2026_group32_bidirectionaltest_ui_VoltageGraphPanel
+  }
+}
+
+edu_sjsu_spring2026_group32_bidirectionaltest_BidirectionalTest ..> pkg_edu_sjsu_spring2026_group32_bidirectionaltest_core
+edu_sjsu_spring2026_group32_bidirectionaltest_BidirectionalTest ..> pkg_edu_sjsu_spring2026_group32_bidirectionaltest_ui
+
+@enduml
