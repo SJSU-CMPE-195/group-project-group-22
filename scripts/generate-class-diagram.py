@@ -6,9 +6,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-SOURCE_DIR = Path("software/src/main/java")
-PLANTUML_DIR = Path("docs/class-diagrams/plantuml-diagrams")
-PNG_DIR = Path("docs/class-diagrams")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SOURCE_DIR = REPO_ROOT / "software" / "src" / "main" / "java"
+PLANTUML_DIR = REPO_ROOT / "docs" / "class-diagrams" / "plantuml-diagrams"
+PNG_DIR = REPO_ROOT / "docs" / "class-diagrams"
 SUMMARY_OUTPUT_FILE = PLANTUML_DIR / "class-diagram-summary.puml"
 PACKAGE_OUTPUT_TEMPLATE = "class-diagram-{package_name}.puml"
 PROJECT_PACKAGE_PREFIX = "edu.sjsu.spring2026.group32"
@@ -495,13 +496,13 @@ def parse_args() -> argparse.Namespace:
 
 def resolve_plantuml_jar(explicit_path: Path | None) -> Path | None:
     if explicit_path:
-        return explicit_path
+        return explicit_path.resolve()
 
     env_value = os.environ.get("PLANTUML_JAR")
     if env_value:
-        return Path(env_value)
+        return Path(env_value).resolve()
 
-    local_default = Path("plantuml.jar")
+    local_default = REPO_ROOT / "plantuml.jar"
     if local_default.exists():
         return local_default
 
