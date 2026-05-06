@@ -29,6 +29,7 @@ Two games are supported: **Hit The Zone** uses a 3-neuron single-channel configu
   - [Hit The Zone](#hit-the-zone)
   - [Pong](#pong)
   - [Bidirectional Test](#bidirectional-test)
+  - [Shared Components](#shared-components)
 - [Configuration](#configuration)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
@@ -274,6 +275,24 @@ A Pong game where the hardware SNN competes as an AI paddle controller. The ESP3
 A diagnostic tool for verifying serial communication between the ESP32 and the Java application. It receives both Launcher-managed connections (Hit The Zone and Pong) and lets you switch between them to inspect bidirectional data flow — useful for debugging firmware behavior or confirming signal integrity before running a game.
 
 ![Bidirectional Test](docs/images/java-program/bidirectionaltest-diagnostic-test-screenshot.png)
+
+**Class Diagram**
+
+![Bidirectional Test Class Diagram](docs/class-diagrams/class-diagram-bidirectionaltest.png)
+
+---
+
+### Shared Components
+
+The `hardware` and `player` packages are shared across all programs. `hardware` handles serial connection management and neural signal processing. `player` provides the base player abstractions used by every game.
+
+**Hardware Class Diagram**
+
+![Hardware Class Diagram](docs/class-diagrams/class-diagram-hardware.png)
+
+**Player Class Diagram**
+
+![Player Class Diagram](docs/class-diagrams/class-diagram-player.png)
 
 ---
 
