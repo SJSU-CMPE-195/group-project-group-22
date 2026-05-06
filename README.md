@@ -5,7 +5,7 @@
 
 Neuromorphic computing replicates brain structure and function directly in hardware. Unlike conventional processors, it uses parallel, event-driven processing for greater efficiency. Software-based spiking neural networks (SNNs) appear in autonomous control systems but carry high energy and resource costs. This project implements the SNN as a real analog circuit — a physical, transistor-level network built from discrete components on a breadboard or PCB — so the hardware itself is the AI player.
 
-The fundamental building block is a **3-neuron control unit** implementing the integrate-and-fire model: an excitatory neuron and an inhibitory neuron both feed into a control (output) neuron. The excitatory neuron drives the control neuron to fire; the inhibitory neuron suppresses overfiring and improves signal stability. Each control unit produces one discrete game action. This scheme is scalable — Hit The Zone uses one 3-neuron control unit (one game input), and Pong uses two control units (six neurons total, one per direction).
+The fundamental building block is a **3-neuron control unit** implementing the integrate-and-fire model: an excitatory neuron and an inhibitory neuron both feed into a control (output) neuron. The excitatory neuron drives the control neuron to fire; the inhibitory neuron suppresses overfiring and improves signal stability. Each control unit produces one discrete game action. This scheme is scalable — Hit The Zone uses one 3-neuron control unit (one game input), and Pong uses two control units (six neurons total, one control unit per direction).
 
 An ESP32 microcontroller acts as the analog bridge between the neuron circuit and the game software: it injects stimulus voltage into the excitatory neuron in response to game state, reads the control neuron's output voltage via ADC, and streams real-time voltage data to a Java application over USB serial at 115200 baud. The Java application detects neural spikes via rising-edge analysis and translates each spike one-to-one into a discrete game action.
 
@@ -22,7 +22,7 @@ A **Launcher** manages serial connections and serves as the home page for all pr
   - [PCB Design](#pcb-design)
   - [Bill of Materials](#bill-of-materials)
   - [Datasheets](#datasheets)
-  - [Breadboard Assembly](#breadboard-assembly-neuronsynapseversion7)
+  - [Breadboard Assembly](#breadboard-assembly)
   - [PCB Assembly](#pcb-assembly)
   - [Flashing the ESP32](#flashing-the-esp32)
 - [Running the Application](#running-the-application)
@@ -36,6 +36,7 @@ A **Launcher** manages serial connections and serves as the home page for all pr
 - [Testing](#testing)
 - [Project Structure](#project-structure)
 - [License](#license)
+- [References](#references)
 
 ---
 
@@ -54,7 +55,9 @@ A **Launcher** manages serial connections and serves as the home page for all pr
 | Andrew Neidhart  | BSCMPE  | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
 | Katrina Weers    | BSSE    | [@Trina-W](https://github.com/Trina-W)              | katrina.weers@sjsu.edu |
 
-[Spring 2026 CMPE 195B Project Roster](https://docs.google.com/spreadsheets/d/1CWvXRMa2uYdF89KqGeZLIvugnG1znIKHWkJCl6HlvxU/edit?gid=0#gid=0)
+[Spring 2026 CMPE Project Expo](https://www.sjsu.edu/cmpe/students/project-expo/2026-spring.php)
+
+[Spring 2026 CMPE Project Roster](https://docs.google.com/spreadsheets/d/1CWvXRMa2uYdF89KqGeZLIvugnG1znIKHWkJCl6HlvxU/edit?gid=0#gid=0)
 
 ---
 
@@ -85,13 +88,13 @@ The project poster provides a full overview of the hardware design, circuit theo
 
 ### Hardware Revisions
 
-Three physical builds were produced over the course of the project. The Breadboard Small and PCB are functionally identical. See the [project poster](#deliverables) for full hardware design details.
+Three physical builds were produced over the course of the project. The Breadboard Big, Breadboard Small, and PCB are functionally identical. See the [project poster](#deliverables) for full hardware design details.
 
 | Revision | Form Factor | Neurons | Notes |
 |---|---|---|---|
 | Breadboard Big | Full-size breadboard | Up to 6 | Initial large-scale prototype |
 | Breadboard Small | Half-size breadboard | Up to 6 | Compact verification build |
-| PCB (V2) | Custom KiCad PCB | Up to 6 | Production form factor; functionally identical to Breadboard Small |
+| PCB (V2) | Custom KiCad PCB | Up to 6 | Production form factor; functionally identical to all breadboard builds |
 
 | Breadboard Big | Breadboard Small vs. PCB |
 |---|---|
@@ -105,7 +108,7 @@ Three physical builds were produced over the course of the project. The Breadboa
 
 ### Schematic
 
-Each neuron in the circuit is built around a **Schmitt trigger** — a comparator with hysteresis. Input voltage charges up slowly (integration), and when it crosses the upper threshold V_UT the output snaps sharply to saturation (the spike). It won't reset until voltage falls below the lower threshold V_LT. The dead band between the two thresholds prevents noise from causing false re-triggers, giving each neuron a clean, stable firing response — directly analogous to a biological action potential.
+Each neuron in the circuit is built around a **Schmitt trigger** — a comparator with hysteresis. Input voltage charges up slowly (integration), and when it crosses the upper threshold V_UT the output snaps sharply to saturation (the spike). It won't reset until voltage falls below the lower threshold V_LT. The dead band between the two thresholds prevents noise from causing false re-triggers, giving each neuron a clean, stable firing response — directly analogous to a biological action potential [1].
 
 ![Schmitt Trigger Diagram](docs/images/schmitt-trigger-diagram.png)
 
@@ -141,28 +144,85 @@ KiCad project: [`hardware/pcb/PCB-Neuron-V2-Kicad-Project.kicad_pro`](hardware/p
 
 ### Datasheets
 
-- [Espressif ESP32 Datasheet](hardware/datasheets-and-diagrams/Espressif-ESP32-Datasheet.pdf)
-- [ESP32 DevKitC Pinout Diagram](hardware/datasheets-and-diagrams/Espressif-ESP32-DevkitC-PinOut-Diagram.png)
+- [Espressif ESP32 Datasheet](hardware/datasheets-and-diagrams/Espressif-ESP32-Datasheet.pdf) [2]
+- [ESP32 DevKitC Pinout Diagram](hardware/datasheets-and-diagrams/Espressif-ESP32-DevkitC-PinOut-Diagram.png) [3]
 
 ---
 
-### Breadboard Assembly (NeuronSynapseVersion7)
+### Breadboard Assembly
 
-The breadboard build uses the **NeuronSynapseVersion7** schematic found in `hardware/schematics/`.
+These steps produce a single-channel build for **Hit The Zone**. The Pong extension at the end adds a second circuit for dual-channel support.
 
-1. Gather all components per the schematic's bill of materials.
-2. Place the ESP32 on the breadboard so both rows of pins are accessible.
-3. Wire the neuron circuit section by section, verifying each subcircuit before moving on.
-4. Connect the neuron output node to **GPIO34 (ADC6)** and the stimulation node to **GPIO25 (DAC1)**.
-5. Optionally wire a status LED to **GPIO2**.
-6. For the dual-channel (Pong) configuration, add a second neuron output to **GPIO35 (ADC7)** and its input to **GPIO26 (DAC2)**.
-7. Double-check all power rails (3.3 V and GND) before applying power.
+You will need the **NeuronSynapseVersion7** schematic (`hardware/schematics/`) open as a reference throughout.
+
+**What you need:**
+- Breadboard(s) and jumper wires
+- All components listed in [`hardware/bom/PCB BOM.csv`](hardware/bom/PCB%20BOM.csv)
+- A breadboard power supply module — powered by a USB battery bank or wall adapter
+- An ESP32 microcontroller
+- A USB cable to connect the ESP32 to your computer
+
+---
+
+**1. Set up power rails**
+
+Mount the breadboard power supply module onto the breadboard and connect your USB battery bank or wall adapter. Set the output to **3.3V**. Verify that the positive (+) and negative (−) power rails along the breadboard are live before placing any components. The neuron circuit runs on 3.3V.
+
+**2. Gather and place components**
+
+Using the NeuronSynapseVersion7 schematic as your guide, place all components onto the breadboard. The schematic organizes the circuit into three neuron subcircuits — the excitatory neuron, the inhibitory neuron, and the control (output) neuron. Place and wire them one subcircuit at a time to keep the build manageable.
+
+**3. Wire the neuron circuit**
+
+Follow the NeuronSynapseVersion7 schematic section by section. Complete and double-check each subcircuit before moving to the next. Make sure all power and ground connections are secure throughout.
+
+**4. Connect the ESP32**
+
+The ESP32 does not need to sit on the breadboard — it connects to the circuit via jumper wires. Make the following connections (refer to the ESP32 DevKitC pinout [3] to locate these pins):
+
+| ESP32 Pin | Connects to | Purpose |
+|---|---|---|
+| GPIO34 (ADC6) | Control neuron output node | Reads neuron spike voltage |
+| GPIO25 (DAC1) | Excitatory neuron input node | Injects stimulus voltage |
+| GND | Breadboard GND rail | Shared ground |
+
+Optionally connect **GPIO2** to a status LED with a current-limiting resistor — the firmware will light it when the neuron output crosses the firing threshold.
+
+Then plug the ESP32 into your computer via USB. This connection is for serial communication only — the breadboard power supply powers the circuit independently.
+
+> **Single-channel build complete.** This is all that is needed to run **Hit The Zone**. Flash the ESP32 with `CHANNEL_COUNT 1` (see [Flashing the ESP32](#flashing-the-esp32)) and proceed to [Running the Application](#running-the-application).
+
+---
+
+**5. Pong extension — add a second control unit**
+
+Pong requires two 3-neuron control units. Build a second complete NeuronSynapseVersion7 circuit on the same or a second breadboard, powered from the same power supply rails. Add the following connections to the ESP32:
+
+| ESP32 Pin | Connects to | Purpose |
+|---|---|---|
+| GPIO35 (ADC7) | Second control neuron output node | Reads RIGHT spike voltage |
+| GPIO26 (DAC2) | Second excitatory neuron input node | Injects RIGHT stimulus voltage |
+
+Flash the ESP32 with `CHANNEL_COUNT 2` (see [Flashing the ESP32](#flashing-the-esp32)) to enable dual-channel mode.
 
 ---
 
 ### PCB Assembly
 
-The PCB is functionally identical to the breadboard build — same connections, pin assignments, and component values in a more compact form factor. Assemble it using the same schematic and verification steps above.
+The PCB (`hardware/pcb/`) is functionally identical to all breadboard builds in a more compact form factor. Solder components using the NeuronSynapseVersion7 schematic as your reference — component values and connections are the same as the breadboard build.
+
+The PCB has two 6-pin headers, **JP1** (left) and **JP2** (right), which expose power and signal connections. Both headers follow the same pin layout:
+
+| Pin | Net | Purpose |
+|---|---|---|
+| 1–2 | `+3V3` | Power supply input (3.3 V) |
+| 3–4 | Signal | See below |
+| 5–6 | `GND` | Ground |
+
+- **JP1** (input side) — pin 3 carries the inverted input signal; pin 4 is the direct signal input. Wire **ESP32 GPIO25 (DAC1)** to JP1 pin 4 to inject stimulus voltage.
+- **JP2** (output side) — pins 3–4 are bridged on the same net and connect to the control neuron output circuit. Wire **ESP32 GPIO34 (ADC6)** to JP2 pin 3 (or 4) to read the spike voltage.
+
+Power the PCB by connecting a **3.3 V source** to JP1 or JP2 pins 1–2, with **GND** on pins 5–6. The ESP32's onboard 3.3 V output pin can be used for this if the circuit current draw is within limits, or use the same breadboard power supply module approach with a USB battery bank or wall adapter.
 
 ---
 
@@ -240,7 +300,7 @@ No API keys or environment variables are required. The only configuration is the
 
 The Launcher is the home page of the application. It provides two serial connection panels — one for Hit The Zone (single-channel) and one for Pong (dual-channel) — and buttons to open each program.
 
-Connect your ESP32 device(s) in the Launcher before opening a program to enable the hardware neural network AI player. Programs can also be launched without hardware — the neural player will simply be unavailable.
+Connect your ESP32 device(s) in the Launcher before opening a program to enable the hardware neural network AI player. All programs are fully playable without hardware — Software AI players serve as the baseline for comparison, and the Hardware AI option will simply be grayed out when no device is connected.
 
 ![Launcher](docs/images/java-program/launcher-program-screenshot.png)
 
@@ -289,7 +349,7 @@ A Pong game where the hardware SNN competes as an AI paddle controller. The ESP3
 
 Pong uses two 3-neuron control units (6 neurons total). Each control unit consists of an excitatory neuron, an inhibitory neuron, and a control (output) neuron — both the excitatory and inhibitory neurons feed into the control neuron, which fires when its membrane voltage V reaches threshold θ. One control unit drives LEFT, the other drives RIGHT.
 
-The architecture diagram below shows the logical view: Ball X Position feeds a Directional Split Layer (Ball Left / Ball Right excitatory neurons), which drive an Output Layer (Paddle Left / Paddle Right control neurons). The red cross-inhibition connections — Ball Left inhibiting Paddle Right and vice versa — represent the inhibitory neurons in each control unit, ensuring only one direction fires at a time. One spike equals one paddle movement event.
+The architecture diagram below shows the logical view: Ball X Position feeds a Directional Split Layer (Ball Left / Ball Right excitatory neurons), which drive an Output Layer (Paddle Left / Paddle Right control neurons). The red cross-inhibition connections — Ball Left inhibiting Paddle Right and vice versa — represent the inhibitory neurons in each control unit, ensuring only one direction fires at a time, producing one discrete paddle movement event per spike.
 
 ![Pong SNN Architecture Diagram](docs/images/pong-game-snn-architecture-diagram.png)
 
@@ -440,3 +500,12 @@ group-project-group-22/
 This project is licensed under the MIT License — see the [`LICENSE`](LICENSE) file for details.
 
 > Distribution is subject to applicable San Jose State University intellectual property policies.
+---
+
+## References
+
+[1] Hackatronic, "Schmitt Trigger Circuit Diagram, Working, Types & Applications," *Hackatronic*, 2023. [Online]. Available: https://www.hackatronic.com/schmitt-trigger-circuit-diagram-working-types-applications/. [Accessed: May 6, 2026].
+
+[2] Espressif Systems, "ESP32 Series Datasheet," *Espressif Systems*, 2024. [Online]. Available: https://documentation.espressif.com/esp32_datasheet_en.pdf. [Accessed: May 6, 2026].
+
+[3] Espressif Systems, "ESP32-DevKitC User Guide," *Espressif Documentation*, 2024. [Online]. Available: https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32/esp32-devkitc/user_guide.html. [Accessed: May 6, 2026].
