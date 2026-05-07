@@ -48,12 +48,12 @@ A **Launcher** manages serial connections and serves as the home page for all pr
 
 **Advisor:** Eric Vanuska — eric.vanuska@sjsu.edu
 
-| Name             | Degree  | GitHub                                              | Email |
-|------------------|---------|-----------------------------------------------------|---|
-| Jonathon Fleming | BSCMPE  | [@JellyF02](https://github.com/JellyF02)            | jonathon.fleming@sjsu.edu |
-| Raymund Mercader | BSSE    | [@ray-sjsu](https://github.com/ray-sjsu)            | raymund.mercader@sjsu.edu |
-| Andrew Neidhart  | BSCMPE  | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu |
-| Katrina Weers    | BSSE    | [@Trina-W](https://github.com/Trina-W)              | katrina.weers@sjsu.edu |
+| Name             | Degree | GitHub                                               | Email                     |
+|------------------|--------|------------------------------------------------------|---------------------------|
+| Jonathon Fleming | BSCMPE | [@JellyF02](https://github.com/JellyF02)             | jonathon.fleming@sjsu.edu |
+| Raymund Mercader | BSSE   | [@ray-sjsu](https://github.com/ray-sjsu)             | raymund.mercader@sjsu.edu |
+| Andrew Neidhart  | BSCMPE | [@andrewneidhart](https://github.com/andrewneidhart) | andrew.neidhart@sjsu.edu  |
+| Katrina Weers    | BSSE   | [@Trina-W](https://github.com/Trina-W)               | katrina.weers@sjsu.edu    |
 
 [Spring 2026 CMPE Project Expo](https://www.sjsu.edu/cmpe/students/project-expo/2026-spring.php)
 
@@ -90,18 +90,18 @@ The project poster provides a full overview of the hardware design, circuit theo
 
 Three physical builds were produced over the course of the project. The Breadboard Big, Breadboard Small, and PCB are functionally identical. See the [project poster](#deliverables) for full hardware design details.
 
-| Revision | Form Factor | Neurons | Notes |
-|---|---|---|---|
-| Breadboard Big | Full-size breadboard | Up to 6 | Initial large-scale prototype |
-| Breadboard Small | Half-size breadboard | Up to 6 | Compact verification build |
-| PCB (V2) | Custom KiCad PCB | Up to 6 | Production form factor; functionally identical to all breadboard builds |
+| Revision         | Form Factor          | Neurons | Notes                                                                   |
+|------------------|----------------------|---------|-------------------------------------------------------------------------|
+| Breadboard Big   | Full-size breadboard | Up to 6 | Initial large-scale prototype                                           |
+| Breadboard Small | Half-size breadboard | Up to 6 | Compact verification build                                              |
+| PCB (V2)         | Custom KiCad PCB     | Up to 6 | Production form factor; functionally identical to all breadboard builds |
 
-| Breadboard Big | Breadboard Small vs. PCB |
-|---|---|
+| Breadboard Big                                                                              | Breadboard Small vs. PCB                                                                                              |
+|---------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
 | ![Breadboard Big](docs/images/physical-hardware-builds/breadboard-big-neuron-prototype.png) | ![Breadboard Small vs PCB](docs/images/physical-hardware-builds/breadboard-small-neuron-vs-pcb-neuron-comparison.jpg) |
 
-| PCB Board | PCB 3D Render |
-|---|---|
+| PCB Board                                                               | PCB 3D Render                                                                   |
+|-------------------------------------------------------------------------|---------------------------------------------------------------------------------|
 | ![PCB Board](docs/images/physical-hardware-builds/pcb-neuron-board.png) | ![PCB 3D Render](docs/images/physical-hardware-builds/pcb-neuron-3D-render.png) |
 
 ---
@@ -138,7 +138,8 @@ KiCad project: [`hardware/pcb/PCB-Neuron-V2-Kicad-Project.kicad_pro`](hardware/p
 
 ### Bill of Materials
 
-[`hardware/bom/PCB BOM.csv`](hardware/bom/PCB%20BOM.csv)
+- [`hardware/bom/BOM breadboard.csv`](hardware/bom/BOM_breadboard.csv)
+- [`hardware/bom/BOM_pcb.csv`](hardware/bom/BOM_pcb.csv)
 
 ---
 
@@ -157,7 +158,7 @@ You will need the **NeuronSynapseVersion7** schematic (`hardware/schematics/`) o
 
 **What you need:**
 - Breadboard(s) and jumper wires
-- All components listed in [`hardware/bom/PCB BOM.csv`](hardware/bom/PCB%20BOM.csv)
+- All components listed in [`hardware/bom/BOM_pcb.csv`](hardware/bom/BOM_pcb.csv)
 - A breadboard power supply module — powered by a USB battery bank or wall adapter
 - An ESP32 microcontroller
 - A USB cable to connect the ESP32 to your computer
@@ -180,11 +181,11 @@ Follow the NeuronSynapseVersion7 schematic section by section. Complete and doub
 
 The ESP32 does not need to sit on the breadboard — it connects to the circuit via jumper wires. Make the following connections (refer to the ESP32 DevKitC pinout [3] to locate these pins):
 
-| ESP32 Pin | Connects to | Purpose |
-|---|---|---|
-| GPIO34 (ADC6) | Control neuron output node | Reads neuron spike voltage |
-| GPIO25 (DAC1) | Excitatory neuron input node | Injects stimulus voltage |
-| GND | Breadboard GND rail | Shared ground |
+| ESP32 Pin     | Connects to                  | Purpose                    |
+|---------------|------------------------------|----------------------------|
+| GPIO34 (ADC6) | Control neuron output node   | Reads neuron spike voltage |
+| GPIO25 (DAC1) | Excitatory neuron input node | Injects stimulus voltage   |
+| GND           | Breadboard GND rail          | Shared ground              |
 
 Optionally connect **GPIO2** to a status LED with a current-limiting resistor — the firmware will light it when the neuron output crosses the firing threshold.
 
@@ -198,9 +199,9 @@ Then plug the ESP32 into your computer via USB. This connection is for serial co
 
 Pong requires two 3-neuron control units. Build a second complete NeuronSynapseVersion7 circuit on the same or a second breadboard, powered from the same power supply rails. Add the following connections to the ESP32:
 
-| ESP32 Pin | Connects to | Purpose |
-|---|---|---|
-| GPIO35 (ADC7) | Second control neuron output node | Reads RIGHT spike voltage |
+| ESP32 Pin     | Connects to                         | Purpose                        |
+|---------------|-------------------------------------|--------------------------------|
+| GPIO35 (ADC7) | Second control neuron output node   | Reads RIGHT spike voltage      |
 | GPIO26 (DAC2) | Second excitatory neuron input node | Injects RIGHT stimulus voltage |
 
 Flash the ESP32 with `CHANNEL_COUNT 2` (see [Flashing the ESP32](#flashing-the-esp32)) to enable dual-channel mode.
@@ -213,11 +214,11 @@ The PCB (`hardware/pcb/`) is functionally identical to all breadboard builds in 
 
 The PCB has two 6-pin headers, **JP1** (left) and **JP2** (right), which expose power and signal connections. Both headers follow the same pin layout:
 
-| Pin | Net | Purpose |
-|---|---|---|
+| Pin | Net    | Purpose                    |
+|-----|--------|----------------------------|
 | 1–2 | `+3V3` | Power supply input (3.3 V) |
-| 3–4 | Signal | See below |
-| 5–6 | `GND` | Ground |
+| 3–4 | Signal | See below                  |
+| 5–6 | `GND`  | Ground                     |
 
 - **JP1** (input side) — pin 3 carries the inverted input signal; pin 4 is the direct signal input. Wire **ESP32 GPIO25 (DAC1)** to JP1 pin 4 to inject stimulus voltage.
 - **JP2** (output side) — pins 3–4 are bridged on the same net and connect to the control neuron output circuit. Wire **ESP32 GPIO34 (ADC6)** to JP2 pin 3 (or 4) to read the spike voltage.
@@ -230,10 +231,10 @@ Power the PCB by connecting a **3.3 V source** to JP1 or JP2 pins 1–2, with **
 
 The firmware lives in `hardware/firmware/`. Two `.ino` files are provided — they are functionally identical except for the `CHANNEL_COUNT` parameter:
 
-| `CHANNEL_COUNT` | Configuration | Used by |
-|---|---|---|
-| `1` | 3-neuron, single ADC channel (GPIO34) | Hit The Zone |
-| `2` | 6-neuron, dual ADC channels (GPIO34 + GPIO35) | Pong |
+| `CHANNEL_COUNT` | Configuration                                 | Used by      |
+|-----------------|-----------------------------------------------|--------------|
+| `1`             | 3-neuron, single ADC channel (GPIO34)         | Hit The Zone |
+| `2`             | 6-neuron, dual ADC channels (GPIO34 + GPIO35) | Pong         |
 
 1. Open the desired `.ino` file in **Arduino IDE**:
    - `NeuralSerial_SingleChannel_3Neuron.ino`
@@ -327,11 +328,11 @@ A game where four players take turns hitting a ball as it passes through a targe
 
 **Controls:**
 
-| Key | Action |
-|---|---|
+| Key   | Action                          |
+|-------|---------------------------------|
 | Space | Hit the ball (when inside zone) |
-| Esc | Pause / unpause |
-| R | Reset the game |
+| Esc   | Pause / unpause                 |
+| R     | Reset the game                  |
 
 **Stats tracked:** Hits (successful / total attempts), Accuracy (%), Hits/Pass (average hits per ball pass)
 
@@ -361,13 +362,13 @@ The architecture diagram below shows the logical view: Ball X Position feeds a D
 
 **Controls (Human player):**
 
-| Key | Action |
-|---|---|
-| ← / → | Move paddle left / right |
-| Esc | Pause / unpause |
-| R | Reset the game (from pause menu) |
-| C | Toggle constant ball speed (from pause menu) |
-| 1 / 2 / 3 | Select ball speed level (from pause menu) |
+| Key       | Action                                       |
+|-----------|----------------------------------------------|
+| ← / →     | Move paddle left / right                     |
+| Esc       | Pause / unpause                              |
+| R         | Reset the game (from pause menu)             |
+| C         | Toggle constant ball speed (from pause menu) |
+| 1 / 2 / 3 | Select ball speed level (from pause menu)    |
 
 **Class Diagram**
 
@@ -446,10 +447,10 @@ Documented in [`docs/evaluation/stress-test-results.md`](docs/evaluation/stress-
 group-project-group-22/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                       # Build, test, and coverage reporting
+│       └── ci.yml                                  # Build, test, and coverage reporting
 ├── docs/
-│   ├── class-diagrams/                  # PNG class diagrams
-│   │   ├── plantuml-diagrams/           # PlantUML source (.puml)
+│   ├── class-diagrams/                             # PNG class diagrams
+│   │   ├── plantuml-diagrams/                      # PlantUML source (.puml)
 │   │   ├── class-diagram-bidirectionaltest.png
 │   │   ├── class-diagram-hardware.png
 │   │   ├── class-diagram-hitthezone.png
@@ -457,34 +458,34 @@ group-project-group-22/
 │   │   ├── class-diagram-player.png
 │   │   ├── class-diagram-pong.png
 │   │   └── class-diagram-summary.png
-│   ├── deliverables/                    # Project poster (SVG + PDF)
-│   ├── evaluation/                      # coverage-report/ + stress-test-results.md
+│   ├── deliverables/                               # Project poster (SVG + PDF)
+│   ├── evaluation/                                 # coverage-report/ + stress-test-results.md
 │   └── images/
-│       ├── java-program/                # Application screenshots
-│       ├── neural-network-game-setups/  # Hardware + game configuration photos
-│       ├── physical-hardware-builds/    # Build photos (breadboard, PCB)
+│       ├── java-program/                           # Application screenshots
+│       ├── neural-network-game-setups/             # Hardware + game configuration photos
+│       ├── physical-hardware-builds/               # Build photos (breadboard, PCB)
 │       ├── pong-game-snn-architecture-diagram.png
 │       └── schmitt-trigger-diagram.png
 ├── hardware/
-│   ├── bom/                             # Bill of materials (CSV)
-│   ├── datasheets-and-diagrams/         # ESP32 datasheet and pinout diagram
-│   ├── firmware/                        # ESP32 Arduino firmware (single- and dual-channel) + archive/
-│   ├── pcb/                             # KiCad PCB V2 project + archive/
-│   └── schematics/                      # KiCad + LTspice schematics, PNGs + archive/
+│   ├── bom/                                        # Bill of materials (CSV)
+│   ├── datasheets-and-diagrams/                    # ESP32 datasheet and pinout diagram
+│   ├── firmware/                                   # ESP32 Arduino firmware (single- and dual-channel) + archive/
+│   ├── pcb/                                        # KiCad PCB V2 project + archive/
+│   └── schematics/                                 # KiCad + LTspice schematics, PNGs + archive/
 ├── scripts/
-│   └── generate-class-diagram.py        # Generates PlantUML source from Java source
+│   └── generate-class-diagram.py                   # Generates PlantUML source from Java source
 ├── software/
 │   └── src/
 │       ├── main/java/.../
-│       │   ├── bidirectionaltest/       # Diagnostic tool — core/ + ui/
-│       │   ├── hardware/                # Serial + signal processing — serial/ + signal/
-│       │   ├── hitthezone/              # Hit The Zone game — ai/ + core/ + model/ + ui/
-│       │   ├── launcher/                # Launcher home page — core/ + model/ + ui/
-│       │   ├── player/                  # Shared player abstractions — model/
-│       │   └── pong/                    # Pong game — ai/ + core/ + model/ + ui/
-│       └── test/java/.../               # JUnit 5 + Mockito test suite + stress/ + testsupport/
+│       │   ├── bidirectionaltest/                  # Diagnostic tool — core/ + ui/
+│       │   ├── hardware/                           # Serial + signal processing — serial/ + signal/
+│       │   ├── hitthezone/                         # Hit The Zone game — ai/ + core/ + model/ + ui/
+│       │   ├── launcher/                           # Launcher home page — core/ + model/ + ui/
+│       │   ├── player/                             # Shared player abstractions — model/
+│       │   └── pong/                               # Pong game — ai/ + core/ + model/ + ui/
+│       └── test/java/.../                          # JUnit 5 + Mockito test suite + stress/ + testsupport/
 ├── tests/
-│   └── README.md                        # Test structure and instructions
+│   └── README.md                                   # Test structure and instructions
 ├── .gitignore
 ├── LICENSE
 ├── README.md
